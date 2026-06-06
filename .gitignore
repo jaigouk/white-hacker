@@ -3,6 +3,8 @@
 
 # Local, machine-specific Claude Code settings (personal permissions)
 .claude/settings.local.json
+# Scheduler/wakeup runtime lock (session id + pid + timestamps) — ephemeral local state
+.claude/scheduled_tasks.lock
 
 # Security scan artifacts (generated per-run; never commit findings)
 THREAT_MODEL.md.bak
