@@ -21,6 +21,43 @@
 
 ---
 
+## Grooming (re-groomed 2026-06-06, after Phase 7)
+
+**Readiness:** ✅ READY. Phases 0–7 done. (Outer-loop *self-writes* still must not merge until
+Phase 9's frozen corpus + keep-or-revert gate exist — README ordering note.)
+
+**Reconciliations (own these):**
+1. **`validate_kb.py` already exists** (built in T-4.1, 18 tests: schema, mandatory
+   `source`+`url`+`retrieved`, controlled enums, size caps, unique ids). So **T-8.1 = ADD
+   `lint_skill.py` only** (ADR-005 caps over *all* skills) + confirm `validate_kb` already satisfies
+   its schema-gate VCs. Likely fix: trim any skill `description` that exceeds the caps.
+2. **Hook registration is the same human-auth blocker (Phases 5/6/8).** T-8.3 (capture) and T-8.4
+   (`confine_self_writes`) hooks are **implemented + tested** as the done-gate; their committed
+   `.claude/settings.json` registration is **batched into the one operator-authorized approval**
+   alongside T-5.3/T-6.4/T-6.5. `confine_self_writes` composes as a **3rd** `PreToolUse` Bash entry
+   with `confine_patch_writes` (T-5.3) + `guard_bash` (T-6.4); its allow-set is the outer-loop one
+   (KB `reference/**`, `.claude/rules/**`, `PATCHES/**`, memory) and it **denies `evals/corpus/**` +
+   the gate scripts** (frozen, separate identity) — reconcile so the three hooks don't conflict.
+3. **⚠️ T-8.7 conflicts with the operator's standing "no autonomous schedulers" preference.**
+   Resolution: **T-8.7 is DOCUMENT-ONLY.** Write `refresh-routine.md` (cadence tiers + how the
+   operator creates/disables the Routine via `/schedule`); **do NOT create a live scheduled task.**
+   All T-8.7 VCs are doc-greps, satisfiable without scheduling anything. (Honors the preference; the
+   refresh poller `poll_feeds.py` still exists and can be run manually.)
+4. **Capture hooks (T-8.3):** append-only JSONL + **secret redaction** (a `.env`-read event yields a
+   redacted line) — never write a secret value to a trace.
+5. **`poll_feeds.py` (T-8.6):** tests use **recorded fixtures, no network**; live polling honors the
+   egress allow-list enforced by `guard_bash`/`confine_self_writes`.
+6. **Traces live under `evals/traces/`** but the **frozen** corpus/gate (`evals/corpus/**`,
+   `evals/keep_or_revert.py`) are agent-read-only — `confine_self_writes` must allow `evals/traces/**`
+   while denying `evals/corpus/**` (Phase 9 builds the gate script).
+
+**Order:** T-8.1 → T-8.2 → (T-8.3 ∥ T-8.4) → (T-8.5 ∥ T-8.6) → T-8.7 (doc). **DoD:** lint/validate/
+dedupe/staleness green over the seed KB + all skills; capture + confinement hooks tested (registration
+batched for auth); `sec-learn`/`sec-kb-refresh` bodies de-stubbed + `harvest.sh`/`poll_feeds.py` tested
+(no network); `refresh-routine.md` written (no live schedule). Then **re-groom Phase 9**.
+
+---
+
 ## 8a — KB structure & lint (the size/schema/dedup spine)
 
 ### T-8.1 · `lint_skill` + `validate_kb` size-cap & schema gate (TDD)

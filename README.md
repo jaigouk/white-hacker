@@ -191,8 +191,7 @@ on project-scope skills. See `docs/plan/PLAN.md` §7.1.
 
 ## Status
 
-**Phases 0–5 done (verified)** — the full inner loop *aims, finds, refutes, tools-up, covers the
-AI surface, and remediates* end-to-end: `sec-threat-model` + `sec-detect` (real `SCAN-PLAN.json` emitter + schema,
+**Phases 0–7 done (verified)** — the full inner loop + team/CI packaging + an eval baseline: `sec-threat-model` + `sec-detect` (real `SCAN-PLAN.json` emitter + schema,
 incl. MCP detection) scope and calibrate a review, `sec-vuln-scan` (recall) and `sec-triage`
 (precision, adversarial, schema-gated, deduped) split discovery from verification, the **tooling
 layer is a swappable capability** (`deps-scan`/`secrets-scan` + SAST/IaC selection) that prefers
@@ -201,8 +200,12 @@ installed tools and **degrades to the floor** — never blocking, and `ai-llm-re
 lethal-trifecta / MCP token-passthrough with `kb_refs` (mapped to OWASP LLM 2025 / Agentic 2026 /
 MCP / MITRE ATLAS), and the optional `sec-patch` stage proposes verified, root-cause fixes via the
 patch ladder (build → PoC-stops → tests → re-attack) writing **only** to `PATCHES/` for a human to
-apply (ADR-010/016; confinement is structural + a PreToolUse tripwire). 136 tests green; polyglot +
-SCA + IaC + AI/MCP + patch-ladder runs logged under `docs/research/`.
+apply (ADR-010/016; confinement is structural + a PreToolUse tripwire). Phase 6 packages it for
+**team mode + CI** (`sec-report` → `SECURITY-REPORT.md`, `ci_gate.py` fail-on-HIGH, a fully-pinned
+GitHub workflow running our own `/security-review`, and the `guard_bash`/`gate_review` review-posture
+hooks), and Phase 7 stands up the **eval baseline** (a 32-case labeled corpus + a deterministic
+`score.py` TPR/FPR/Youden's-J scorer + a recorded `baseline.json` regression gate). **207 tests green**;
+polyglot + SCA + IaC + AI/MCP + patch-ladder + eval runs logged under `docs/research/` + `evals/`.
 The remaining skills are stubs; the rest lands over the rollout:
 
 | Phase | Focus | Status |
@@ -213,12 +216,16 @@ The remaining skills are stubs; the rest lands over the rollout:
 | 3 | Tool integration: secrets/deps scan, capability discovery, degradation ladder | ✅ done |
 | 4 | AI/LLM + API appendices + living `ai-attack-kb` (framework/MCP-triggered) | ✅ done |
 | 5 | Patch + re-attack (opt-in, capability-removed writes) | ✅ done¹ |
-| 6 | Team mode + CI Action | next |
-| 7 | Eval (ongoing — validate against a labeled finding set, track FP rate) | planned |
+| 6 | Team mode + CI Action (sec-report, ci_gate, pinned workflow, posture hooks) | ✅ done¹ |
+| 7 | Eval baseline (32-case labeled corpus, score.py TPR/FPR/Youden's J, baseline gate) | ✅ done |
+| 8 | Self-improvement (KB lint/dedup/staleness, sec-learn, sec-kb-refresh, capture+confine hooks) | next (groomed) |
+| 9 | Frozen eval corpus + keep-or-revert gate + confinement guardrails | planned |
 
-¹ Phase 5 tasks T-5.1…T-5.4 are done + verified; the only open item is **activating** the
-`confine_patch_writes` PreToolUse hook + `permissions.deny` in committed `.claude/settings.json`
-(ADR-016) — that write is self-modifying startup config, so it awaits explicit operator authorization.
+¹ Phases 5 & 6 tasks are done + verified; the one shared open item is **activating** the PreToolUse
+hooks (`confine_patch_writes`, `guard_bash`, `gate_review`; Phase 8 adds capture + `confine_self_writes`)
++ `permissions.deny` in committed `.claude/settings.json` (ADR-016). Each hook's *logic* is committed +
+tested; the *registration* is one self-modifying startup-config write that awaits explicit operator
+authorization (batched into a single approval).
 
 Full gap analysis, skill specs, tooling, and rollout: **`docs/plan/PLAN.md`**.
 
