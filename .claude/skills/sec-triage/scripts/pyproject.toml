@@ -1,0 +1,12 @@
+[project]
+name = "white-hacker-sec-triage-scripts"
+version = "0.1.0"
+description = "Deterministic dedup pass for white-hacker findings."
+requires-python = ">=3.10"
+dependencies = ["jsonschema>=4.20"]
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

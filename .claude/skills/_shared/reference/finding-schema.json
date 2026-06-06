@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://white-hacker/finding-schema.json",
+  "title": "white-hacker findings document",
+  "description": "Canonical machine-consumable contract emitted by sec-vuln-scan / sec-triage / sec-report and the agent. Every JSON artifact and every eval gate validates against this.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["summary", "findings"],
+  "properties": {
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scanned_langs", "tools_used", "tools_unavailable", "scoring_standard", "counts"],
+      "properties": {
+        "scanned_langs": { "type": "array", "items": { "type": "string" } },
+        "tools_used": { "type": "array", "items": { "type": "string" } },
+        "tools_unavailable": { "type": "array", "items": { "type": "string" } },
+        "scoring_standard": { "type": "string", "minLength": 1 },
+        "counts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["high", "medium", "low"],
+          "properties": {
+            "high": { "type": "integer", "minimum": 0 },
+            "medium": { "type": "integer", "minimum": 0 },
+            "low": { "type": "integer", "minimum": 0 }
+          }
+        }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/finding" }
+    }
+  },
+  "$defs": {
+    "finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id", "canonical_of", "file", "line", "severity", "category", "owasp",
+        "preconditions", "access_required", "verified", "confidence",
+        "exploit_scenario", "recommendation", "first_link", "tool_assisted", "kb_refs"
+      ],
+      "properties": {
+        "id": { "type": "string", "pattern": "^F-[0-9]{3,}$" },
+        "canonical_of": {
+          "description": "null for a canonical finding; the canonical id (F-NNN) when this is a duplicate.",
+          "type": ["string", "null"], "pattern": "^F-[0-9]{3,}$"
+        },
+        "file": { "type": "string", "minLength": 1 },
+        "line": { "type": "integer", "minimum": 0 },
+        "severity": { "enum": ["HIGH", "MEDIUM", "LOW"] },
+        "category": { "type": "string", "minLength": 1 },
+        "owasp": { "type": "array", "items": { "type": "string" } },
+        "preconditions": { "type": "array", "items": { "type": "string" } },
+        "access_required": { "enum": ["unauth-remote", "authenticated", "admin", "local", "unknown"] },
+        "verified": { "enum": ["ladder_passed", "ladder_failed", "static_review_only"] },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "exploit_scenario": { "type": "string" },
+        "recommendation": { "type": "string" },
+        "first_link": { "type": "string" },
+        "tool_assisted": { "type": "boolean" },
+        "kb_refs": { "type": "array", "items": { "type": "string" } },
+        "excluded_by": {
+          "description": "optional: the exclusion rule that demoted this candidate (audit trail).",
+          "type": "string"
+        }
+      }
+    }
+  }
+}

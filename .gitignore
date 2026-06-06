@@ -1,0 +1,31 @@
+# Local working notes / scratch — never commit (global rule)
+.notes/
+
+# Local, machine-specific Claude Code settings (personal permissions)
+.claude/settings.local.json
+
+# Security scan artifacts (generated per-run; never commit findings)
+THREAT_MODEL.md.bak
+SCAN-PLAN.json
+VULN-FINDINGS.json
+TRIAGE.json
+SECRETS.json
+DEPS.json
+SECURITY-REPORT.md
+PATCHES/
+.triage-state/
+.patch-state/
+*.sarif
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# Trivy / scanner caches
+.trivycache/
+
+# OS
+.DS_Store

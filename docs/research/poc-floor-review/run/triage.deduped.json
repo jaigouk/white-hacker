@@ -1,0 +1,87 @@
+{
+  "summary": {
+    "scanned_langs": [
+      "go",
+      "python",
+      "typescript"
+    ],
+    "tools_used": [],
+    "tools_unavailable": [
+      "sast",
+      "sca",
+      "secrets",
+      "iac"
+    ],
+    "scoring_standard": "CVSS4.0",
+    "counts": {
+      "high": 3,
+      "medium": 0,
+      "low": 0
+    }
+  },
+  "findings": [
+    {
+      "id": "F-001",
+      "canonical_of": null,
+      "file": "docs/research/poc-floor-review/go-vuln/main.go",
+      "line": 13,
+      "severity": "HIGH",
+      "category": "injection",
+      "owasp": [
+        "A03:2021",
+        "A03:2025"
+      ],
+      "preconditions": [],
+      "access_required": "unauth-remote",
+      "verified": "static_review_only",
+      "confidence": 0.97,
+      "exploit_scenario": "host query param concatenated into sh -c -> OS command injection (unauthenticated).",
+      "recommendation": "argv array exec.Command(ping,-c,1,host) + net.ParseIP validation.",
+      "first_link": "docs/research/poc-floor-review/go-vuln/main.go:13",
+      "tool_assisted": false,
+      "kb_refs": []
+    },
+    {
+      "id": "F-002",
+      "canonical_of": null,
+      "file": "docs/research/poc-floor-review/py-vuln/app.py",
+      "line": 14,
+      "severity": "HIGH",
+      "category": "injection",
+      "owasp": [
+        "A03:2021",
+        "A03:2025"
+      ],
+      "preconditions": [],
+      "access_required": "unauth-remote",
+      "verified": "static_review_only",
+      "confidence": 0.97,
+      "exploit_scenario": "id query param interpolated into SQL via f-string -> SQL injection (unauthenticated).",
+      "recommendation": "Parameterized query execute(... WHERE id = ?, (uid,)); cast id to int.",
+      "first_link": "docs/research/poc-floor-review/py-vuln/app.py:14",
+      "tool_assisted": false,
+      "kb_refs": []
+    },
+    {
+      "id": "F-003",
+      "canonical_of": null,
+      "file": "docs/research/poc-floor-review/ts-vuln/handler.ts",
+      "line": 10,
+      "severity": "HIGH",
+      "category": "injection",
+      "owasp": [
+        "A03:2021",
+        "A03:2025"
+      ],
+      "preconditions": [],
+      "access_required": "unauth-remote",
+      "verified": "static_review_only",
+      "confidence": 0.96,
+      "exploit_scenario": "name query param interpolated into child_process.exec shell string -> OS command injection (unauthenticated).",
+      "recommendation": "execFile(echo,[Hello,name]) argv array, no shell; allowlist-validate name.",
+      "first_link": "docs/research/poc-floor-review/ts-vuln/handler.ts:10",
+      "tool_assisted": false,
+      "kb_refs": []
+    }
+  ]
+}
