@@ -1,0 +1,17 @@
+{
+  "case_id": "py-rag-poisoning",
+  "language": "python",
+  "category": "rag-poisoning",
+  "severity": "MEDIUM",
+  "owasp": [
+    "LLM08:2025"
+  ],
+  "vulnerable": {
+    "file": "vulnerable_variant.py",
+    "line": 2
+  },
+  "benign_lookalike": {
+    "file": "benign_lookalike.py"
+  },
+  "note": "Unauthenticated write into the vector store."
+}

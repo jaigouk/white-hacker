@@ -1,0 +1,14 @@
+{
+  "tpr": 0.9062,
+  "fpr": 0.0312,
+  "youden_j": 0.875,
+  "tp": 29,
+  "fn": 3,
+  "fp": 1,
+  "tn": 31,
+  "n_cases": 32,
+  "date": "2026-06-06",
+  "commit": "4a9a3ce",
+  "findings_snapshot": "evals/runs/baseline-findings.json",
+  "note": "SYNTHETIC baseline (representative snapshot, not a measured agent run). Refresh by capturing a real /security-review run over the corpus, then re-score."
+}

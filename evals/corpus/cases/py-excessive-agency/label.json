@@ -1,0 +1,17 @@
+{
+  "case_id": "py-excessive-agency",
+  "language": "python",
+  "category": "excessive-agency",
+  "severity": "HIGH",
+  "owasp": [
+    "LLM06:2025"
+  ],
+  "vulnerable": {
+    "file": "vulnerable_variant.py",
+    "line": 2
+  },
+  "benign_lookalike": {
+    "file": "benign_lookalike.py"
+  },
+  "note": "High-impact tool invoked with no human gate."
+}

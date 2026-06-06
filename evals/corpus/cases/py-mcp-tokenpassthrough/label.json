@@ -1,0 +1,17 @@
+{
+  "case_id": "py-mcp-tokenpassthrough",
+  "language": "python",
+  "category": "tool-poisoning",
+  "severity": "HIGH",
+  "owasp": [
+    "MCP01:2025"
+  ],
+  "vulnerable": {
+    "file": "vulnerable_variant.py",
+    "line": 3
+  },
+  "benign_lookalike": {
+    "file": "benign_lookalike.py"
+  },
+  "note": "MCP tool forwards the caller's token downstream."
+}

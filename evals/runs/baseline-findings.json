@@ -1,0 +1,222 @@
+{
+  "_note": "SYNTHETIC representative snapshot (not a measured agent run) \u2014 Phase 9 replaces it with a captured real run. Documented FN set {py-prompt-injection,py-rag-poisoning,go-weakrng} + 1 FP (js-cors) so the baseline is a realistic floor, not a J=1 ceiling.",
+  "summary": {
+    "counts": {
+      "high": 0,
+      "medium": 0,
+      "low": 0
+    }
+  },
+  "findings": [
+    {
+      "id": "F-001",
+      "file": "go-cmdi/vulnerable_variant.go",
+      "line": 4,
+      "category": "injection",
+      "severity": "HIGH"
+    },
+    {
+      "id": "F-002",
+      "file": "go-pathtraversal/vulnerable_variant.go",
+      "line": 4,
+      "category": "injection",
+      "severity": "HIGH"
+    },
+    {
+      "id": "F-003",
+      "file": "go-sqli/vulnerable_variant.go",
+      "line": 4,
+      "category": "injection",
+      "severity": "HIGH"
+    },
+    {
+      "id": "F-004",
+      "file": "go-ssrf/vulnerable_variant.go",
+      "line": 4,
+      "category": "ssrf",
+      "severity": "HIGH"
+    },
+    {
+      "id": "F-005",
+      "file": "js-bopla/vulnerable_variant.js",
+      "line": 2,
+      "category": "AuthN/AuthZ",
+      "severity": "HIGH"
+    },
+    {
+      "id": "F-006",
+      "file": "js-cmdi/vulnerable_variant.js",
+      "line": 3,
+      "category": "injection",
+      "severity": "HIGH"
+    },
+    {
+      "id": "F-007",
+      "file": "js-cors/vulnerable_variant.js",
+      "line": 2,
+      "category": "config",
+      "severity": "MEDIUM"
+    },
+    {
+      "id": "F-008",
+      "file": "js-cors/benign_lookalike.js",
+      "line": 1,
+      "category": "config",
+      "severity": "LOW"
+    },
+    {
+      "id": "F-009",
+      "file": "js-open-redirect/vulnerable_variant.js",
+      "line": 2,
+      "category": "AuthN/AuthZ",
+      "severity": "LOW"
+    },
+    {
+      "id": "F-010",
+      "file": "js-sqli/vulnerable_variant.js",
+      "line": 2,
+      "category": "injection",
+      "severity": "HIGH"
+    },
+    {
+      "id": "F-011",
+      "file": "js-ssrf/vulnerable_variant.js",
+      "line": 2,
+      "category": "ssrf",
+      "severity": "HIGH"
+    },
+    {
+      "id": "F-012",
+      "file": "js-xss/vulnerable_variant.js",
+      "line": 2,
+      "category": "xss",
+      "severity": "HIGH"
+    },
+    {
+      "id": "F-013",
+      "file": "py-bola/vulnerable_variant.py",
+      "line": 2,
+      "category": "AuthN/AuthZ",
+      "severity": "HIGH"
+    },
+    {
+      "id": "F-014",
+      "file": "py-cmdi/vulnerable_variant.py",
+      "line": 3,
+      "category": "injection",
+      "severity": "HIGH"
+    },
+    {
+      "id": "F-015",
+      "file": "py-data-exfil/vulnerable_variant.py",
+      "line": 3,
+      "category": "data-exfil",
+      "severity": "HIGH"
+    },
+    {
+      "id": "F-016",
+      "file": "py-excessive-agency/vulnerable_variant.py",
+      "line": 2,
+      "category": "excessive-agency",
+      "severity": "HIGH"
+    },
+    {
+      "id": "F-017",
+      "file": "py-hardcoded-secret/vulnerable_variant.py",
+      "line": 1,
+      "category": "crypto",
+      "severity": "HIGH"
+    },
+    {
+      "id": "F-018",
+      "file": "py-ldap/vulnerable_variant.py",
+      "line": 2,
+      "category": "injection",
+      "severity": "MEDIUM"
+    },
+    {
+      "id": "F-019",
+      "file": "py-llm05-rce/vulnerable_variant.py",
+      "line": 3,
+      "category": "improper-output-handling",
+      "severity": "HIGH"
+    },
+    {
+      "id": "F-020",
+      "file": "py-llm05-ssrf/vulnerable_variant.py",
+      "line": 3,
+      "category": "improper-output-handling",
+      "severity": "HIGH"
+    },
+    {
+      "id": "F-021",
+      "file": "py-mcp-tokenpassthrough/vulnerable_variant.py",
+      "line": 3,
+      "category": "tool-poisoning",
+      "severity": "HIGH"
+    },
+    {
+      "id": "F-022",
+      "file": "py-pathtraversal/vulnerable_variant.py",
+      "line": 2,
+      "category": "injection",
+      "severity": "HIGH"
+    },
+    {
+      "id": "F-023",
+      "file": "py-pickle/vulnerable_variant.py",
+      "line": 3,
+      "category": "deserialization",
+      "severity": "HIGH"
+    },
+    {
+      "id": "F-024",
+      "file": "py-sqli/vulnerable_variant.py",
+      "line": 2,
+      "category": "injection",
+      "severity": "HIGH"
+    },
+    {
+      "id": "F-025",
+      "file": "py-ssrf/vulnerable_variant.py",
+      "line": 3,
+      "category": "ssrf",
+      "severity": "HIGH"
+    },
+    {
+      "id": "F-026",
+      "file": "py-ssti/vulnerable_variant.py",
+      "line": 3,
+      "category": "injection",
+      "severity": "HIGH"
+    },
+    {
+      "id": "F-027",
+      "file": "py-weakhash/vulnerable_variant.py",
+      "line": 3,
+      "category": "crypto",
+      "severity": "MEDIUM"
+    },
+    {
+      "id": "F-028",
+      "file": "py-xxe/vulnerable_variant.py",
+      "line": 3,
+      "category": "injection",
+      "severity": "MEDIUM"
+    },
+    {
+      "id": "F-029",
+      "file": "py-yaml/vulnerable_variant.py",
+      "line": 3,
+      "category": "deserialization",
+      "severity": "HIGH"
+    },
+    {
+      "id": "F-030",
+      "file": "ts-jwt-none/vulnerable_variant.ts",
+      "line": 3,
+      "category": "AuthN/AuthZ",
+      "severity": "HIGH"
+    }
+  ]
+}

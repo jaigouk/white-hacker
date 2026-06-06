@@ -1,0 +1,17 @@
+{
+  "case_id": "ts-jwt-none",
+  "language": "typescript",
+  "category": "AuthN/AuthZ",
+  "severity": "HIGH",
+  "owasp": [
+    "API2:2023"
+  ],
+  "vulnerable": {
+    "file": "vulnerable_variant.ts",
+    "line": 3
+  },
+  "benign_lookalike": {
+    "file": "benign_lookalike.ts"
+  },
+  "note": "JWT verified without pinning the algorithm."
+}

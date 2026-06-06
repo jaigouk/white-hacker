@@ -1,0 +1,17 @@
+{
+  "case_id": "js-open-redirect",
+  "language": "javascript",
+  "category": "AuthN/AuthZ",
+  "severity": "LOW",
+  "owasp": [
+    "A01:2025"
+  ],
+  "vulnerable": {
+    "file": "vulnerable_variant.js",
+    "line": 2
+  },
+  "benign_lookalike": {
+    "file": "benign_lookalike.js"
+  },
+  "note": "Redirect to a user-controlled URL."
+}

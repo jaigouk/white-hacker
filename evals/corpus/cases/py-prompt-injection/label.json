@@ -1,0 +1,17 @@
+{
+  "case_id": "py-prompt-injection",
+  "language": "python",
+  "category": "prompt-injection",
+  "severity": "MEDIUM",
+  "owasp": [
+    "LLM01:2025"
+  ],
+  "vulnerable": {
+    "file": "vulnerable_variant.py",
+    "line": 2
+  },
+  "benign_lookalike": {
+    "file": "benign_lookalike.py"
+  },
+  "note": "Untrusted retrieved content concatenated into the prompt (architectural design note)."
+}

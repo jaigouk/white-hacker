@@ -1,0 +1,17 @@
+{
+  "case_id": "py-bola",
+  "language": "python",
+  "category": "AuthN/AuthZ",
+  "severity": "HIGH",
+  "owasp": [
+    "API1:2023"
+  ],
+  "vulnerable": {
+    "file": "vulnerable_variant.py",
+    "line": 2
+  },
+  "benign_lookalike": {
+    "file": "benign_lookalike.py"
+  },
+  "note": "Object fetched by id without an owner check."
+}

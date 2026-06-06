@@ -1,0 +1,17 @@
+{
+  "case_id": "go-weakrng",
+  "language": "go",
+  "category": "crypto",
+  "severity": "MEDIUM",
+  "owasp": [
+    "A02:2025"
+  ],
+  "vulnerable": {
+    "file": "vulnerable_variant.go",
+    "line": 4
+  },
+  "benign_lookalike": {
+    "file": "benign_lookalike.go"
+  },
+  "note": "Token from math/rand."
+}

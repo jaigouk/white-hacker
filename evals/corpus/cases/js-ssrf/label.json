@@ -1,0 +1,17 @@
+{
+  "case_id": "js-ssrf",
+  "language": "javascript",
+  "category": "ssrf",
+  "severity": "HIGH",
+  "owasp": [
+    "A01:2025"
+  ],
+  "vulnerable": {
+    "file": "vulnerable_variant.js",
+    "line": 2
+  },
+  "benign_lookalike": {
+    "file": "benign_lookalike.js"
+  },
+  "note": "fetch of a user-supplied URL."
+}

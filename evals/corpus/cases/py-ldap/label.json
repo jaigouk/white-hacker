@@ -1,0 +1,17 @@
+{
+  "case_id": "py-ldap",
+  "language": "python",
+  "category": "injection",
+  "severity": "MEDIUM",
+  "owasp": [
+    "A03:2025"
+  ],
+  "vulnerable": {
+    "file": "vulnerable_variant.py",
+    "line": 2
+  },
+  "benign_lookalike": {
+    "file": "benign_lookalike.py"
+  },
+  "note": "LDAP filter built from user input."
+}

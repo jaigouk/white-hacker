@@ -1,0 +1,17 @@
+{
+  "case_id": "py-hardcoded-secret",
+  "language": "python",
+  "category": "crypto",
+  "severity": "HIGH",
+  "owasp": [
+    "A02:2025"
+  ],
+  "vulnerable": {
+    "file": "vulnerable_variant.py",
+    "line": 1
+  },
+  "benign_lookalike": {
+    "file": "benign_lookalike.py"
+  },
+  "note": "Hardcoded API key in source."
+}

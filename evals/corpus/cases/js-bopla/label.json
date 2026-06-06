@@ -1,0 +1,17 @@
+{
+  "case_id": "js-bopla",
+  "language": "javascript",
+  "category": "AuthN/AuthZ",
+  "severity": "HIGH",
+  "owasp": [
+    "API3:2023"
+  ],
+  "vulnerable": {
+    "file": "vulnerable_variant.js",
+    "line": 2
+  },
+  "benign_lookalike": {
+    "file": "benign_lookalike.js"
+  },
+  "note": "Mass assignment of a request body to a model."
+}
