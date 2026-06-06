@@ -13,6 +13,77 @@
 
 ---
 
+## Grooming (re-groomed 2026-06-06, after Phase 4)
+
+**Readiness:** ✅ READY *after spike-06* (hook protocol — see DoR). Phases 0–4 are `done (verified)`.
+
+**Definition of Ready — reconciled against what Phases 0–4 actually built:**
+- **The finding contract `sec-patch` consumes exists.** `TRIAGE.json` validates against
+  `_shared/reference/finding-schema.json` via `validate_findings.py`. `sec-patch` reads the *accepted*
+  (non-excluded, report-gate) findings.
+- **The agent already exposes NO `Write`/`Edit`.** `.claude/agents/white-hacker.md` `tools:` is
+  `Read, Grep, Glob, Bash, SendMessage, ToolSearch`. So T-5.3's "no working-tree write tool" VC is
+  **already true for Write/Edit** — the residual write surface is **`Bash`** (redirection / `tee` /
+  `cp`/`mv` / `git apply`). This reframes T-5.3 (see reconciliation #1).
+- **`settings.local.json` exists but has only a permission allowlist — no `hooks` block yet.** T-5.3
+  adds the first `hooks.PreToolUse` wiring.
+- **PoC-fixture pattern is established** (`docs/research/poc-*/` with `README.md` + tests, e.g.
+  `poc-ai-review`); reuse it for T-5.4's buildable fixture.
+- **Re-attack uses a fresh agent.** The ladder's re-attack rung spawns a fresh-context subagent
+  (Agent tool) to try to bypass the fix; its verdict lands in `PATCH-STATE.json.ladder.reattack`.
+
+**Reconciliation sub-tasks (drift Phases 0–4 left for Phase 5 — own them explicitly):**
+1. **Confinement boundary is `Bash`, not `Write`/`Edit` (re-scopes T-5.3).** Because the agent has no
+   Write/Edit, a PreToolUse guard on those tools alone confines nothing — and the **artifact chain
+   itself is written via Bash** (skills `scripts/` emit `SCAN-PLAN.json`/`VULN-FINDINGS.json`/… by
+   redirection). So a naive "deny every write outside `PATCHES/`" would **break the pipeline**. The
+   guard must therefore be a **`PreToolUse` hook on `Bash`** (plus Write/Edit as defense-in-depth) that:
+   (a) **allows** writes to the artifact-chain allowlist (`THREAT_MODEL.md`, the `*.json` artifacts,
+   `SECURITY-REPORT.md`, `*.sarif`) and to `PATCHES/**`; (b) **denies** any write resolving outside
+   that allowlist (working-tree/source); (c) **denies git mutation verbs** (`git apply|am|commit|push|
+   checkout --|reset --hard|restore|clean`). Implement the decision in a **testable Python module**
+   behind a thin `.sh` wrapper that reads the PreToolUse tool-input JSON on stdin and exits `2` to deny.
+   Be honest about the residual: Bash-command parsing is heuristic; the *strong* guarantee remains the
+   structural baseline (no Write/Edit tool, no `git apply`, human applies patches). Document the limit.
+2. **Phase 8/9 overlap — keep hooks separate + composable.** T-5.3's `confine_patch_writes.sh` is the
+   **patch-write** confinement; Phase 9 builds the **general** trifecta/egress confinement guardrails.
+   Register both independently under `hooks.PreToolUse` (don't fold one into the other, don't duplicate).
+3. **`PATCH-STATE.json` validator is new.** Mirror the `validate_kb.py`/`validate_findings.py` pattern:
+   a `patch-state-schema.json` (Draft 2020-12, tri-state ladder enums) + a `scripts/` validator with
+   pytest. No new runtime deps beyond `jsonschema`.
+
+**Task sizing & sequencing (reconciled):**
+| Step | Size | Type | Order | Notes |
+|------|------|------|-------|-------|
+| **spike-06** PreToolUse hook protocol | S | research | **first (DoR for T-5.3)** | verify CC hook I/O: stdin JSON shape, exit-2-denies semantics, `settings` registration — don't assume from memory |
+| T-5.1 `sec-patch` body (ladder + opt-in + PATCHES/-only) | M | docs | after spike (T-5.2/5.3 reference it) | ladder rungs in order + variant hunt |
+| T-5.2 `patch-state-schema.json` + validator + tests | S | code+tests | after T-5.1 | tri-state `{pass,fail,n/a}`; >1 test |
+| T-5.3 confinement hook (**Bash guard + allowlist**, re-scoped) | M | code+tests | after spike-06 + T-5.1 | biggest task; path-traversal + git-verb negative tests |
+| T-5.4 patch-ladder fixture e2e | L | code+fixture+tests | last | buildable vuln + failing test + PoC + re-attack + variant |
+
+Order: **spike-06 → T-5.1 → T-5.2 → T-5.3 → T-5.4.**
+
+**Risks / open questions:**
+- *Hook protocol (top risk):* the Claude Code PreToolUse hook I/O contract (stdin JSON keys, exit-code
+  semantics, `settings.json` `hooks` schema) must be **verified by spike-06** before T-5.3 — assuming it
+  from memory is exactly the "verify before concluding" trap.
+- *Heuristic Bash parsing:* the confinement can be bypassed by exotic write vectors (e.g. a python
+  one-liner that opens a file for write). Mitigate with a conservative deny-by-default for recognized
+  write verbs + the structural baseline; **state the residual risk in the hook header** and let Phase 9
+  harden. Do **not** claim airtight confinement.
+- *VC drift:* T-5.3's original third VC ("agent exposes no Write/Edit") is already satisfied; it is
+  **rewritten below** to also require the hook to deny `git apply`/source writes (the real boundary).
+
+**Definition of Done (phase):** all four tasks `done (verified)` + spike-06 resolved; `sec-patch`
+documents the four ladder rungs in order + variant hunt + opt-in + PATCHES/-only + `PATCH-STATE.json`;
+the schema validates a sample and rejects a missing/!tri-state rung; the confinement hook **allows**
+PATCHES/ + the artifact-chain allowlist and **denies** source/working-tree writes, path-traversal
+(`PATCHES/../src`), and git-mutation verbs (all tested); the patch-ladder fixture demonstrates
+PoC-stops + tests-pass + reattack-pass + a named variant + confinement-held (only `PATCHES/` added);
+living docs + statuses updated. Then **re-groom Phase 6** (rolling-wave).
+
+---
+
 ### T-5.1 · Implement `sec-patch` body (the patch ladder)
 - **Goal:** `sec-patch/SKILL.md` documents: opt-in only; read `TRIAGE.json`; for each accepted finding
   produce a **root-cause** minimal diff; ladder = build → original PoC no longer triggers → existing
@@ -39,16 +110,25 @@
   - [ ] `sec-patch/SKILL.md` references the schema — `grep -q 'patch-state-schema.json' .claude/skills/sec-patch/SKILL.md`
 - **Status:** todo
 
-### T-5.3 · Enforce write-confinement to `./PATCHES/` (capability-removal, not instruction)
-- **Goal:** structurally guarantee `sec-patch` cannot touch the working tree: a `PreToolUse` guard (the
-  Phase-8 confinement hook, scoped here for `sec-patch`) denies any `Write`/`Edit` whose path is outside
-  `./PATCHES/`, and the agent `tools:` line excludes working-tree write / `git apply` (ADR-010).
-- **Artifact:** `.claude/hooks/confine_patch_writes.sh` (+ `tests/`), referenced from `settings.local.json`
-- **Depends on:** T-5.1
+### T-5.3 · Enforce write-confinement (capability-removal, not instruction) — re-scoped to a Bash guard
+> **Re-groom note (2026-06-06):** the agent already exposes no `Write`/`Edit` (`tools: Read, Grep,
+> Glob, Bash, SendMessage, ToolSearch`), so the residual write surface is **`Bash`**, and the artifact
+> chain is itself written via Bash. The hook therefore guards **Bash** with an artifact-chain
+> allowlist (reconciliation #1), not a Write/Edit path. Depends on **spike-06** (hook I/O protocol).
+- **Goal:** structurally stop `sec-patch` (and the agent) from touching the working tree: a
+  `PreToolUse` hook on **`Bash`** (plus Write/Edit as defense-in-depth) **allows** writes to the
+  artifact-chain allowlist (`THREAT_MODEL.md`, `*.json` artifacts, `SECURITY-REPORT.md`, `*.sarif`) and
+  `PATCHES/**`, and **denies** (exit 2) any other write target **and** git-mutation verbs (`git apply|
+  am|commit|push|checkout --|reset --hard|restore|clean`). The agent `tools:` line already excludes
+  Write/Edit; `git apply` is denied by the hook (ADR-010). Honest residual risk documented in-hook.
+- **Artifact:** `.claude/hooks/confine_patch_writes.sh` + a testable `confine_patch_writes.py` (+
+  `scripts/`/`tests/`), registered under `hooks.PreToolUse` in `.claude/settings.local.json`
+- **Depends on:** spike-06, T-5.1
 - **Verification criteria:**
-  - [ ] The hook denies (exit 2) a write to `./src/x` and allows a write to `./PATCHES/x` — `uv run pytest .claude/hooks/tests/test_confine_patch_writes.py` (or a shell test harness; >1 case incl. path-traversal `./PATCHES/../src`)
-  - [ ] Path-traversal escape (`PATCHES/../`) is denied — negative test
-  - [ ] Agent definition exposes no working-tree write — `grep -E '^tools:' .claude/agents/white-hacker.md` shows no `Write`/`Edit`/`git apply`
+  - [ ] Denies (exit 2) a Bash write to `./src/x` (`echo x > src/x`, `tee src/x`, `cp a src/x`) and **allows** a write to `./PATCHES/x` and to the artifact allowlist (`SCAN-PLAN.json`) — `uv run pytest .claude/hooks/tests/test_confine_patch_writes.py` (>1 case)
+  - [ ] Path-traversal escape (`PATCHES/../src`, abs paths, `$PWD/src`) is denied — negative test
+  - [ ] Git-mutation verbs (`git apply`, `git commit`, `git push`) are denied; read-only git (`git status`/`diff`/`log`) is allowed — asserted in tests
+  - [ ] Agent definition still exposes no working-tree write tool — `grep -E '^tools:' .claude/agents/white-hacker.md` shows no `Write`/`Edit`; and the hook is registered in `settings.local.json`
 - **Status:** todo
 
 ### T-5.4 · Patch-ladder demonstration on a planted-vuln fixture
