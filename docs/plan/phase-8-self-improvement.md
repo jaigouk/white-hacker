@@ -70,11 +70,11 @@ batched for auth); `sec-learn`/`sec-kb-refresh` bodies de-stubbed + `harvest.sh`
   `tests/` with fixtures: a passing skill, an over-cap skill, an unsourced KB entry)
 - **Depends on:** T-4.1
 - **Verification criteria:**
-  - [ ] All caps + schema rules enforced; passing & failing fixtures behave correctly — `uv run pytest .claude/skills/ai-attack-kb/scripts/tests/test_lint_skill.py .claude/skills/ai-attack-kb/scripts/tests/test_validate_kb.py`
-  - [ ] An unsourced AI-threat entry (no `metadata.source`) is **rejected** — dedicated negative test (si-08 §2.2 blocking rule)
-  - [ ] Running `lint_skill` over **all** current skills passes — `uv run python .claude/skills/ai-attack-kb/scripts/lint_skill.py .claude/skills/` exits 0
-  - [ ] Running `validate_kb` over the seed KB passes — `uv run python .claude/skills/ai-attack-kb/scripts/validate_kb.py .claude/skills/ai-attack-kb/reference/` exits 0
-- **Status:** todo
+  - [x] All caps + schema rules enforced; passing & failing fixtures behave correctly — `uv run --with jsonschema --with pyyaml --with pytest pytest .../tests/test_lint_skill.py .../tests/test_validate_kb.py` *(11 + 18 tests)*
+  - [x] An unsourced AI-threat entry (no `metadata.source`) is **rejected** — `validate_kb` `test_missing_metadata_source_fails` (T-4.1)
+  - [x] `lint_skill` over **all** current skills exits 0 — `uv run python .../lint_skill.py .claude/skills/` *(12 skills OK; stdlib-only, lenient frontmatter parse matching CC — caught that strict YAML rejects valid colon-bearing descriptions)*
+  - [x] `validate_kb` over the seed KB exits 0
+- **Status:** done *(validate_kb pre-existed from T-4.1; T-8.1 added lint_skill.py)*
 
 ### T-8.2 · `dedupe_kb` + `staleness_check` (anti-drift)
 - **Goal:** two tested scripts: `dedupe_kb.py` (controlled `technique_class` vocab + shared-xref / title-
@@ -86,11 +86,11 @@ batched for auth); `sec-learn`/`sec-kb-refresh` bodies de-stubbed + `harvest.sh`
   `.claude/skills/ai-attack-kb/archive/` (created)
 - **Depends on:** T-8.1
 - **Verification criteria:**
-  - [ ] Duplicate `id` across entries fails the run; a shared-xref pair is flagged for merge — `uv run pytest .claude/skills/ai-attack-kb/scripts/tests/test_dedupe_kb.py` (>1 case)
-  - [ ] An entry with `review_by` in the past is flagged stale; a future one is not — `uv run pytest .claude/skills/ai-attack-kb/scripts/tests/test_staleness_check.py`
-  - [ ] Aging-out moves to `archive/` (no delete) — test asserts the file is relocated, content preserved
-  - [ ] Seed KB has no duplicate ids and no stale entries — `uv run python .claude/skills/ai-attack-kb/scripts/dedupe_kb.py .claude/skills/ai-attack-kb/reference/ && uv run python .claude/skills/ai-attack-kb/scripts/staleness_check.py .claude/skills/ai-attack-kb/reference/` both exit 0
-- **Status:** todo
+  - [x] Duplicate `id` fails the run; a shared-xref pair is flagged for merge (advisory, no fail) — `uv run --with pyyaml --with pytest pytest .../test_dedupe_kb.py` *(5 tests; incl. title-similarity)*
+  - [x] An entry past `review_by` is flagged stale; a future one is not — `uv run --with pyyaml --with pytest pytest .../test_staleness_check.py`
+  - [x] Aging-out moves to `archive/` (no delete) — `test_archive_moves_file_preserving_content`
+  - [x] Seed KB has no duplicate ids and no stale entries — `dedupe_kb` exit 0 (2 advisory xref flags, no dup) + `staleness_check --today 2026-06-06` exit 0
+- **Status:** done *(`archive/` created; cadence note: refresh touches the fast tier only)*
 
 ## 8b — Capture hooks + PreToolUse confinement guardrails (the harness)
 
