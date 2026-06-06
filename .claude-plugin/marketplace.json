@@ -1,0 +1,10 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
+  "name": "white-hacker-marketplace",
+  "owner": { "name": "Jaigouk Kim", "email": "ping@jaigouk.kim" },
+  "metadata": { "pluginRoot": "./plugins" },
+  "plugins": [
+    { "name": "white-hacker", "source": "./plugins/white-hacker", "category": "security",
+      "description": "White-hat security reviewer + self-improving AI-attack KB." }
+  ]
+}

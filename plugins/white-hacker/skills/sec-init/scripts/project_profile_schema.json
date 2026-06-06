@@ -1,0 +1,79 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://white-hacker/skills/sec-init/project-profile.schema.json",
+  "title": "white-hacker project-scope companion profile",
+  "description": "A GATED, project-scope companion the generic white-hacker agent consumes. It specializes detection-derived facts ONLY. additionalProperties:false at the top level GUARANTEES no shipped-identity key (posture, tools, tool-scope, output-contract, review-stages) can ever appear — init never rewrites the shipped identity (ADR-004, ADR-017).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "generated_note",
+    "detected_langs",
+    "frameworks",
+    "present_capabilities",
+    "tools_unavailable",
+    "load_appendices",
+    "ai_pass",
+    "scoring_standard",
+    "threat_model_seed"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string"
+    },
+    "generated_note": {
+      "type": "string",
+      "description": "A factual one-line provenance statement (never an imperative instruction)."
+    },
+    "detected_langs": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "frameworks": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "present_capabilities": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Security capabilities backed by an installed tool (sast/sca/secrets/iac/ai-redteam)."
+    },
+    "tools_unavailable": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Capabilities with no installed tool; the agent degrades these to the Read/Grep/Glob floor."
+    },
+    "load_appendices": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Per-language reference appendices to load (lang-go/lang-python/lang-typescript/lang-java)."
+    },
+    "ai_pass": {
+      "type": "boolean",
+      "description": "True when LLM/AI deps are present; the AI/LLM review pass applies."
+    },
+    "scoring_standard": {
+      "type": ["string", "null"],
+      "description": "Severity scoring standard (e.g. CVSS or an org bug-bar). Defaults to null: must be human-confirmed, never hardcoded."
+    },
+    "threat_model_seed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["assets", "entry_points", "trust_boundaries"],
+      "properties": {
+        "assets": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "entry_points": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "trust_boundaries": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    }
+  }
+}

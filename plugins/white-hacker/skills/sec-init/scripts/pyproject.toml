@@ -1,0 +1,12 @@
+[project]
+name = "white-hacker-sec-init"
+version = "0.1.0"
+description = "Onboarding: run detection + threat-model seed once and emit a gated, project-scope companion profile the generic white-hacker agent consumes — never an identity rewrite (ADR-017)."
+requires-python = ">=3.10"
+dependencies = ["jsonschema>=4.20"]
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -40,6 +40,7 @@ to hack AI products" (`docs/research/si-07-threat-feeds.md`).
 | 7 | [`phase-7-eval-baseline.md`](phase-7-eval-baseline.md) | Labeled finding set; FP-rate tracking before each release | PLAN §8.1 P7 |
 | 8 | [`phase-8-self-improvement.md`](phase-8-self-improvement.md) | KB structure & lint; `sec-learn` reflective loop; `sec-kb-refresh` feed poller; capture hooks | si-08 §1–§5; ADR-004/005/012 |
 | 9 | [`phase-9-eval-guardrails.md`](phase-9-eval-guardrails.md) | Frozen eval corpus; keep-or-revert gate; `PreToolUse` confinement guardrails; passive-drift re-score | si-08 §6, §3.4, §5.2; ADR-004 |
+| 10 | [`phase-10-distribution-init.md`](phase-10-distribution-init.md) | Plugin packaging + marketplace; `.claude/`(dev) vs `plugins/`(payload) split; project-detecting init → gated project-scope companion | spike-07; ADR-014→017 |
 
 **Ordering note.** Phases 0–5 are the inner loop and ship value first (Phase 0 alone beats
 the legacy single-pass Go agent on any language). Phase 7 stands up a *minimum* eval baseline

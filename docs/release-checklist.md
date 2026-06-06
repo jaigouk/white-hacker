@@ -32,5 +32,23 @@ uv run --with jsonschema python evals/score.py \
 - CI action model id + `@anthropic-ai/claude-code` version + every `uses:` SHA still resolve and are
   current (`ci/security-review.action.yml`).
 
-## 4. Living docs + statuses updated
+## 4. Plugin package valid (ADR-017)
+Since white-hacker ships as a Claude Code plugin via a marketplace, the package must validate
+before tagging:
+- **Bump the plugin version.** Increment `version` in
+  `plugins/white-hacker/.claude-plugin/plugin.json` (semver; matches the release tag).
+- **Validate the manifest + catalog.** Either tool passes:
+```bash
+# Stdlib floor validator (no Claude CLI required) — exit 0 on success.
+uv run python packaging/validate_manifest.py .
+# Optional, if the CLI is installed:
+claude plugin validate
+```
+- **Full test suite green.** Re-run step 1 (all skill/hook/eval/packaging tests, incl.
+  `packaging/tests/`).
+- **Marketplace source path resolves.** `.claude-plugin/marketplace.json` lists `white-hacker`
+  with `source` `./plugins/white-hacker`, and that directory exists with `.claude-plugin/plugin.json`
+  inside it (the validator above asserts this).
+
+## 5. Living docs + statuses updated
 - `README.md` status table, `docs/plan/*` task statuses, `docs/ARD.md` (append-only) reflect the release.

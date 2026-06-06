@@ -126,7 +126,7 @@ runnable `poc-*/` with tests) before being relied on; `README`/`PRD`/`DDD`/`ARCH
 **Rationale:** User-mandated discipline; matches global TDD/DDD rules.
 
 ## ADR-014 — Scaffolding under `.claude/`; distribute by copy or plugin
-**Status:** accepted
+**Status:** accepted — distribution mechanism superseded by ADR-017 (spike-07)
 **Decision:** The active agent/skills live under this repo's `.claude/` so they work here;
 for reuse in other projects, copy to `~/.claude/` (user scope) or package as a plugin.
 Identity comes from the `name` field, not the path.
@@ -181,3 +181,36 @@ hook + permissions block is provided ready to enable; disable by removing the `h
 **Alternatives:** (a) a globally-active hook gating the `Write` tool + `git commit` (rejected: breaks
 developer/build sessions and surprises the operator); (b) trusting the hook as the boundary (rejected:
 red-team-falsified — undecidable parsing).
+
+## ADR-017 — Distribute as a Claude Code plugin via a marketplace; `.claude/`(dev) vs `plugins/<name>/`(payload); project-detecting init emits a gated project-scope companion, not a profile rewrite
+**Status:** accepted — supersedes the *distribution mechanism* of ADR-014 (resolved by spike-07)
+**Context:** ADR-014 said "distribute by copy or plugin" but was flagged "requested layout, not
+researched." Spike-07 verified against canonical Anthropic docs (code.claude.com) and the three
+largest actively-maintained reference repos (anthropics/claude-code 130k★,
+anthropics/claude-plugins-official 29.5k★, wshobson/agents 36k★) that the canonical 2026 shape for
+an agent+skills+commands+hooks+KB bundle is a Claude Code **plugin** published via a **marketplace**.
+**Decision:**
+1. Ship the payload as a plugin: `plugins/white-hacker/` with `.claude-plugin/plugin.json` (only the
+   manifest in `.claude-plugin/`) and component dirs (`agents/ skills/ commands/ hooks/ scripts/`) at
+   the **plugin root**; catalog at repo-root `.claude-plugin/marketplace.json`. Keep a **thin dev
+   `.claude/`** for dogfooding; dogfood via `claude --plugin-dir ./plugins/white-hacker`. The repo
+   `CLAUDE.md` is **dev-only and not shipped** (a plugin-root CLAUDE.md is not loaded by Claude Code).
+2. Agent **identity lives in the agent `.md` + skills**, never a plugin CLAUDE.md. Skills become
+   namespaced (`/white-hacker:…`); hooks reference `${CLAUDE_PLUGIN_ROOT}`.
+3. **Project-detecting init = run the existing `sec-detect` + `sec-threat-model` once at onboarding**
+   and persist a committed, **project-scope companion** (pruned scanner registry, loaded language
+   appendices, threat-model seed, scoring standard, AI-pass flag) that the generic agent consumes —
+   plus an optional **project-scope** SessionStart hook emitting detected facts as **factual
+   statements** (≤10,000 chars, never imperative — imperative additionalContext trips Claude's
+   prompt-injection defenses; white-hacker is itself an injection target). Init **never** rewrites the
+   shipped identity (ADR-004); every generated artifact passes the **Phase-9 keep-or-revert gate** +
+   size caps. Honor anthropics/claude-code#16538 (plugin-scope SessionStart additionalContext may not
+   surface → use project scope).
+**Rationale:** canonical mechanism; matches the largest active repos; preserves identity (ADR-004);
+reuses existing detection skills rather than building a new subsystem; the floor still guarantees value.
+**Alternatives rejected:** (a) copy `.claude/` into each repo — ad-hoc, no
+versioning/namespacing/marketplace discovery; (b) per-project rewrite of the shipped agent profile —
+identity drift (no built-in guard) and prompt-injection risk from imperative auto-injected context.
+**Consequences:** namespaced skill invocation; `${CLAUDE_PLUGIN_ROOT}` in hooks; repo `CLAUDE.md`
+excluded from the shipped artifact; a `/sec-init` skill + `--init-only` Setup path become the
+onboarding surface.

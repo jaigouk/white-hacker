@@ -1,0 +1,10 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin.json",
+  "name": "white-hacker",
+  "version": "0.1.0",
+  "description": "Generic, self-improving white-hat security reviewer (defending-code inner loop + self-improving outer loop) for any TS/Go/Python/Java repo, incl. AI/LLM/MCP/agentic risks.",
+  "author": { "name": "Jaigouk Kim", "email": "ping@jaigouk.kim" },
+  "license": "Apache-2.0",
+  "repository": "https://github.com/jaigouk/white-hacker",
+  "keywords": ["security", "sast", "owasp", "llm-security", "code-review"]
+}

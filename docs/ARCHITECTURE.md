@@ -395,14 +395,38 @@ the durable thing is the capability + the floor.
 
 ## 8. Distribution
 
-One definition, three carriers, multiple scopes (ADR-009, ADR-014):
+The distributable is a Claude Code **plugin published via a marketplace** — the canonical 2026 shape
+for an agent+skills+commands+hooks+KB bundle, verified in spike-07 against canonical Anthropic docs
+and the three largest actively-maintained reference repos (ADR-017, supersedes the *distribution
+mechanism* of ADR-014). One definition, three carriers, multiple scopes (ADR-009).
 
+- **Dev vs payload split:** the repo's `.claude/`(dev) is for dogfooding *here*; the shipped
+  **payload** lives in `plugins/white-hacker/` — `.claude-plugin/plugin.json` (only the manifest in
+  `.claude-plugin/`) plus component dirs (`agents/ skills/ commands/ hooks/ scripts/`) at the
+  **plugin root** — with the catalog at repo-root `.claude-plugin/marketplace.json`. The two are
+  siblings with different jobs; the repo `CLAUDE.md` is **dev-only and not shipped** (a plugin-root
+  CLAUDE.md is not loaded by Claude Code, so identity must live in the agent `.md` + skills).
+- **Dogfood loop:** run the payload without installing via `claude --plugin-dir
+  ./plugins/white-hacker` (or a self-registered marketplace); validate with `claude plugin validate`.
+  Install elsewhere with `claude plugin marketplace add owner/repo` → `claude plugin install
+  white-hacker@<marketplace> [--scope user|project|local]`.
+- **Plugin consequences:** skills become **namespaced** (`/white-hacker:security-review`) and hooks
+  reference `${CLAUDE_PLUGIN_ROOT}` for portable paths (ADR-017).
 - **Carriers from one file:** `/security-review` slash command · delegated subagent
   (isolated context, summary-only return) · agent-team teammate (TL/QA/Dev + white-hacker).
   Identity comes from the `name` field, not the path.
-- **Scopes:** active under this repo's `.claude/` (works here); copy to `~/.claude/` for
-  user-scope cross-project reuse; or package as a **plugin**. Project scope only when config is
-  repo-specific.
+- **Scopes:** plugin/user scope ships the generic base; project scope only when config is
+  repo-specific (the init companion below).
+- **Project-detecting init:** onboarding runs the existing `sec-detect` + `sec-threat-model` **once**
+  and persists a committed, **project-scope companion** (scanner registry pruned to installed tools,
+  loaded language appendices, threat-model seed, scoring standard, AI-pass flag) the generic agent
+  consumes — plus an optional **project-scope** SessionStart hook emitting detected facts as
+  **factual statements** (≤10,000 chars, never imperative — imperative additionalContext trips
+  Claude's prompt-injection defenses, and white-hacker is itself an injection target). Init **never**
+  rewrites the shipped identity (ADR-004); every generated artifact passes the Phase-9 keep-or-revert
+  gate + size caps. Project scope honors anthropics/claude-code#16538 (plugin-scope SessionStart
+  additionalContext may not surface). The `/sec-init` skill + `--init-only` Setup path are the
+  onboarding surface (ADR-017, spike-07).
 - **Team modes:** *sequential / subagent mode* is the default for side projects — the lead invokes
   white-hacker at the review phase and gets back only the `TRIAGE.json` summary + the
   `SECURITY-REPORT.md` path. *Team mode* is opt-in for adversarial cross-check; route findings to
@@ -437,3 +461,4 @@ One definition, three carriers, multiple scopes (ADR-009, ADR-014):
 | Plan-first process; living docs | ADR-013 |
 | Scaffolding under `.claude/`; distribute by copy or plugin | ADR-014 |
 | **Tools are a swappable capability layer; registry self-updates** | **ADR-015** |
+| **Distribute as plugin/marketplace; dev vs payload; project-detecting init** | **ADR-017** |

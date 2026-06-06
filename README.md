@@ -45,11 +45,11 @@ Everything else — *especially* specific scanner tools — is secondary and swa
 
 ## What it is
 
-- **One agent** (`.claude/agents/white-hacker.md`, ADR-009): a senior-security-engineer
+- **One agent** (`plugins/white-hacker/agents/white-hacker.md`, ADR-009): a senior-security-engineer
   identity + stage dispatch. Reusable three ways — as `/security-review`, a delegated
   subagent, and an agent-team teammate — from a single definition.
-- **~12 composable skills** (`.claude/skills/`), one per stage, chained via on-disk JSON so
-  each runs standalone, resumes after context exhaustion, and is CI-gateable.
+- **~12 composable skills** (`plugins/white-hacker/skills/`), one per stage, chained via on-disk
+  JSON so each runs standalone, resumes after context exhaustion, and is CI-gateable.
 - **A living KB** (`ai-attack-kb/reference/`): dated, source-linked, status-tagged AI-attack
   technique entries, progressive-disclosure loaded only when an LLM/agent/MCP repo is reviewed.
 
@@ -94,7 +94,9 @@ The agent has three carriers, one definition.
 ```
 
 Runs discovery → triage → report and returns **only triaged findings** (never raw discovery
-output) plus the `SECURITY-REPORT.md` path. CI gates on `counts.high == 0`.
+output) plus the `SECURITY-REPORT.md` path. CI gates on `counts.high == 0`. When installed as a
+plugin the commands are namespaced — `/white-hacker:security-review` (see **Install & onboarding**
+below); the bare form shown here applies under `--plugin-dir` dev mode or user-scope install.
 
 **2 — Delegated subagent**
 
@@ -137,7 +139,7 @@ depends on a *capability* (SAST · SCA · secrets · IaC · AI-redteam), **never
 Examples *today* (illustrative defaults, not requirements): Opengrep (SAST), Trivy /
 OSV-Scanner (SCA/IaC), gitleaks / trufflehog (secrets), native gates (govulncheck / pip-audit /
 npm audit). Whatever the repo or user already has plugs in behind the same capability — see
-**`.claude/skills/_shared/reference/tool-registry.md`** for the full mapping and the rules
+**`plugins/white-hacker/skills/_shared/reference/tool-registry.md`** for the full mapping and the rules
 (pin versions, never auto-install from unpinned sources, ADR-006).
 
 Default scanning is **static-analysis-only** (ADR-007): no build / run / install / network.
@@ -147,40 +149,114 @@ Execution-verified PoC detonation is an opt-in, sandboxed escalation for high-va
 
 ## Repo layout
 
-Artifacts live under `.claude/` so they work *here* (ADR-014); identity comes from the agent's
-`name` field, not the path.
+The repo root **is** the marketplace; the shipped artifacts live under `plugins/white-hacker/`
+(payload), separate from this repo's own thin `.claude/` (dev config). Identity comes from the
+agent's `name` field, not the path (ADR-017).
 
 ```
-white-hacker/
-├── .claude/
-│   ├── agents/white-hacker.md          # the ONE definition (persona, posture, dispatch)
-│   ├── commands/security-review.md     # thin /security-review entry point
-│   ├── hooks/                          # PreToolUse guardrails + capture (planned)
+white-hacker/                            # repo root == the marketplace
+├── .claude-plugin/marketplace.json      # catalog (lists the white-hacker plugin)
+├── plugins/white-hacker/                # the shipped plugin PAYLOAD
+│   ├── .claude-plugin/plugin.json       # ONLY the manifest lives here
+│   ├── agents/white-hacker.md           # the ONE definition (persona, posture, dispatch)
+│   ├── commands/security-review.md      # thin /security-review entry point
+│   ├── hooks/                           # PreToolUse guardrails + capture + SessionStart-detect
 │   └── skills/
-│       ├── sec-threat-model/           # → THREAT_MODEL.md (scope + scoring standard)
-│       ├── sec-detect/                 # → SCAN-PLAN.json (stack + scanner selection)
-│       ├── secrets-scan/  deps-scan/   # → SECRETS.json / DEPS.json
-│       ├── sec-vuln-scan/              # discovery — RECALL → VULN-FINDINGS.json
-│       ├── ai-llm-review/              # AI/LLM/MCP/Agentic pass (merged into findings)
-│       ├── sec-triage/                 # verification + triage — PRECISION → TRIAGE.json
-│       ├── sec-report/                 # → SECURITY-REPORT.md + machine JSON
-│       ├── sec-patch/                  # opt-in patch ladder → PATCHES/
-│       ├── ai-attack-kb/reference/     # living KB (dated, sourced AI-attack entries)
-│       ├── sec-learn/  sec-kb-refresh/ # OUTER loop: reflect / refresh feeds
-│       └── _shared/reference/          # stable checklists, severity rubric, finding schema,
-│                                       #   tool-registry.md (capability → tools)
-├── config/                             # custom-scan-instructions + fp-rules examples
-├── ci/                                 # security-review.action.yml (pinned model + SHA-pinned)
-└── docs/                               # ARD, plan/, research/ (spikes, PoCs, takeaways)
+│       ├── sec-init/                    # → <repo>/.white-hacker/project-profile.json (onboarding)
+│       ├── sec-threat-model/            # → THREAT_MODEL.md (scope + scoring standard)
+│       ├── sec-detect/                  # → SCAN-PLAN.json (stack + scanner selection)
+│       ├── secrets-scan/  deps-scan/    # → SECRETS.json / DEPS.json
+│       ├── sec-vuln-scan/               # discovery — RECALL → VULN-FINDINGS.json
+│       ├── ai-llm-review/               # AI/LLM/MCP/Agentic pass (merged into findings)
+│       ├── sec-triage/                  # verification + triage — PRECISION → TRIAGE.json
+│       ├── sec-report/                  # → SECURITY-REPORT.md + machine JSON
+│       ├── sec-patch/                   # opt-in patch ladder → PATCHES/
+│       ├── ai-attack-kb/reference/      # living KB (dated, sourced AI-attack entries)
+│       ├── sec-learn/  sec-kb-refresh/  # OUTER loop: reflect / refresh feeds
+│       └── _shared/reference/           # stable checklists, severity rubric, finding schema,
+│                                        #   tool-registry.md (capability → tools)
+├── .claude/                             # THIS repo's own dev/dogfood config (thin; NOT shipped)
+├── packaging/                           # stdlib manifest/marketplace validator (+ tests)
+├── config/                              # custom-scan-instructions + fp-rules examples
+├── ci/                                  # security-review.action.yml (pinned model + SHA-pinned)
+└── docs/                                # ARD, plan/, research/ (spikes, PoCs, takeaways)
 ```
 
 ---
 
-## Distribution (ADR-014)
+## Install & onboarding
 
-- **Copy to user scope** — `~/.claude/agents/` + `~/.claude/skills/` — for cross-project reuse.
-- **Package as a plugin** — same artifacts, distributed as a unit.
-- **Project scope** (this repo's `.claude/`) — when the configuration is repo-specific.
+white-hacker ships as a **Claude Code plugin distributed through a marketplace** (ADR-017,
+superseding ADR-014; see `docs/research/spike-07-agent-distribution-and-init-2026-06.md`).
+This repo *is* the marketplace: the catalog is `.claude-plugin/marketplace.json` (marketplace
+name `white-hacker-marketplace`) and the shipped payload is `plugins/white-hacker/`.
+
+### 1 — Install (end users)
+
+```
+/plugin marketplace add jaigouk/white-hacker
+/plugin install white-hacker@white-hacker-marketplace
+```
+
+The first line registers this GitHub repo as a marketplace; the second installs the
+`white-hacker` plugin from it. Once installed, skills are **namespaced** under the plugin:
+
+```
+/white-hacker:security-review            # the review entry point
+/white-hacker:sec-init                   # per-project onboarding (below)
+```
+
+> Fallback (legacy, no marketplace): copy `plugins/white-hacker/{agents,skills,commands,hooks}/`
+> into your **user scope** (`~/.claude/`) for cross-project reuse. This is the pre-ADR-017
+> model and is no longer the primary path — prefer marketplace install so updates flow through
+> `/plugin`.
+
+### 2 — Dev / dogfood loop (no install)
+
+Run the plugin straight from the working tree — no marketplace registration, no copy:
+
+```
+claude --plugin-dir ./plugins/white-hacker
+```
+
+This is how the repo dogfoods its own agent. The repo's own `.claude/` is *dev* config only
+(conventions + agent-memory); the **shipped** behavior all comes from `plugins/white-hacker/`.
+
+### 3 — Project onboarding with `/sec-init`
+
+After install, run once per repository you want to review:
+
+```
+/white-hacker:sec-init     # (or /sec-init when run via --plugin-dir)
+```
+
+`sec-init` **detects the project** — languages, frameworks, which scanners are installed, and
+whether the repo has an AI/LLM/MCP/agentic surface — and writes a **gated, project-scope
+companion** at `<repo>/.white-hacker/project-profile.json`. The generic agent *consumes* this
+profile to specialize a review (pruned scanner registry, the right language appendices, a
+threat-model seed, the scoring standard, and the AI-pass flag) **without ever rewriting the
+shipped agent identity** (ADR-004): the profile is factual project context, never imperative
+instructions, and `posture`/`tools` keys are schema-rejected.
+
+A project-scope **SessionStart hook** can surface that profile as factual context at the start
+of each session (the agent still treats injected content as untrusted). Register it at
+**project scope, not plugin scope**, per the Claude Code bug
+[anthropics/claude-code#16538](https://github.com/anthropics/claude-code/issues/16538).
+As an alternative one-time onboarding carrier, the `claude --init-only` **Setup-hook** path can
+run the same detection once at launch instead of via the user-invoked skill.
+
+### Dev (`.claude/`) vs ship (`plugins/white-hacker/`)
+
+| Path | Role | Shipped to users? |
+|------|------|-------------------|
+| `plugins/white-hacker/.claude-plugin/plugin.json` | the plugin **manifest** (only file under `.claude-plugin/`) | yes |
+| `plugins/white-hacker/{agents,skills,commands,hooks}/` | the **payload** — component dirs at the **plugin root** | yes |
+| `.claude-plugin/marketplace.json` | the **catalog** (this repo == the marketplace) | yes (resolves the source path) |
+| `.claude/` | this repo's **dev/dogfood** config (CLAUDE.md conventions + agent-memory) | **no** |
+| `CLAUDE.md` (repo root / `.claude/`) | **dev conventions only** — a plugin-root `CLAUDE.md` is **not loaded** by Claude Code, so identity lives in the agent + skills, not a CLAUDE.md | **no** |
+
+Because a plugin-root `CLAUDE.md` is not loaded, the agent's identity and posture are carried
+entirely by `agents/white-hacker.md` + the skills (ADR-017). The repo `CLAUDE.md` is dev-only.
 
 Caveat: a subagent's `skills` / `mcpServers` frontmatter does **not** apply when it runs as a
 team teammate (teammates load skills/MCP from project + user settings); plugin subagents ignore
