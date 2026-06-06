@@ -15,6 +15,7 @@ SECRETS.json
 DEPS.json
 SECURITY-REPORT.md
 PATCHES/
+PATCH-STATE.json
 .triage-state/
 .patch-state/
 *.sarif

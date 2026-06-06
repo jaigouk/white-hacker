@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://white-hacker/patch-state-schema.json",
+  "title": "white-hacker PATCH-STATE.json",
+  "description": "Per-finding record of the sec-patch ladder (build -> PoC stops -> tests pass -> re-attack) + variant hunt + verdict. Verification CLASS is kept separate from severity (PLAN 6.1): the ladder records what was demonstrated, not how bad the bug is. Validated by scripts/validate_patch_state.py.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "patches"],
+  "properties": {
+    "schema_version": { "type": "string", "minLength": 1 },
+    "patches": { "type": "array", "items": { "$ref": "#/$defs/patch_record" } }
+  },
+  "$defs": {
+    "tri_state": {
+      "description": "pass = demonstrated to hold; fail = demonstrated to fail; n/a = rung not applicable (e.g. no build system, no existing tests).",
+      "enum": ["pass", "fail", "n/a"]
+    },
+    "patch_record": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["finding_id", "patch_path", "ladder", "variants", "verdict"],
+      "properties": {
+        "finding_id": {
+          "description": "The TRIAGE.json / finding-schema id this patch addresses.",
+          "type": "string", "pattern": "^F-[0-9]{3,}$"
+        },
+        "patch_path": {
+          "description": "Path to the proposed diff under ./PATCHES/ (sec-patch writes nowhere else; ADR-010 enforced at the data layer).",
+          "type": "string", "pattern": "^PATCHES/.+"
+        },
+        "ladder": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["build", "poc_stopped", "tests_passed", "reattack"],
+          "properties": {
+            "build": { "$ref": "#/$defs/tri_state" },
+            "poc_stopped": { "$ref": "#/$defs/tri_state" },
+            "tests_passed": { "$ref": "#/$defs/tri_state" },
+            "reattack": { "$ref": "#/$defs/tri_state" }
+          }
+        },
+        "variants": {
+          "description": "Sibling call-sites / same-class occurrences found during the variant hunt. May be empty.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["file", "line"],
+            "properties": {
+              "file": { "type": "string", "minLength": 1 },
+              "line": { "type": "integer", "minimum": 0 },
+              "note": { "type": "string" }
+            }
+          }
+        },
+        "verdict": {
+          "description": "Overall outcome (a CLASS, not a severity — PLAN 6.1). patched = ladder green; patch_failed = the fix does not hold (a rung failed); wont_fix = accepted-not-patched; needs_human = requires a human decision/apply.",
+          "enum": ["patched", "patch_failed", "wont_fix", "needs_human"]
+        }
+      }
+    }
+  }
+}

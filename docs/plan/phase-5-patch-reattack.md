@@ -84,6 +84,43 @@ living docs + statuses updated. Then **re-groom Phase 6** (rolling-wave).
 
 ---
 
+## Grooming refinement (deepened 2026-06-06 — 9-agent verification workflow)
+
+> Delta on the re-groom above, from a verification workflow (spike-06 resolved + confinement red-team).
+> **spike-06 RESOLVED (HIGH):** `docs/research/spike-06-claude-code-hooks-protocol-2026-06.md` (sourced to
+> code.claude.com/docs). A PreToolUse hook gets `{…, tool_name, tool_input}` on stdin (for Bash,
+> `tool_input.command` is the full string; `cwd` to canonicalize); **exit 2 = hard block** (stderr→Claude);
+> registered under `hooks.PreToolUse[].{matcher:"Bash", hooks[].{type:"command",command}}`; the
+> `permissions.deny` list parses compound commands and checks each sub-command (strips
+> `timeout/time/nice/nohup/stdbuf/xargs`), so `Bash(git apply *)` etc. are enforced by CC's own parser.
+
+**Red-team verdict on T-5.3 (load-bearing):** a verb+path Bash hook is **NOT** a real boundary — 16
+verified bypasses (symlink-through-allowlist, `mv`/`cp` laundering, `python3 -c`/`perl -e`/`sed -i`/
+`awk 'print>f'`, heredoc traversal, `patch -p1 <diff` which is a git-apply equivalent off the verb list).
+**Re-frame T-5.3 as defense-in-depth, strongest first:** (1) **STRUCTURAL baseline** — no Write/Edit tool
+(already), no *granted* apply capability, `sec-patch` emits a diff under `PATCHES/` and a **human applies
+it** (the only real guarantee — lead with it); (2) **`permissions.deny`** for git/patch mutation verbs
+(CC-parsed, robust); (3) a conservative deny-by-default Bash **hook as a tripwire** that
+realpath-canonicalizes then matches a pinned allowlist and denies interpreters / laundering verbs /
+`.claude/**` writes. Hook header + phase DoD carry the verbatim residual-risk statement.
+
+## Decisions on open questions (jkim defaults — 2026-06-06, "go through phases automatically"; all reversible)
+1. **Re-attack = a fresh `/security-review` / `/sec-patch` invocation in a clean session** — NOT adding
+   `Task`/`Agent` to white-hacker's `tools:` (keeps the capability surface minimal; honors ADR-008
+   fresh-context). T-5.4's `reattack:pass` is a transcribed one-time live demo, not a CI gate.
+2. **`PATCH-STATE.json` is a live-run artifact → gitignored** (like `VULN-FINDINGS.json`/`TRIAGE.json`);
+   the fixture's tracked verdict is `EXPECTED-PATCH-STATE.json`.
+3. **Confinement backstop ships in a COMMITTED `.claude/settings.json`** (not the gitignored
+   `settings.local.json`), so the ADR-010 guard survives a fresh clone.
+4. **Personal `settings.local.json` allows left as-is** (per-author, gitignored); the shipped guard is the
+   committed deny-list + hook + no-Write/Edit. Interpreter/laundering writes during a patch run are caught
+   by layer (3).
+5. **Policy promoted to ADR-016** (append-only) — git/patch-apply denial is hook+permissions-enforced (not
+   capability-absent), with the residual-risk statement recorded.
+6. **`verdict` enum = `{patched, patch_failed, wont_fix, needs_human}`** (T-5.2 — done).
+
+---
+
 ### T-5.1 · Implement `sec-patch` body (the patch ladder)
 - **Goal:** `sec-patch/SKILL.md` documents: opt-in only; read `TRIAGE.json`; for each accepted finding
   produce a **root-cause** minimal diff; ladder = build → original PoC no longer triggers → existing
@@ -92,11 +129,12 @@ living docs + statuses updated. Then **re-groom Phase 6** (rolling-wave).
 - **Artifact:** `.claude/skills/sec-patch/SKILL.md`
 - **Depends on:** T-1.1
 - **Verification criteria:**
-  - [ ] Body documents all four ladder rungs in order + variant hunt — `for k in 'build' 'PoC' 'tests pass\|existing tests' 're-attack\|reattack' 'variant'; do grep -qiE "$k" .claude/skills/sec-patch/SKILL.md || echo MISSING:"$k"; done` prints nothing
-  - [ ] States opt-in + writes whitelisted to `./PATCHES/` only — `grep -qi 'opt-in' .claude/skills/sec-patch/SKILL.md && grep -q 'PATCHES/' .claude/skills/sec-patch/SKILL.md`
-  - [ ] Declares `PATCH-STATE.json` output — `grep -q 'PATCH-STATE.json' .claude/skills/sec-patch/SKILL.md`
-  - [ ] De-stubbed; `SKILL.md` < 500 lines — `! grep -q 'STATUS: STUB' .claude/skills/sec-patch/SKILL.md`
-- **Status:** todo
+  - [x] Body documents all four ladder rungs in order + variant hunt — *(grep fixed: plain `|`, not `\|`, under `grep -E`)* `for k in 'build' 'PoC' 'tests pass|existing tests' 're-attack|reattack' 'variant'; do grep -qiE "$k" .claude/skills/sec-patch/SKILL.md || echo MISSING:"$k"; done` prints nothing
+  - [x] States opt-in + writes whitelisted to `./PATCHES/` only — `grep -qi 'opt-in' .claude/skills/sec-patch/SKILL.md && grep -q 'PATCHES/' .claude/skills/sec-patch/SKILL.md`
+  - [x] Declares `PATCH-STATE.json` output + references the schema — `grep -q 'PATCH-STATE.json' … && grep -q 'patch-state-schema.json' .claude/skills/sec-patch/SKILL.md`
+  - [x] De-stubbed; `SKILL.md` < 500 lines (65) — `! grep -q 'STATUS: STUB' .claude/skills/sec-patch/SKILL.md`
+  - [x] Re-attack spawn mechanism documented (fresh `/security-review`/`/sec-patch` invocation) — `grep -qiE 'fresh (agent|session)|/security-review|/sec-patch' .claude/skills/sec-patch/SKILL.md`; accepted-finding selector (`excluded_by` absent + report-gate) documented; opt-in `/sec-patch` command exists at `.claude/commands/sec-patch.md`
+- **Status:** done
 
 ### T-5.2 · Define + validate the `PATCH-STATE.json` schema
 - **Goal:** a schema for `PATCH-STATE.json` recording per-finding: `finding_id`, `patch_path`,
@@ -105,10 +143,10 @@ living docs + statuses updated. Then **re-groom Phase 6** (rolling-wave).
 - **Artifact:** `.claude/skills/sec-patch/patch-state-schema.json` (+ test in `scripts/tests/`)
 - **Depends on:** T-5.1
 - **Verification criteria:**
-  - [ ] A sample `PATCH-STATE.json` validates; a missing ladder rung is rejected — `uv run pytest .claude/skills/sec-patch/scripts/tests/test_patch_state_schema.py` (>1 test, edge cases)
-  - [ ] Ladder fields are tri-state enums `{pass,fail,n/a}` — asserted in a test
-  - [ ] `sec-patch/SKILL.md` references the schema — `grep -q 'patch-state-schema.json' .claude/skills/sec-patch/SKILL.md`
-- **Status:** todo
+  - [x] A sample `PATCH-STATE.json` validates; a missing ladder rung is rejected — `uv run --with jsonschema --with pytest pytest .claude/skills/sec-patch/scripts/tests/test_patch_state_schema.py` *(16 tests)*
+  - [x] Ladder fields are tri-state enums `{pass,fail,n/a}` (exactly) — `test_tri_state_enum_is_exactly_pass_fail_na`; `verdict` enum `{patched,patch_failed,wont_fix,needs_human}` (`test_verdict_enum_is_class_not_severity`); `patch_path` must be under `PATCHES/` (`test_patch_path_must_be_under_patches`); schema carries **no severity** field (`test_schema_carries_no_severity_field`, PLAN §6.1)
+  - [x] `sec-patch/SKILL.md` references the schema — `grep -q 'patch-state-schema.json' .claude/skills/sec-patch/SKILL.md`
+- **Status:** done
 
 ### T-5.3 · Enforce write-confinement (capability-removal, not instruction) — re-scoped to a Bash guard
 > **Re-groom note (2026-06-06):** the agent already exposes no `Write`/`Edit` (`tools: Read, Grep,
