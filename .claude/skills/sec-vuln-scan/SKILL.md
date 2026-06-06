@@ -28,6 +28,31 @@ Brute-force "more agents" converges on the same shallow bugs. Instead:
 For every candidate, record `{file, line, category, source, sink, why-reachable}`. **Report unproven
 candidates too**, flagged with a lower `confidence` — recall is the goal here; triage prunes.
 
+## SAST capability selection (+ degradation)
+Code-level discovery runs behind the **SAST capability** (ADR-015) — read
+`SCAN-PLAN.json`'s `category_tool["sast"]`:
+- **Tool bound** (illustrative: Opengrep with Semgrep-compatible rules, or a per-language linter such
+  as gosec/bandit/eslint-plugin-security that *serves the detected language*): run it, fold its hits
+  into the candidate set, and stamp them `tool_assisted:true` (via `_shared/scripts/degradation.py`).
+- **Degraded** (`null`, or the only SAST tool doesn't serve this language): run the **Read/Grep/Glob
+  heuristic floor** against `core-checklist.md` + the `lang-*.md` appendices, stamp `tool_assisted:false`,
+  cap confidence, and list `sast` in `summary.tools_unavailable`. **Discovery never blocks** on a
+  missing engine.
+
+**Coverage caveat (PLAN §4.3):** SCA / IaC tools (e.g. Trivy) have **no SAST** — a clean dependency or
+config scan is *not* source coverage. Always **combine** the SAST capability with SCA/secrets/IaC; one
+green scan in one capability says nothing about the others. (On a host with no SAST engine installed,
+this stage runs the floor — the selection logic is proven by the Phase-3 degradation test with an
+injected `which`.)
+
+## IaC capability selection (+ degradation)
+Run the **IaC capability** **only when `SCAN-PLAN.json` reports infra** (`docker`/`github-actions`/
+k8s/Terraform) — otherwise skip cleanly (no infra ⇒ no IaC tool invoked). When `category_tool["iac"]`
+is bound (illustrative: `trivy config`, Checkov, hadolint, zizmor), run it against the rendered
+manifests and load [`infra.md`](../_shared/reference/infra.md) for the patterns; else apply `infra.md`
+over the files on the floor (`tool_assisted:false`). Honor ADR-006 pinning in any invocation
+(pin/digest/signature; `--skip-db-update` for offline).
+
 ## Prompting stance
 "Find security vulnerabilities in this code. Explain why each is exploitable and how an attacker
 reaches it." Provide context and intent; delegate *how* to scan. Do not paste the exclusion list

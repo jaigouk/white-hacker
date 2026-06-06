@@ -11,6 +11,11 @@
 - **Floor** = the zero-install fallback that always works.
 - Each tool entry should carry: `tool · cost · langs/ecosystems · invoke · notes · added(date,source)`.
 - Prefer whatever the **repo or user already has**; do not install without need + pinning (ADR-006).
+- **Executable twin:** the runtime selection *order* lives in
+  `.claude/skills/sec-detect/scripts/detect_tools.py::SCANNER_PREFERENCE` (the capability→ordered-tools
+  map `sec-detect` actually binds, including the `ai-redteam` capability added in Phase 2). Keep this
+  doc and that map in sync — `_shared/scripts/tests/test_registry_lock.py` fails if a capability in the
+  code is missing here.
 
 ## Capabilities
 
@@ -37,6 +42,18 @@
 - Examples: promptfoo redteam · garak.
 
 ### (add new capabilities here as discovered)
+
+## Pinning & supply-chain hygiene (ADR-006 — non-negotiable)
+The reviewer must not become a supply-chain vector itself. Never auto-install from unpinned sources;
+prefer a tool the repo/user already has, else a digest-pinned binary/image with signature/GPG
+verification.
+- **Trivy:** safe stable = **v0.71.0 / v0.70.0+**. **Avoid binary v0.69.4 and images
+  v0.69.5–v0.69.6 (malicious set);** v0.69.2/0.69.3 are safe. Run offline with `--skip-db-update`
+  against the cached DB (matches the "no network during scanning" posture). Trivy = SCA + IaC +
+  secrets + SBOM, **no SAST** — pair with a SAST engine for source coverage.
+- **Actions/CI tools:** pin GitHub Actions to a commit SHA (the official Trivy action was
+  compromised twice in March 2026); pin Docker base images by digest.
+- New/updated tools are added **only** as reviewable, dated change-log entries below (ADR-015).
 
 ## Change log
 > Append dated entries when a tool/capability is added or retired. Format:

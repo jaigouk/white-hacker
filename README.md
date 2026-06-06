@@ -191,20 +191,21 @@ on project-scope skills. See `docs/plan/PLAN.md` §7.1.
 
 ## Status
 
-**Phases 0–2 done (verified)** — the inner loop *aims, finds, and refutes* end-to-end on the
-Read/Grep/Glob floor: `sec-threat-model` + `sec-detect` (with a real `SCAN-PLAN.json` emitter +
-schema) scope and calibrate a review, `sec-vuln-scan` (recall) and `sec-triage` (precision,
-adversarial, schema-gated, deduped) split discovery from verification, and `/security-review` runs
-threat-model→detect→discovery→triage→report. 71 tests green; a polyglot mini-repo run is logged in
-`docs/research/poc-floor-review/`. The remaining skills are stubs; the rest lands over the rollout:
+**Phases 0–3 done (verified)** — the inner loop *aims, finds, refutes, and tools-up* end-to-end:
+`sec-threat-model` + `sec-detect` (real `SCAN-PLAN.json` emitter + schema) scope and calibrate a
+review, `sec-vuln-scan` (recall) and `sec-triage` (precision, adversarial, schema-gated, deduped)
+split discovery from verification, and the **tooling layer is a swappable capability**
+(`deps-scan`/`secrets-scan` + SAST/IaC selection) that prefers installed tools and **degrades to the
+floor** — never blocking. 95 tests green; polyglot + SCA + IaC runs logged under `docs/research/`
+(real Trivy SCA + `trivy config`, offline). The remaining skills are stubs; the rest lands over the rollout:
 
 | Phase | Focus | Status |
 |-------|-------|--------|
 | 0 | Skeleton: generic persona + `/security-review` (discovery→triage→report on Read/Grep/Glob) | ✅ done |
 | 1 | FP discipline + structure: adversarial N-of-N, exclusion list, precondition severity, JSON schema, dedup | ✅ done |
 | 2 | Threat-model + detect (per-language `reference/*.md`) | ✅ done |
-| 3 | Tool integration: secrets/deps scan, capability discovery, degradation ladder | next (re-groom) |
-| 4 | AI/LLM + API appendices (framework-triggered) | planned |
+| 3 | Tool integration: secrets/deps scan, capability discovery, degradation ladder | ✅ done |
+| 4 | AI/LLM + API appendices (framework-triggered) | next (re-groom) |
 | 5 | Patch + re-attack (opt-in, capability-removed writes) | planned |
 | 6 | Team mode + CI Action | planned |
 | 7 | Eval (ongoing — validate against a labeled finding set, track FP rate) | planned |
@@ -221,7 +222,7 @@ Full gap analysis, skill specs, tooling, and rollout: **`docs/plan/PLAN.md`**.
 | `.claude/agents/white-hacker.md` | The agent definition — behavior source of truth | Written |
 | `docs/ARD.md` | Architecture Decision Records (ADR-001…015) — the *why* | Written |
 | `docs/plan/PLAN.md` | Foundation plan: gap analysis, skills, tooling, phased rollout | Written |
-| `docs/research/` | Spikes (`spike-01..04`), PoCs (`poc-tool-detection`, `poc-trivy-sca`, `poc-floor-review`), foundation (`fnd-*`) + self-improvement (`si-*`) takeaways | Written |
+| `docs/research/` | Spikes (`spike-01..04`), PoCs (`poc-tool-detection`, `poc-trivy-sca`, `poc-floor-review`, `poc-iac-scan`), foundation (`fnd-*`) + self-improvement (`si-*`) takeaways | Written |
 | `docs/PRD.md` | Product requirements (FR/NFR + verification criteria) | Written |
 | `docs/DDD.md` | Domain model (ubiquitous language, bounded contexts) | Written |
 | `docs/ARCHITECTURE.md` | The *what/how* (companion to ARD) | Written |

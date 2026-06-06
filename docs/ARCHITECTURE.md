@@ -9,17 +9,18 @@ product is not a scanner — it is **two nested loops over plain-text artifacts 
 interfaces** (Agent Skills, MCP). Specific tools are a swappable capability layer (ADR-015);
 the loops are the whole point.
 
-> **Current build state (2026-06-06): Phases 0–2 done (verified).** Built on disk today: the agent
+> **Current build state (2026-06-06): Phases 0–3 done (verified).** Built on disk today: the agent
 > definition; the inner-loop skill *bodies* for `sec-threat-model`, `sec-detect`, `sec-vuln-scan`
-> (discovery/recall), and `sec-triage` (precision); the `_shared/reference/*` content
-> (core-checklist, severity-rubric, exclusion-rules, the four `lang-*.md` appendices, tool-registry)
-> and the real `finding-schema.json`; `sec-detect`'s `detect_tools.py` + `scan-plan-schema.json` +
-> validators with tests (71 tests green); and the `/security-review` command wired to run
-> threat-model→detect→discovery→triage→report on the floor. **Still stubs / planned** (see
-> `docs/plan/`): `secrets-scan`, `deps-scan`, `ai-llm-review`, `sec-patch`, `sec-report`, the
-> `ai-attack-kb` entries, `.claude/hooks/` scripts, `.claude/settings.json` guardrail wiring, and
-> `evals/`. Sections below describe the intended design in present tense — treat anything in the
-> "planned" list as not-yet-built.
+> (discovery/recall incl. SAST+IaC capability selection), `sec-triage` (precision), `deps-scan`
+> (SCA capability + Trivy normalizer), and `secrets-scan` (secrets capability + redaction); the
+> `_shared/reference/*` content (core-checklist, severity-rubric, exclusion-rules, the four
+> `lang-*.md` appendices, `infra.md`, tool-registry) and the real `finding-schema.json`;
+> `sec-detect`'s `detect_tools.py` + `scan-plan-schema.json`, the shared `degradation.py` glue, and
+> the SCA/secrets normalizers, all with tests (95 tests green); and the `/security-review` command
+> wired to run threat-model→detect→discovery→triage→report on the floor. **Still stubs / planned**
+> (see `docs/plan/`): `ai-llm-review`, `sec-patch`, `sec-report`, the `ai-attack-kb` entries,
+> `.claude/hooks/` scripts, `.claude/settings.json` guardrail wiring, and `evals/`. Sections below
+> describe the intended design in present tense — treat anything in the "planned" list as not-yet-built.
 
 - **INNER loop** (per review) — Anthropic's `defending-code-reference-harness` methodology:
   threat-model → discovery (recall) → verification (precision) → triage → patch (+re-attack).
