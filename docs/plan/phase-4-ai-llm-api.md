@@ -236,7 +236,7 @@ sink + lethal-trifecta path (KB-cited) and spares the clean look-alike, findings
 - **Edge cases / test notes:** the clean look-alike (schema-validated structured output before the sink)
   must NOT fire; an MCP-only repo (no langchain/openai) must still flip `ai_pass` after sub-task 1.
 - **Verification criteria:**
-  - [ ] `detect_tools` flips `ai_pass:true` on the fixture (AI/MCP dep) incl. an MCP-only manifest — `uv run --with jsonschema python .claude/skills/sec-detect/scripts/detect_tools.py docs/research/poc-ai-review/<ai-vuln> | python3 -c 'import json,sys;assert json.load(sys.stdin)["ai_pass"]'` + a `sec-detect` MCP test
-  - [ ] The AI pass flags the LLM05 sink + lethal-trifecta path with non-empty `kb_refs`, and does NOT flag the clean look-alike — before/after logged in README
-  - [ ] Findings validate against T-1.1 and every `kb_ref` resolves — `uv run --with jsonschema python .claude/skills/_shared/scripts/validate_findings.py <output> --check-kb-refs .claude/skills/ai-attack-kb/reference/` + the new `_shared` test
-- **Status:** todo
+  - [x] `detect_tools` flips `ai_pass:true` on the fixture (AI/MCP dep) incl. an MCP-only manifest — `uv run --with jsonschema python .claude/skills/sec-detect/scripts/detect_tools.py docs/research/poc-ai-review/ai-vuln | python3 -c 'import json,sys;assert json.load(sys.stdin)["ai_pass"]'` + a `sec-detect` MCP test *(ai-vuln + ai-vuln-mcp-only both True; +4 MCP tests, incl. no-overmatch)*
+  - [x] The AI pass flags the LLM05 sink + lethal-trifecta path with non-empty `kb_refs`, and does NOT flag the clean look-alike — before/after logged in README *(F-001 LLM05@28, F-002 trifecta@40, F-003/F-004 MCP; look-alike spared — see `poc-ai-review/README.md`)*
+  - [x] Findings validate against T-1.1 and every `kb_ref` resolves — `uv run --with jsonschema python .claude/skills/_shared/scripts/validate_findings.py docs/research/poc-ai-review/EXPECTED-FINDINGS.json --check-kb-refs .claude/skills/ai-attack-kb/reference/` + the new `_shared` test *(OK; +6 `--check-kb-refs` tests)*
+- **Status:** done *(fixture findings file named `EXPECTED-FINDINGS.json` — the live-chain name `VULN-FINDINGS.json` is gitignored)*

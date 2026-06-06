@@ -140,3 +140,61 @@ def test_main_cli_detects_dup_ids(tmp_path):
     # schema is fine, but --no-dup-ids should fail it
     assert vf.main([str(p)]) == 0
     assert vf.main([str(p), "--no-dup-ids"]) == 1
+
+
+# === T-4.6: --check-kb-refs (every kb_ref must resolve to a KB entry id) ===
+def _make_kb(tmp_path, *ids):
+    kb = tmp_path / "kb"
+    kb.mkdir()
+    for i in ids:
+        (kb / f"{i.lower()}.md").write_text(
+            f"---\nid: {i}\ntitle: t\ntechnique_class: data-exfil\n---\nbody\n"
+        )
+    return kb
+
+
+def test_kb_entry_ids_parses_front_matter(tmp_path):
+    kb = _make_kb(tmp_path, "AISEC-DATA-EXFIL-001", "AISEC-TOOL-POISONING-001")
+    assert vf.kb_entry_ids(kb) == {"AISEC-DATA-EXFIL-001", "AISEC-TOOL-POISONING-001"}
+
+
+def test_unresolved_kb_refs_empty_when_all_resolve():
+    d = copy.deepcopy(VALID)
+    d["findings"][0]["kb_refs"] = ["AISEC-DATA-EXFIL-001"]
+    assert vf.unresolved_kb_refs(d, {"AISEC-DATA-EXFIL-001"}) == []
+
+
+def test_unresolved_kb_refs_reports_dangling():
+    d = copy.deepcopy(VALID)
+    d["findings"][0]["kb_refs"] = ["AISEC-NOPE-999"]
+    errs = vf.unresolved_kb_refs(d, {"AISEC-DATA-EXFIL-001"})
+    assert len(errs) == 1 and "AISEC-NOPE-999" in errs[0]
+
+
+def test_main_check_kb_refs_resolves(tmp_path):
+    import json
+    kb = _make_kb(tmp_path, "AISEC-DATA-EXFIL-001")
+    d = copy.deepcopy(VALID)
+    d["findings"][0]["kb_refs"] = ["AISEC-DATA-EXFIL-001"]
+    p = tmp_path / "ok.json"
+    p.write_text(json.dumps(d))
+    assert vf.main([str(p), "--check-kb-refs", str(kb)]) == 0
+
+
+def test_main_check_kb_refs_dangling_fails(tmp_path):
+    import json
+    kb = _make_kb(tmp_path, "AISEC-DATA-EXFIL-001")
+    d = copy.deepcopy(VALID)
+    d["findings"][0]["kb_refs"] = ["AISEC-DATA-EXFIL-001", "AISEC-GONE-002"]
+    p = tmp_path / "bad.json"
+    p.write_text(json.dumps(d))
+    # passes plain validation, fails the kb-ref resolution check
+    assert vf.main([str(p)]) == 0
+    assert vf.main([str(p), "--check-kb-refs", str(kb)]) == 1
+
+
+def test_main_check_kb_refs_missing_dir_is_usage_error(tmp_path):
+    import json
+    p = tmp_path / "x.json"
+    p.write_text(json.dumps(VALID))
+    assert vf.main([str(p), "--check-kb-refs", str(tmp_path / "nope")]) == 2

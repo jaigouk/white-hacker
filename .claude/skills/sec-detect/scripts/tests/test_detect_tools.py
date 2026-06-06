@@ -169,6 +169,40 @@ def test_ai_pass_false_without_ai_deps(tmp_path: Path):
     assert plan.ai_pass is False
 
 
+# === Phase-4 (T-4.6): MCP detection flips ai_pass on its own ==============
+def test_ai_pass_true_for_mcp_only_python(tmp_path: Path):
+    # An MCP-only repo (no langchain/openai/anthropic) must still flip ai_pass.
+    (tmp_path / "requirements.txt").write_text("mcp==1.10.0\nhttpx\n")
+    plan = dt.build_scan_plan(tmp_path, _which_only())
+    assert plan.ai_pass is True
+    assert "mcp" in plan.frameworks
+    assert "ai-llm.md" in plan.reference_appendices
+
+
+def test_ai_pass_true_for_mcp_npm_sdk(tmp_path: Path):
+    (tmp_path / "package.json").write_text(
+        '{"dependencies": {"@modelcontextprotocol/sdk": "^1.10.0", "express": "^4"}}'
+    )
+    plan = dt.build_scan_plan(tmp_path, _which_only())
+    assert plan.ai_pass is True
+    assert "mcp" in plan.frameworks
+
+
+def test_ai_pass_true_for_fastmcp(tmp_path: Path):
+    (tmp_path / "pyproject.toml").write_text("[project]\ndependencies=['fastmcp>=2']\n")
+    assert dt.build_scan_plan(tmp_path, _which_only()).ai_pass is True
+
+
+def test_mcp_token_not_overmatched(tmp_path: Path):
+    # An unrelated dependency containing the substring "mcp" must NOT flip ai_pass.
+    (tmp_path / "package.json").write_text(
+        '{"dependencies": {"some-mcp-helper": "^1", "express": "^4"}}'
+    )
+    plan = dt.build_scan_plan(tmp_path, _which_only())
+    assert plan.ai_pass is False
+    assert "mcp" not in plan.frameworks
+
+
 # === Phase-2: ai-redteam capability is conditional on ai_pass =============
 def test_ai_redteam_category_only_when_ai_pass(tmp_path: Path):
     (tmp_path / "requirements.txt").write_text("flask\n")  # no AI deps

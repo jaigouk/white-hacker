@@ -81,6 +81,13 @@ AI_FRAMEWORK_SIGNALS: dict[str, tuple[set[str], tuple[str, ...]]] = {
     "torch": ({"requirements.txt", "pyproject.toml", "Pipfile"}, ("torch",)),
     "openai": ({"requirements.txt", "pyproject.toml", "Pipfile", "package.json"}, ("openai",)),
     "anthropic": ({"requirements.txt", "pyproject.toml", "Pipfile", "package.json"}, ("anthropic",)),
+    # MCP (Model Context Protocol). An MCP repo is an AI surface even without an LLM SDK,
+    # so it must flip ai_pass on its own. Tokens are precise to avoid matching the bare
+    # substring "mcp" inside unrelated names: the npm SDK, the `modelcontextprotocol`
+    # string, fastmcp, and the Python `mcp` package in its pinned/extra/quoted forms.
+    "mcp": ({"requirements.txt", "pyproject.toml", "Pipfile", "package.json"},
+            ("modelcontextprotocol", "@modelcontextprotocol/sdk", "fastmcp",
+             '"mcp"', "mcp==", "mcp>=", "mcp~=", "mcp[")),
 }
 
 # Backend/web frameworks → the API appendix (OWASP API Top 10) is applicable.

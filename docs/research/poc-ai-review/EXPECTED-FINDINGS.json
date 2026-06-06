@@ -1,0 +1,83 @@
+{
+  "summary": {
+    "scanned_langs": ["python"],
+    "tools_used": ["builtin-floor: Read/Grep/Glob", "ai-llm.md + ai-attack-kb detections"],
+    "tools_unavailable": ["ai-redteam (promptfoo/garak — not installed; static floor used)"],
+    "scoring_standard": "OWASP-LLM-2025 + CVSS4.0",
+    "counts": {"high": 3, "medium": 1, "low": 0}
+  },
+  "findings": [
+    {
+      "id": "F-001",
+      "canonical_of": null,
+      "file": "ai-vuln/agent.py",
+      "line": 28,
+      "severity": "HIGH",
+      "category": "improper-output-handling",
+      "owasp": ["LLM05:2025"],
+      "preconditions": ["attacker can influence user_text reaching the model"],
+      "access_required": "unauth-remote",
+      "verified": "static_review_only",
+      "confidence": 0.9,
+      "exploit_scenario": "The model is prompted to emit a shell command and its raw output is run with shell=True — model output flowing into a shell is LLM05 improper output handling, yielding RCE.",
+      "recommendation": "Never exec model output. If a command must be derived, map a schema-validated action to a fixed argv with no shell (see clean-lookalike/agent_safe.py).",
+      "first_link": "ai-vuln/agent.py:28",
+      "tool_assisted": false,
+      "kb_refs": ["AISEC-PROMPT-INJECTION-001"]
+    },
+    {
+      "id": "F-002",
+      "canonical_of": null,
+      "file": "ai-vuln/agent.py",
+      "line": 40,
+      "severity": "MEDIUM",
+      "category": "lethal-trifecta",
+      "owasp": ["LLM01:2025", "LLM02:2025"],
+      "preconditions": ["research_agent reachable with attacker-influenced web_url"],
+      "access_required": "authenticated",
+      "verified": "static_review_only",
+      "confidence": 0.8,
+      "exploit_scenario": "research_agent combines all three trifecta legs in one path: private DB data, untrusted web content, and a model-chosen POST destination — indirect prompt injection in the fetched page can exfiltrate the private data. Architectural design note (LLM01 is exclusion-listed), not a line-level HIGH.",
+      "recommendation": "Cut one leg: quarantine untrusted content in a tool-less model (dual-LLM/CaMeL), or remove the model-controlled egress, or gate the private-data access. Apply Agents Rule of Two.",
+      "first_link": "ai-vuln/agent.py:40",
+      "tool_assisted": false,
+      "kb_refs": ["AISEC-PROMPT-INJECTION-001", "AISEC-DATA-EXFIL-001"]
+    },
+    {
+      "id": "F-003",
+      "canonical_of": null,
+      "file": "ai-vuln/agent.py",
+      "line": 50,
+      "severity": "HIGH",
+      "category": "mcp-token-passthrough",
+      "owasp": ["MCP01:2025"],
+      "preconditions": ["call_downstream exposed as an MCP tool"],
+      "access_required": "authenticated",
+      "verified": "static_review_only",
+      "confidence": 0.85,
+      "exploit_scenario": "The MCP tool forwards the caller's incoming bearer token straight to a downstream API (token passthrough) instead of validating audience and minting its own credential — the MCP auth spec 2025-11-25 forbids this (RFC 8707 audience binding).",
+      "recommendation": "Validate the token audience and mint a separate, audience-bound downstream credential; never forward the incoming token (see clean-lookalike/agent_safe.py:mint_downstream_token).",
+      "first_link": "ai-vuln/agent.py:50",
+      "tool_assisted": false,
+      "kb_refs": ["AISEC-TOOL-POISONING-001"]
+    },
+    {
+      "id": "F-004",
+      "canonical_of": null,
+      "file": "ai-vuln-mcp-only/server.py",
+      "line": 16,
+      "severity": "HIGH",
+      "category": "mcp-token-passthrough",
+      "owasp": ["MCP01:2025"],
+      "preconditions": ["MCP-only repo (no LLM SDK) still classified as an AI surface"],
+      "access_required": "authenticated",
+      "verified": "static_review_only",
+      "confidence": 0.85,
+      "exploit_scenario": "An MCP-only server (no langchain/openai) still triggers the AI pass; its proxy tool forwards the caller's token to an arbitrary URL — token passthrough plus SSRF on the model-supplied url.",
+      "recommendation": "Mint an audience-bound credential and allowlist the downstream host; do not forward the incoming token.",
+      "first_link": "ai-vuln-mcp-only/server.py:16",
+      "tool_assisted": false,
+      "kb_refs": ["AISEC-TOOL-POISONING-001"]
+    }
+  ]
+}
