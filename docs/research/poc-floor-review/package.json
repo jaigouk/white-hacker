@@ -1,0 +1,5 @@
+{
+  "name": "floor-review-fixture",
+  "private": true,
+  "dependencies": { "express": "^4.19.0" }
+}

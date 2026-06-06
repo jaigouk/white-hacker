@@ -54,6 +54,13 @@ appendices) and fully independent — a good candidate to fan out one writer per
 `sec-detect/scripts`; a real (or mini) repo produces a schema-valid `THREAT_MODEL.md` + `SCAN-PLAN.json`
 that `sec-vuln-scan` consumes; statuses + this file + the run log updated (living-docs rule).
 
+> **✅ PHASE COMPLETE (2026-06-06).** All five tasks `done (verified)`: 35 tests green across
+> `sec-detect/scripts` (26 detect + 9 schema); the floor-review mini-repo produces a schema-valid
+> `THREAT_MODEL.md` + `SCAN-PLAN.json`; discovery partitions by the named entry points; the
+> `/security-review` command runs threat-model→detect→discovery→triage→report. CVE currency resolved
+> via `docs/research/spike-04-phase2-cve-currency.md`. One VC-regex portability fix applied (BSD-grep
+> `\|`). Next wave (Phase 3 — tools/capabilities) to be **re-groomed** before starting (rolling-wave).
+
 ---
 
 ### T-2.1 · Implement `sec-threat-model` body (ingest/synthesize + scoring standard)
@@ -72,11 +79,11 @@ that `sec-vuln-scan` consumes; statuses + this file + the run log updated (livin
   and label everything "assumed"; an existing `THREAT_MODEL.md` that's stale → ingest + flag drift, don't
   silently overwrite.
 - **Verification criteria:**
-  - [ ] Body covers ingest-or-synthesize, the five THREAT_MODEL sections, and the scoring-standard question — `for k in 'asset' 'entry point\|entry-point' 'trust boundar' 'in-scope\|in scope' 'scoring standard'; do grep -qiE "$k" .claude/skills/sec-threat-model/SKILL.md || echo MISSING:"$k"; done` prints nothing
-  - [ ] Declares output `THREAT_MODEL.md` and read-only git usage — `grep -q 'THREAT_MODEL.md' .claude/skills/sec-threat-model/SKILL.md && grep -qi 'git log' .claude/skills/sec-threat-model/SKILL.md`
-  - [ ] Documents `--auto`/`--fresh` non-interactive fallbacks (PLAN §8.1 P2) — `grep -qE '\-\-auto|\-\-fresh' .claude/skills/sec-threat-model/SKILL.md`
-  - [ ] stub banner removed — `! grep -q 'STATUS: STUB' .claude/skills/sec-threat-model/SKILL.md`
-- **Status:** todo
+  - [x] Body covers ingest-or-synthesize, the five THREAT_MODEL sections, and the scoring-standard question — `for k in 'asset' 'entry[ -]point' 'trust boundar' 'in.scope' 'scoring standard'; do grep -qiE "$k" .claude/skills/sec-threat-model/SKILL.md || echo MISSING:"$k"; done` prints nothing *(regex made BSD-grep portable: `\|` is a literal pipe under macOS `grep -E`, so alternation is written as `[ -]` / `.`)*
+  - [x] Declares output `THREAT_MODEL.md` and read-only git usage — `grep -q 'THREAT_MODEL.md' .claude/skills/sec-threat-model/SKILL.md && grep -qi 'git log' .claude/skills/sec-threat-model/SKILL.md`
+  - [x] Documents `--auto`/`--fresh` non-interactive fallbacks (PLAN §8.1 P2) — `grep -qE '\-\-auto|\-\-fresh' .claude/skills/sec-threat-model/SKILL.md`
+  - [x] stub banner removed — `! grep -q 'STATUS: STUB' .claude/skills/sec-threat-model/SKILL.md`
+- **Status:** done (verified 2026-06-06; five sections + scoring-standard question + --auto/--fresh + read-only git documented)
 
 ### T-2.2 · Promote tool/lang detection PoC into `sec-detect` scripts
 - **Goal:** move `docs/research/poc-tool-detection/detect_tools.py` (manifest→lang, framework
@@ -98,12 +105,12 @@ that `sec-vuln-scan` consumes; statuses + this file + the run log updated (livin
   for a non-Python stack (e.g. a TS LangChain app). Keep the PoC's existing edge-case tests; add ≥3 new
   ones for the framework/ai_pass layer.
 - **Verification criteria:**
-  - [ ] Ported tests pass (≥ the PoC's 12) — `uv run --with pytest pytest .claude/skills/sec-detect/scripts/`
-  - [ ] Detection is capability-keyed (`sast/sca/secrets/iac` → ordered tool prefs, brands swappable) and degrades when a category has no tool — test asserts `degraded_categories` populated when `which` returns None for a category
-  - [ ] CLI emits valid `SCAN-PLAN.json` — `uv run python .claude/skills/sec-detect/scripts/detect_tools.py . | python -c 'import json,sys; d=json.load(sys.stdin); assert "category_tool" in d and "degraded" in d'`
-  - [ ] Framework fingerprint sets `ai_pass` when AI deps present — dedicated test (e.g. a `requirements.txt` with `langchain` → `ai_pass:true`)
-  - [ ] `SKILL.md` documents the framework-fingerprint → AI-pass trigger and stub banner removed — `grep -qi 'ai-llm-review\|ai pass\|ai_pass' .claude/skills/sec-detect/SKILL.md && ! grep -q 'STATUS: STUB' .claude/skills/sec-detect/SKILL.md`
-- **Status:** todo
+  - [x] Ported tests pass (≥ the PoC's 12) — `uv run --with jsonschema --with pytest pytest .claude/skills/sec-detect/scripts/` (26 detect tests, ≥12 ported)
+  - [x] Detection is capability-keyed (`sast/sca/secrets/iac/ai-redteam` → ordered tool prefs, brands swappable) and degrades when a category has no tool — `test_plan_degrades_when_category_tool_missing`, `test_ai_redteam_degrades_to_floor_when_no_tool`
+  - [x] CLI emits valid `SCAN-PLAN.json` — `uv run --with jsonschema python .claude/skills/sec-detect/scripts/detect_tools.py . | python3 -c 'import json,sys; d=json.load(sys.stdin); assert "category_tool" in d and "degraded" in d'`
+  - [x] Framework fingerprint sets `ai_pass` when AI deps present — `test_ai_pass_true_for_python_langchain`, `test_ai_pass_true_for_typescript_stack`
+  - [x] `SKILL.md` documents the framework-fingerprint → AI-pass trigger and stub banner removed — `grep -qi 'ai-llm-review\|ai pass\|ai_pass' .claude/skills/sec-detect/SKILL.md && ! grep -q 'STATUS: STUB' .claude/skills/sec-detect/SKILL.md`
+- **Status:** done (verified 2026-06-06; 26 detect tests pass, framework+ai_pass+ai-redteam layer added, SCAN-PLAN emitter validated)
 
 ### T-2.3 · Define the `SCAN-PLAN.json` schema + validator
 - **Goal:** a JSON Schema for `SCAN-PLAN.json` (languages, infra, frameworks, capability→tool map,
@@ -118,10 +125,10 @@ that `sec-vuln-scan` consumes; statuses + this file + the run log updated (livin
 - **Edge cases / test notes:** empty repo (no langs) still valid; `additionalProperties:false` to catch
   typos; unknown capability key rejected; `degraded` required.
 - **Verification criteria:**
-  - [ ] PoC/emitter output validates against the schema — `uv run --with jsonschema --with pytest pytest .claude/skills/sec-detect/scripts/tests/test_scan_plan_schema.py`
-  - [ ] A plan missing `degraded` or with an unknown capability key is rejected — negative test (>1 test, edge cases)
-  - [ ] Schema is valid draft 2020-12 (meta-validate) and referenced by `sec-detect/SKILL.md` — `grep -q 'scan-plan-schema.json' .claude/skills/sec-detect/SKILL.md`
-- **Status:** todo
+  - [x] PoC/emitter output validates against the schema — `uv run --with jsonschema --with pytest pytest .claude/skills/sec-detect/scripts/tests/test_scan_plan_schema.py` (9 tests)
+  - [x] A plan missing `degraded` or with an unknown capability key is rejected — `test_missing_degraded_is_rejected`, `test_unknown_capability_key_is_rejected`, `test_unknown_degraded_capability_is_rejected`, `test_additional_root_property_is_rejected`, `test_wrong_type_ai_pass_is_rejected`
+  - [x] Schema is valid draft 2020-12 (meta-validate) and referenced by `sec-detect/SKILL.md` — `test_schema_is_valid_draft_2020_12` + `grep -q 'scan-plan-schema.json' .claude/skills/sec-detect/SKILL.md`
+- **Status:** done (verified 2026-06-06; schema derived from emitter, locked by test_scan_plan_schema.py, 9 tests incl. 5 negatives)
 
 ### T-2.4 · Fill per-language reference appendices (`lang-{go,python,typescript,java}.md`)
 - **Goal:** replace the four stubs with the PLAN §5.2 content (Go `os.Root`/govulncheck/gosec;
@@ -138,10 +145,11 @@ that `sec-vuln-scan` consumes; statuses + this file + the run log updated (livin
 - **Edge cases / test notes:** avoid time-sensitive phrasing in the body (ADR-005); put any deprecated
   technique under a `## Deprecated <details>` block so it doesn't pollute current guidance.
 - **Verification criteria:**
-  - [ ] Each file > 30 lines and free of the stub banner — `for f in go python typescript java; do awk 'END{exit !(NR>30)}' .claude/skills/_shared/reference/lang-$f.md && ! grep -q 'STATUS: STUB' .claude/skills/_shared/reference/lang-$f.md || echo FAIL:$f; done` prints nothing
-  - [ ] Signature sinks present per language — `grep -qi 'os.Root\|govulncheck' .claude/skills/_shared/reference/lang-go.md && grep -qi 'pickle\|yaml.load' .claude/skills/_shared/reference/lang-python.md && grep -qiE '29927|react2shell|prototype pollution' .claude/skills/_shared/reference/lang-typescript.md && grep -qiE 'jackson|spel|ObjectInputStream' .claude/skills/_shared/reference/lang-java.md`
-  - [ ] Each ≤ 400 lines (reference cap) — `for f in go python typescript java; do awk 'END{exit !(NR<=400)}' .claude/skills/_shared/reference/lang-$f.md || echo TOOLONG:$f; done` prints nothing
-- **Status:** todo
+  - [x] Each file > 30 lines and free of the stub banner — `for f in go python typescript java; do { awk 'END{exit !(NR>30)}' .claude/skills/_shared/reference/lang-$f.md && ! grep -q 'STATUS: STUB' .claude/skills/_shared/reference/lang-$f.md; } || echo FAIL:$f; done` prints nothing (go 66, java 72, python 74, ts 72 lines)
+  - [x] Signature sinks present per language — `grep -qi 'os.Root\|govulncheck' lang-go.md && grep -qi 'pickle\|yaml.load' lang-python.md && grep -qiE '29927|react2shell|prototype pollution' lang-typescript.md && grep -qiE 'jackson|spel|ObjectInputStream' lang-java.md`
+  - [x] Each ≤ 400 lines (reference cap) — all four well under (max 74)
+  - [x] CVE ids re-verified against 2026 sources before writing — `docs/research/spike-04-phase2-cve-currency.md` (none needed the `unverified` tag)
+- **Status:** done (verified 2026-06-06; four appendices, pattern-first, CVE ids confirmed via spike-04)
 
 ### T-2.5 · Chain threat-model + detect into the command and prove on a real repo
 - **Goal:** `/security-review` and the agent loop now run threat-model → detect before discovery; a real
@@ -156,7 +164,7 @@ that `sec-vuln-scan` consumes; statuses + this file + the run log updated (livin
 - **Edge cases / test notes:** headless run must use `--auto` (no AskUserQuestion); confirm a degraded
   capability still produces a usable plan.
 - **Verification criteria:**
-  - [ ] A run on a real/mini repo emits a `THREAT_MODEL.md` with all five sections + chosen scoring standard (logged)
-  - [ ] The same run emits a `SCAN-PLAN.json` that validates against T-2.3 and lists detected langs + capability map + `ai_pass` — schema check passes on the produced file
-  - [ ] `sec-vuln-scan` partitions according to the entry points named in `THREAT_MODEL.md` (manual spot-check logged)
-- **Status:** todo
+  - [x] A run on a real/mini repo emits a `THREAT_MODEL.md` with all five sections + chosen scoring standard (logged) — `run/THREAT_MODEL.md` (synthesized, CVSS 4.0, 3 entry points)
+  - [x] The same run emits a `SCAN-PLAN.json` that validates against T-2.3 and lists detected langs + capability map + `ai_pass` — `run/SCAN-PLAN.json` validates; langs `go,python,typescript`, frameworks `express,flask`, `ai_pass:false`, `degraded:[sast,secrets]`
+  - [x] `sec-vuln-scan` partitions according to the entry points named in `THREAT_MODEL.md` (manual spot-check logged) — all 3 entry points map to discovery candidates at exact `file:line` (README Phase-2 table)
+- **Status:** done (verified 2026-06-06; chain run end-to-end on the floor-review mini-repo; command order updated to threat-model→detect→discovery→triage→report)

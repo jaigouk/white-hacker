@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jaigouk.kim/white-hacker/scan-plan-schema.json",
+  "title": "SCAN-PLAN.json",
+  "description": "Output of sec-detect: detected languages/frameworks, capability→tool map, degraded categories, ai_pass trigger, and applicable reference appendices. Consumed by sec-vuln-scan / sec-triage. Derived from the detect_tools.py emitter (T-2.2); kept locked by test_scan_plan_schema.py.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "languages",
+    "infra",
+    "frameworks",
+    "available_tools",
+    "ai_pass",
+    "category_tool",
+    "degraded",
+    "reference_appendices",
+    "fallback"
+  ],
+  "$defs": {
+    "capability": {
+      "description": "A security capability (the durable interface), never a brand.",
+      "enum": ["sast", "sca", "secrets", "iac", "ai-redteam"]
+    }
+  },
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+$"
+    },
+    "languages": {
+      "type": "array",
+      "items": {"type": "string"},
+      "uniqueItems": true
+    },
+    "infra": {
+      "type": "array",
+      "items": {"type": "string"},
+      "uniqueItems": true
+    },
+    "frameworks": {
+      "type": "array",
+      "items": {"type": "string"},
+      "uniqueItems": true
+    },
+    "available_tools": {
+      "type": "array",
+      "items": {"type": "string"},
+      "uniqueItems": true
+    },
+    "ai_pass": {"type": "boolean"},
+    "category_tool": {
+      "type": "object",
+      "description": "capability -> chosen tool name, or null when degraded to the floor.",
+      "propertyNames": {"$ref": "#/$defs/capability"},
+      "additionalProperties": {"type": ["string", "null"]}
+    },
+    "degraded": {
+      "type": "array",
+      "description": "Capabilities with no installed tool (fell back to Read/Grep/Glob).",
+      "items": {"$ref": "#/$defs/capability"},
+      "uniqueItems": true
+    },
+    "reference_appendices": {
+      "type": "array",
+      "items": {"type": "string"},
+      "uniqueItems": true
+    },
+    "fallback": {"type": "string"}
+  }
+}

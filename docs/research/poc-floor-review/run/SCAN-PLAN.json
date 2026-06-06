@@ -1,0 +1,34 @@
+{
+  "schema_version": "1.0",
+  "languages": [
+    "go",
+    "python",
+    "typescript"
+  ],
+  "infra": [],
+  "frameworks": [
+    "express",
+    "flask"
+  ],
+  "available_tools": [
+    "govulncheck",
+    "trivy"
+  ],
+  "ai_pass": false,
+  "category_tool": {
+    "sast": null,
+    "sca": "govulncheck",
+    "secrets": null
+  },
+  "degraded": [
+    "sast",
+    "secrets"
+  ],
+  "reference_appendices": [
+    "api.md",
+    "lang-go.md",
+    "lang-python.md",
+    "lang-typescript.md"
+  ],
+  "fallback": "read-grep-glob heuristic pass (confidence capped)"
+}

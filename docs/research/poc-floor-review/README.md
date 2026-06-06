@@ -73,3 +73,49 @@ Demonstrates the two-stage pipeline (ADR-008) with **fresh-context** triage. Art
 
 This proves Phase 1: discovery maximizes recall (over-reports), triage delivers precision (refutes
 the look-alikes), the strict schema gates both, and dedup is idempotent.
+
+---
+
+## Phase 2 — threat-model → detect chain (T-2.5), verified 2026-06-06
+Proves the upstream stages that *aim* the review run end-to-end on this (now manifest-bearing)
+polyglot mini-repo, and that discovery partitions by the entry points the threat model names.
+
+**Made the fixture detectable** (honest manifests, matching the actual code): `go.mod` (net/http),
+`requirements.txt` (Flask), `package.json` (express) + `tsconfig.json`.
+
+**Stage 1 — `sec-threat-model` → `run/THREAT_MODEL.md`** (synthesized, `--auto`, CVSS 4.0). All five
+sections present; names three unauth-remote entry points: `GET /ping`→`pingHandler`,
+`GET /user`→`get_user`, `GET /greet`.
+
+**Stage 2 — `sec-detect` → `run/SCAN-PLAN.json`** (real `detect_tools.py` run; validates against
+`scan-plan-schema.json`):
+
+| Field | Value |
+|---|---|
+| `languages` | `go, python, typescript` |
+| `frameworks` | `express, flask` (both web ⇒ `api.md`) |
+| `ai_pass` | `false` (no AI deps — honest) |
+| `category_tool` | `sca: govulncheck` (installed) · `sast: null`, `secrets: null` (degraded) |
+| `degraded` | `sast, secrets` (no opengrep/gitleaks on PATH → floor, confidence capped) |
+| `reference_appendices` | `api.md, lang-go.md, lang-python.md, lang-typescript.md` |
+
+**Stage 3 — discovery partitions by the named entry points.** Each `THREAT_MODEL.md` entry point maps
+to a discovery candidate at the exact `file:line` (suffix-matched against `run/discovery.json`):
+
+| Entry point (threat model) | Discovery candidate | |
+|---|---|---|
+| `go-vuln/main.go:13` `GET /ping` | `…/go-vuln/main.go:13` | FOUND |
+| `py-vuln/app.py:14` `GET /user` | `…/py-vuln/app.py:14` | FOUND |
+| `ts-vuln/handler.ts:10` `GET /greet` | `…/ts-vuln/handler.ts:10` | FOUND |
+
+**Reproduce:**
+```bash
+cd docs/research/poc-floor-review
+uv run --with jsonschema python ../../../.claude/skills/sec-detect/scripts/detect_tools.py . > run/SCAN-PLAN.json
+uv run --with jsonschema python ../../../.claude/skills/sec-detect/scripts/validate_scan_plan.py run/SCAN-PLAN.json   # -> valid
+```
+
+This proves Phase 2: a real repo yields `THREAT_MODEL.md` + a schema-valid `SCAN-PLAN.json` (langs +
+capability map + `ai_pass`), discovery partitions by the threat-model entry points, and missing
+scanners degrade gracefully instead of blocking. CVE ids in the loaded appendices were re-verified in
+`docs/research/spike-04-phase2-cve-currency.md`.

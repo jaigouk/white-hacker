@@ -17,6 +17,12 @@ PATCHES/
 .patch-state/
 *.sarif
 
+# Exception: the PoC run evidence under docs/research/ is DELIBERATE, sanitized fixture
+# output (planted-vuln findings — the eval-corpus seed), not live scans. Keep it tracked.
+# (Also un-ignores triage.json, which the case-insensitive TRIAGE.json pattern catches on macOS.)
+!docs/research/poc-floor-review/run/
+!docs/research/poc-floor-review/run/*
+
 # Python
 __pycache__/
 *.pyc
