@@ -1,0 +1,17 @@
+{
+  "case_id": "go-cmdi-02",
+  "language": "go",
+  "category": "injection",
+  "severity": "HIGH",
+  "owasp": [
+    "A03:2025"
+  ],
+  "vulnerable": {
+    "file": "vulnerable_variant.go",
+    "line": 4
+  },
+  "benign_lookalike": {
+    "file": "benign_lookalike.go"
+  },
+  "note": "cmdi variant 2 (go)."
+}

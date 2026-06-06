@@ -1,0 +1,17 @@
+{
+  "case_id": "ja-ssrf-01",
+  "language": "javascript",
+  "category": "ssrf",
+  "severity": "HIGH",
+  "owasp": [
+    "A01:2025"
+  ],
+  "vulnerable": {
+    "file": "vulnerable_variant.js",
+    "line": 1
+  },
+  "benign_lookalike": {
+    "file": "benign_lookalike.js"
+  },
+  "note": "ssrf variant 1 (javascript)."
+}

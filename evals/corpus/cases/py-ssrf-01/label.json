@@ -1,0 +1,17 @@
+{
+  "case_id": "py-ssrf-01",
+  "language": "python",
+  "category": "ssrf",
+  "severity": "HIGH",
+  "owasp": [
+    "A01:2025"
+  ],
+  "vulnerable": {
+    "file": "vulnerable_variant.py",
+    "line": 3
+  },
+  "benign_lookalike": {
+    "file": "benign_lookalike.py"
+  },
+  "note": "ssrf variant 1 (python)."
+}

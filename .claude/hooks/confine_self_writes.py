@@ -24,7 +24,11 @@ import sys
 import guard_bash as gb
 
 FROZEN_BASENAMES = {"keep_or_revert.py", "baseline.json", "score.py", "label-schema.json"}
-ALLOW_SEGMENTS = ("/ai-attack-kb/", "/.claude/rules/", "/PATCHES/", "/evals/traces/")
+# Writable lane. NOTE: `.claude/rules/` is intentionally EXCLUDED — identity preservation (T-9.4,
+# si-08 §5.2) protects the agent role / rules / CLAUDE.md, which supersedes the broader T-8.4
+# allow-set. `_shared/reference/` is in the lane so sec-learn can PROPOSE checklist/tool-registry
+# diffs (PR-gated); the identity files are denied because they are not in any allow segment.
+ALLOW_SEGMENTS = ("/ai-attack-kb/", "/_shared/reference/", "/PATCHES/", "/evals/traces/")
 FEED_HOSTS = {
     "api.osv.dev", "storage.googleapis.com", "api.github.com", "raw.githubusercontent.com",
     "github.com", "export.arxiv.org", "rss.arxiv.org", "arxiv.org", "genai.owasp.org",

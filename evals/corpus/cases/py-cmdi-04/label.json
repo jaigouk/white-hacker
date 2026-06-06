@@ -1,0 +1,17 @@
+{
+  "case_id": "py-cmdi-04",
+  "language": "python",
+  "category": "injection",
+  "severity": "HIGH",
+  "owasp": [
+    "A03:2025"
+  ],
+  "vulnerable": {
+    "file": "vulnerable_variant.py",
+    "line": 3
+  },
+  "benign_lookalike": {
+    "file": "benign_lookalike.py"
+  },
+  "note": "cmdi variant 4 (python)."
+}

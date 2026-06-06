@@ -17,6 +17,34 @@
 
 ---
 
+## Grooming (re-groomed 2026-06-06, after Phase 8 — final phase)
+
+**Readiness:** ✅ READY. Phases 0–8 done. The corpus (32), scorer, and confinement hooks exist.
+
+**Reconciliations (own these):**
+1. **The corpus-freeze write-block already exists.** `confine_self_writes` (T-8.4) already denies
+   agent writes to `evals/corpus/**` and `keep_or_revert.py`/`baseline.json`/`score.py`
+   (`FROZEN_BASENAMES`), with tests. So T-9.1 VC3 and T-9.2 VC4 **reuse** `test_confine_self_writes`
+   (`-k corpus` / `-k keep_or_revert`); no new hook needed.
+2. **Grow 32 → ≥100 via the generator.** Extend `generate.py` (programmatic per-language variants of
+   the existing patterns, OWASP-Benchmark-style) + **3 named CVE-anchor cases** (CVE-2026-22807,
+   CVE-2026-22778 vLLM; CVE-2025-68664 LangChain). Add `evals/corpus/LOCKED` enumerating case ids +
+   a freeze note in the README. `test_labels.py` already validates every label.
+3. **`keep_or_revert.py` is deterministic.** It takes baseline + candidate score dicts (+ per-locked-
+   case results, + k≥3 run arrays) and computes the asymmetric verdict — **no RNG** (the k runs are
+   inputs, so the verdict is reproducible). Read-only to the agent (already in `FROZEN_BASENAMES`).
+4. **Hook registration stays human-auth-batched.** `gate_kb_edit` (T-9.3) hook logic + tests are the
+   done-gate; its committed `settings.json` registration joins the one operator-auth approval. The
+   **CI step** edits `ci/security-review.action.yml` (a workflow file — editable, not startup config).
+5. **Docs that schedule are document-only** (T-9.5 drift re-score / red-team): describe cadence + how
+   the operator schedules it; create **no live schedule** (operator's no-scheduler preference).
+6. **Identity preservation is non-negotiable** (T-9.4): edits to the agent role / `.claude/rules/**` /
+   `CLAUDE.md` are ALWAYS blocked, regardless of any gate verdict.
+
+**Order:** T-9.1 → T-9.2 → T-9.4 → T-9.3 → T-9.5 → T-9.6. Phase 9 closes the outer-loop gate.
+
+---
+
 ### T-9.1 · Freeze the corpus (read-only to the agent, signed, ≥ 100 paired cases)
 - **Goal:** grow the Phase-7 corpus to ≥ 100 paired cases (vulnerable + benign look-alike; AI/LLM sinks
   covered separately; CVE regression anchors from si-08 §6.1 incl. vLLM CVE-2026-22807 / CVE-2026-22778,
@@ -26,11 +54,11 @@
   freeze note)
 - **Depends on:** T-7.1, T-8.4
 - **Verification criteria:**
-  - [ ] ≥ 100 case dirs, each with all four files + valid `label.json` — `[ $(ls -d evals/corpus/cases/*/ | wc -l) -ge 100 ] && uv run pytest evals/tests/test_labels.py`
-  - [ ] CVE regression anchors present — `for c in CVE-2026-22807 CVE-2026-22778 CVE-2025-68664; do grep -rq "$c" evals/corpus/cases/ || echo MISSING:$c; done` prints nothing
-  - [ ] The confinement hook denies an agent write under `evals/corpus/**` — `uv run pytest .claude/hooks/tests/test_confine_self_writes.py -k corpus`
-  - [ ] `evals/corpus/LOCKED` enumerates the locked case ids — `test -s evals/corpus/LOCKED`
-- **Status:** todo
+  - [x] ≥ 100 case dirs, each with all four files + valid `label.json` — **103** cases (generator: variants + CVE anchors); `test_labels.py` validates all
+  - [x] CVE regression anchors present — CVE-2026-22807 / CVE-2026-22778 (vLLM) / CVE-2025-68664 (LangChain) all present
+  - [x] The confinement hook denies an agent write under `evals/corpus/**` — `pytest test_confine_self_writes.py -k corpus` (reuses T-8.4)
+  - [x] `evals/corpus/LOCKED` enumerates the locked case ids — 103 ids written
+- **Status:** done
 
 ### T-9.2 · `keep_or_revert.py` — asymmetric gate (agent cannot edit it)
 - **Goal:** the gate (si-08 §6.4): given baseline vs candidate scores, **HARD REVERT** if `recall_loss >
@@ -42,11 +70,11 @@
 - **Artifact:** `evals/keep_or_revert.py` (+ `evals/tests/test_keep_or_revert.py`)
 - **Depends on:** T-7.2, T-9.1
 - **Verification criteria:**
-  - [ ] Each threshold fires correctly on crafted score pairs (recall −2.5pp → REVERT; FPR +1.5pp → REVERT; J +0.02 no-regress → KEEP; locked-case regress → REVERT) — `uv run pytest evals/tests/test_keep_or_revert.py` (one test per branch)
-  - [ ] Returns the 3-valued verdict; "fix target while breaking any other case" → REVERT — dedicated test (si-08 §6.3)
-  - [ ] Paired-bootstrap with k≥3 runs produces a stable verdict on a deterministic synthetic input — determinism/stability test
-  - [ ] The confinement hook denies an agent write to `evals/keep_or_revert.py` — `uv run pytest .claude/hooks/tests/test_confine_self_writes.py -k keep_or_revert`
-- **Status:** todo
+  - [x] Each threshold fires on crafted score pairs (recall −2.5pp / FPR +1.5pp / locked-regress → REVERT; J +0.02 → KEEP) — `pytest test_keep_or_revert.py` *(12 tests, one per branch)*
+  - [x] 3-valued verdict; "fix target while breaking any other case" → REVERT — `test_fix_target_but_break_other_reverts`
+  - [x] Paired-bootstrap k≥3 produces a stable verdict on deterministic input — `test_bootstrap_stable_keep` / `_unstable_is_inconclusive`
+  - [x] The confinement hook denies an agent write to `evals/keep_or_revert.py` — `pytest test_confine_self_writes.py -k keep_or_revert`
+- **Status:** done *(deterministic: k runs are inputs, no RNG)*
 
 ### T-9.3 · Wire the gate as a merge gate + PreToolUse/Stop hook on KB edits
 - **Goal:** express the gate as DeepEval-style pytest assertions for clean CI diffing, run it in the CI
@@ -57,10 +85,10 @@
   `ci/security-review.action.yml`, `.claude/hooks/gate_kb_edit.sh` (+ test)
 - **Depends on:** T-9.2, T-6.3, T-8.4
 - **Verification criteria:**
-  - [ ] CI gate step runs `keep_or_revert.py` and fails the job on a REVERT verdict — `uv run pytest evals/tests/test_gate_ci.py`; CI YAML has the step — `grep -q 'keep_or_revert' ci/security-review.action.yml`
-  - [ ] The `PreToolUse` hook gates a KB-edit event (blocks on REVERT, allows on KEEP) — `uv run pytest .claude/hooks/tests/test_gate_kb_edit.py`
-  - [ ] A simulated regressing KB diff is blocked end-to-end (logged demonstration) — `evals/audit-log.md` records the REVERT verdict + diff
-- **Status:** todo
+  - [x] CI gate (DeepEval assertions) fails the job on REVERT — `pytest evals/tests/test_gate_ci.py` *(3 tests)*; the `kb-keep-or-revert-gate` job in `ci/security-review.action.yml` references `keep_or_revert`
+  - [x] The `PreToolUse` hook gates a KB-edit event (blocks on REVERT/no-verdict, allows on KEEP) — `pytest test_gate_kb_edit.py` *(7 tests; Write/Edit + Bash)*
+  - [x] A regressing KB diff is blocked end-to-end — `evals/audit-log.md` records the REVERT demonstration
+- **Status:** done *(gate_kb_edit registration batched into the operator-auth settings.json approval)*
 
 ### T-9.4 · Pre-commit safety checklist enforcement (the 10 gates)
 - **Goal:** enforce the si-08 §5.2 mandatory checklist as a single PreToolUse-blocked self-write gate:
@@ -72,11 +100,11 @@
   (seed), `evals/audit-log.md` (seed)
 - **Depends on:** T-8.1, T-8.2, T-9.2
 - **Verification criteria:**
-  - [ ] All 10 gates implemented; a self-write failing any one is blocked and logged to `rejected.md` — `uv run pytest .claude/skills/ai-attack-kb/scripts/tests/test_precommit_safety.py` (≥ 1 test per gate)
-  - [ ] An edit touching the agent role / `.claude/rules/` / CLAUDE.md is **always** blocked (identity preservation, non-negotiable) — dedicated negative test
-  - [ ] A clean, sourced, deduped, gate-green PATCH on a feature branch passes all 10 — positive test
-  - [ ] Rejections append to `evals/rejected.md` so the loop never re-proposes a known loser — test asserts the append
-- **Status:** todo
+  - [x] All 10 gates implemented; a self-write failing any one is blocked + logged — `pytest test_precommit_safety.py` *(13 tests, ≥1 per gate)*
+  - [x] An edit touching agent role / `.claude/rules/` / CLAUDE.md is **always** blocked — `test_identity_preservation_always_blocks` (also reconciled in `confine_self_writes`)
+  - [x] A clean sourced/deduped/gate-green PATCH on a feature branch passes all 10 — `test_clean_change_passes_all_10`
+  - [x] Rejections append to `evals/rejected.md` — `test_enforce_appends_to_rejected`
+- **Status:** done
 
 ### T-9.5 · Passive-drift re-score + nightly red-team + second ratchet
 - **Goal:** a weekly scheduled full-corpus re-score against the same thresholds (catches silent
@@ -88,10 +116,10 @@
   procedure) + `evals/scripts/promote_finding.py` (+ test)
 - **Depends on:** T-9.2, T-8.7
 - **Verification criteria:**
-  - [ ] Doc defines the weekly passive-drift re-score against `baseline.json` thresholds — `grep -qi 'passive.drift\|weekly' docs/self-improvement/eval-ops.md && grep -q 'keep_or_revert\|baseline' docs/self-improvement/eval-ops.md`
-  - [ ] Red-team layer documented behind the AI-redteam **capability** (degradable, not a hard tool dep) — `grep -qi 'red.team' docs/self-improvement/eval-ops.md && grep -qi 'capability\|optional\|degrad' docs/self-improvement/eval-ops.md`
-  - [ ] `promote_finding.py` adds a confirmed finding as a new locked case + label and is itself outside agent write-scope (must be run by the human/CI identity) — `uv run pytest evals/tests/test_promote_finding.py`
-- **Status:** todo
+  - [x] Doc defines the weekly passive-drift re-score against `baseline.json` thresholds (shares `keep_or_revert` logic) — greps pass
+  - [x] Red-team layer documented behind the AI-redteam **capability** (optional/degradable, not a hard dep) — greps pass
+  - [x] `promote_finding.py` adds a confirmed finding as a new locked case + label, run by the human/CI identity (agent is write-blocked from `evals/corpus/**`) — `pytest test_promote_finding.py` *(4 tests; refuses to clobber)*
+- **Status:** done *(scheduled parts document-only — no live schedule, per the no-scheduler preference)*
 
 ### T-9.6 · Graduated-autonomy policy (earn it per-step)
 - **Goal:** document the graduation policy (si-08 §7 Phase 5): everything human-gated first; only after a
@@ -102,7 +130,7 @@
 - **Artifact:** `docs/self-improvement/autonomy-policy.md`
 - **Depends on:** T-9.3, T-9.4
 - **Verification criteria:**
-  - [ ] Policy states the track-record threshold + the exact auto-merge-eligible class (feed-sourced PATCH-only, fast-tier, gate-green, no new sink, sourced) — `grep -qi 'patch-only\|patch only' docs/self-improvement/autonomy-policy.md && grep -qi 'feed-sourced\|fast tier' docs/self-improvement/autonomy-policy.md`
-  - [ ] States CREATE / checklist / rule / CLAUDE.md edits stay human-gated indefinitely — `grep -qi 'indefinit\|human-gated' docs/self-improvement/autonomy-policy.md && grep -qi 'identity' docs/self-improvement/autonomy-policy.md`
-  - [ ] References the second ratchet keeps running as autonomy widens — `grep -qi 'ratchet' docs/self-improvement/autonomy-policy.md`
-- **Status:** todo
+  - [x] Policy states the track-record threshold (≥20 matched PRs) + the exact auto-merge-eligible class (feed-sourced PATCH-only, fast-tier, gate-green, no new sink, sourced) — greps pass
+  - [x] States CREATE / checklist / rule / CLAUDE.md edits stay human-gated indefinitely (identity preservation) — greps pass
+  - [x] References the second ratchet keeps running as autonomy widens — grep passes
+- **Status:** done

@@ -41,8 +41,27 @@ def test_denies_traversal_into_frozen(tmp_path):
     assert deny("echo x > evals/traces/../corpus/c1/label.json", tmp_path)
 
 
+def test_denies_corpus_write(tmp_path):  # T-9.1 VC3 (-k corpus)
+    assert deny("echo x > evals/corpus/cases/c1/label.json", tmp_path)
+    assert deny("cp evil.md evals/corpus/cases/c1/vulnerable_variant.py", tmp_path)
+
+
+def test_denies_keep_or_revert_write(tmp_path):  # T-9.2 VC4 (-k keep_or_revert)
+    assert deny("echo x > evals/keep_or_revert.py", tmp_path)
+
+
 def test_denies_settings_self_disable(tmp_path):
     assert deny("echo x > .claude/settings.json", tmp_path)
+
+
+def test_identity_preservation_denied(tmp_path):  # T-9.4: agent role / rules / CLAUDE.md protected
+    assert deny("echo x > CLAUDE.md", tmp_path)
+    assert deny("echo x > .claude/rules/custom.md", tmp_path)
+    assert deny("echo x > .claude/agents/white-hacker.md", tmp_path)
+
+
+def test_allows_shared_reference_checklist(tmp_path):  # sec-learn may PROPOSE checklist diffs
+    assert allow("echo x > .claude/skills/_shared/reference/core-checklist.md", tmp_path)
 
 
 def test_write_tool_confined(tmp_path):

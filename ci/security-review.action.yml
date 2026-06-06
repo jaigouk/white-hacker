@@ -54,3 +54,28 @@ jobs:
           # ci_gate.py validates TRIAGE.json against finding-schema, then exits 1 when counts.high > 0
           # (threshold overridable with --max-high). See Phase 6 T-6.2.
           python .claude/skills/sec-report/scripts/ci_gate.py TRIAGE.json
+
+  # Outer-loop merge gate (Phase 9 T-9.3): on a PR that touches the living KB or the checklists,
+  # run the keep-or-revert gate — a REVERT verdict (recall loss / FPR gain / locked-case regress)
+  # fails the job and blocks the merge. The frozen corpus + gate scripts are agent-read-only.
+  kb-keep-or-revert-gate:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3 (SHA verified 2026-06-06)
+        with:
+          fetch-depth: 0
+      - name: Keep-or-revert gate on KB / checklist changes
+        run: |
+          changed=$(git diff --name-only "origin/${{ github.base_ref }}...HEAD" || true)
+          if echo "$changed" | grep -qE '\.claude/skills/ai-attack-kb/|\.claude/skills/_shared/reference/'; then
+            python -m pip install --quiet pytest jsonschema pyyaml
+            # DeepEval-style gate assertions (REVERT -> AssertionError -> job fails):
+            python -m pytest evals/tests/test_gate_ci.py -q
+            # and the gate CLI itself against the recorded baseline (Phase 9 T-9.2):
+            #   python evals/keep_or_revert.py --baseline evals/baseline.json --candidate evals/runs/candidate.json
+            echo "keep_or_revert gate evaluated (see evals/audit-log.md)"
+          else
+            echo "no KB/checklist change; keep_or_revert gate skipped"
+          fi

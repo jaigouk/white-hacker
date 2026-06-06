@@ -1,0 +1,17 @@
+{
+  "case_id": "go-sqli-03",
+  "language": "go",
+  "category": "injection",
+  "severity": "HIGH",
+  "owasp": [
+    "A03:2025"
+  ],
+  "vulnerable": {
+    "file": "vulnerable_variant.go",
+    "line": 4
+  },
+  "benign_lookalike": {
+    "file": "benign_lookalike.go"
+  },
+  "note": "sqli variant 3 (go)."
+}

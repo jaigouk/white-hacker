@@ -1,0 +1,17 @@
+{
+  "case_id": "py-weakhash-04",
+  "language": "python",
+  "category": "crypto",
+  "severity": "MEDIUM",
+  "owasp": [
+    "A02:2025"
+  ],
+  "vulnerable": {
+    "file": "vulnerable_variant.py",
+    "line": 3
+  },
+  "benign_lookalike": {
+    "file": "benign_lookalike.py"
+  },
+  "note": "weakhash variant 4 (python)."
+}

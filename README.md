@@ -191,7 +191,8 @@ on project-scope skills. See `docs/plan/PLAN.md` §7.1.
 
 ## Status
 
-**Phases 0–7 done (verified)** — the full inner loop + team/CI packaging + an eval baseline: `sec-threat-model` + `sec-detect` (real `SCAN-PLAN.json` emitter + schema,
+**Phases 0–9 done (verified)** — both loops complete: the inner review loop + team/CI packaging + the
+eval baseline, and the outer self-improvement loop with its frozen keep-or-revert gate: `sec-threat-model` + `sec-detect` (real `SCAN-PLAN.json` emitter + schema,
 incl. MCP detection) scope and calibrate a review, `sec-vuln-scan` (recall) and `sec-triage`
 (precision, adversarial, schema-gated, deduped) split discovery from verification, the **tooling
 layer is a swappable capability** (`deps-scan`/`secrets-scan` + SAST/IaC selection) that prefers
@@ -204,9 +205,12 @@ apply (ADR-010/016; confinement is structural + a PreToolUse tripwire). Phase 6 
 **team mode + CI** (`sec-report` → `SECURITY-REPORT.md`, `ci_gate.py` fail-on-HIGH, a fully-pinned
 GitHub workflow running our own `/security-review`, and the `guard_bash`/`gate_review` review-posture
 hooks), and Phase 7 stands up the **eval baseline** (a 32-case labeled corpus + a deterministic
-`score.py` TPR/FPR/Youden's-J scorer + a recorded `baseline.json` regression gate). **207 tests green**;
-polyglot + SCA + IaC + AI/MCP + patch-ladder + eval runs logged under `docs/research/` + `evals/`.
-The remaining skills are stubs; the rest lands over the rollout:
+`score.py` TPR/FPR/Youden's-J scorer + a recorded `baseline.json` regression gate). Phases 8–9 add the **outer loop**: KB lint/dedup/staleness gates,
+the `sec-learn` reflective pass + `sec-kb-refresh` feed poller (both PR-gated, never auto-merge),
+deterministic capture + confinement hooks, and the **frozen 103-case corpus + asymmetric
+keep-or-revert gate + 10-gate pre-commit checklist** that lets the KB ratchet up without drift.
+**373 tests green**; polyglot + SCA + IaC + AI/MCP + patch-ladder + eval runs logged under
+`docs/research/` + `evals/`. All ten phases are built:
 
 | Phase | Focus | Status |
 |-------|-------|--------|
@@ -218,8 +222,8 @@ The remaining skills are stubs; the rest lands over the rollout:
 | 5 | Patch + re-attack (opt-in, capability-removed writes) | ✅ done¹ |
 | 6 | Team mode + CI Action (sec-report, ci_gate, pinned workflow, posture hooks) | ✅ done¹ |
 | 7 | Eval baseline (32-case labeled corpus, score.py TPR/FPR/Youden's J, baseline gate) | ✅ done |
-| 8 | Self-improvement (KB lint/dedup/staleness, sec-learn, sec-kb-refresh, capture+confine hooks) | next (groomed) |
-| 9 | Frozen eval corpus + keep-or-revert gate + confinement guardrails | planned |
+| 8 | Self-improvement (KB lint/dedup/staleness, sec-learn, sec-kb-refresh, capture+confine hooks) | ✅ done¹ |
+| 9 | Frozen 103-case corpus + keep-or-revert gate + 10-gate pre-commit + drift/ratchet | ✅ done¹ |
 
 ¹ Phases 5 & 6 tasks are done + verified; the one shared open item is **activating** the PreToolUse
 hooks (`confine_patch_writes`, `guard_bash`, `gate_review`; Phase 8 adds capture + `confine_self_writes`)

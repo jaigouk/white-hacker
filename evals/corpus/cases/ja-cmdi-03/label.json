@@ -1,0 +1,17 @@
+{
+  "case_id": "ja-cmdi-03",
+  "language": "javascript",
+  "category": "injection",
+  "severity": "HIGH",
+  "owasp": [
+    "A03:2025"
+  ],
+  "vulnerable": {
+    "file": "vulnerable_variant.js",
+    "line": 2
+  },
+  "benign_lookalike": {
+    "file": "benign_lookalike.js"
+  },
+  "note": "cmdi variant 3 (javascript)."
+}

@@ -154,6 +154,94 @@ C = [
      'def run(secret, model_url):\n    raise RuntimeError("no model-controlled egress of secrets")\n'),
 ]
 
+# --- programmatic per-language variants to grow the FROZEN corpus to >=100 -------------------
+# OWASP-Benchmark-style: a sink family templated across languages, numbered variants (@N). Real
+# small snippets; the `SINK` marker locates the labeled line. EXT per language.
+_EXT = {"python": "py", "javascript": "js", "go": "go"}
+# family -> (category, severity, owasp, {lang: (vuln_template, clean_template)})   @N = variant index
+_FAMILIES = {
+    "sqli": ("injection", "HIGH", ["A03:2025"], {
+        "python": ('def q@N(db, v):\n    return db.execute("SELECT * FROM t@N WHERE c = \'" + v + "\'")  # SINK sqli\n',
+                   'def q@N(db, v):\n    return db.execute("SELECT * FROM t@N WHERE c = ?", (v,))\n'),
+        "javascript": ('function q@N(db, v){ return db.query("SELECT * FROM t@N WHERE c=" + v); }  // SINK sqli\n',
+                       'function q@N(db, v){ return db.query("SELECT * FROM t@N WHERE c=$1", [v]); }\n'),
+        "go": ('package m\nimport ("database/sql"; "fmt")\nfunc Q@N(db *sql.DB, v string) *sql.Row {\n\treturn db.QueryRow(fmt.Sprintf("SELECT * FROM t@N WHERE c=%s", v))  // SINK sqli\n}\n',
+               'package m\nimport "database/sql"\nfunc Q@N(db *sql.DB, v string) *sql.Row {\n\treturn db.QueryRow("SELECT * FROM t@N WHERE c=$1", v)\n}\n'),
+    }),
+    "cmdi": ("injection", "HIGH", ["A03:2025"], {
+        "python": ('import subprocess\ndef run@N(host):\n    return subprocess.run("ping " + host, shell=True)  # SINK cmdi\n',
+                   'import subprocess\ndef run@N(host):\n    return subprocess.run(["ping", host])\n'),
+        "javascript": ('const cp=require("child_process");\nfunction run@N(x){ return cp.execSync("echo "+x); }  // SINK cmdi\n',
+                       'const cp=require("child_process");\nfunction run@N(x){ return cp.execFileSync("echo",[x]); }\n'),
+        "go": ('package m\nimport "os/exec"\nfunc Run@N(h string) ([]byte, error) {\n\treturn exec.Command("sh", "-c", "ping "+h).Output()  // SINK cmdi\n}\n',
+               'package m\nimport "os/exec"\nfunc Run@N(h string) ([]byte, error) {\n\treturn exec.Command("ping", h).Output()\n}\n'),
+    }),
+    "ssrf": ("ssrf", "HIGH", ["A01:2025"], {
+        "python": ('import requests\ndef fetch@N(url):\n    return requests.get(url).text  # SINK ssrf\n',
+                   'import requests\nALLOW={"api.internal"}\ndef fetch@N(url):\n    from urllib.parse import urlparse\n    assert urlparse(url).hostname in ALLOW\n    return requests.get(url).text\n'),
+        "javascript": ('async function fetch@N(u){ return await fetch(u); }  // SINK ssrf\n',
+                       'const OK=new Set(["api.internal"]);\nasync function fetch@N(u){ if(!OK.has(new URL(u).hostname)) throw new Error("x"); return await fetch(u); }\n'),
+        "go": ('package m\nimport "net/http"\nfunc Fetch@N(u string) (*http.Response, error) {\n\treturn http.Get(u)  // SINK ssrf\n}\n',
+               'package m\nimport ("net/http"; "net/url")\nfunc Fetch@N(raw string) (*http.Response, error) {\n\tu,_:=url.Parse(raw); if u.Host!="api.internal" { return nil, http.ErrAbortHandler }\n\treturn http.Get(raw)\n}\n'),
+    }),
+    "pathtraversal": ("injection", "HIGH", ["A01:2025"], {
+        "python": ('def read@N(name):\n    return open("/data/" + name).read()  # SINK path-traversal\n',
+                   'import os\ndef read@N(name):\n    p=os.path.realpath("/data/"+name)\n    assert p.startswith("/data/")\n    return open(p).read()\n'),
+        "go": ('package m\nimport ("os"; "path/filepath")\nfunc Read@N(n string) ([]byte, error) {\n\treturn os.ReadFile(filepath.Join("/data", n))  // SINK path-traversal\n}\n',
+               'package m\nimport ("os"; "path/filepath"; "strings")\nfunc Read@N(n string) ([]byte, error) {\n\tp:=filepath.Clean(filepath.Join("/data", n)); if !strings.HasPrefix(p,"/data/") { return nil, os.ErrPermission }\n\treturn os.ReadFile(p)\n}\n'),
+    }),
+    "weakhash": ("crypto", "MEDIUM", ["A02:2025"], {
+        "python": ('import hashlib\ndef h@N(pw):\n    return hashlib.md5(pw.encode()).hexdigest()  # SINK weak-hash\n',
+                   'import bcrypt\ndef h@N(pw):\n    return bcrypt.hashpw(pw.encode(), bcrypt.gensalt())\n'),
+        "javascript": ('const c=require("crypto");\nfunction h@N(pw){ return c.createHash("md5").update(pw).digest("hex"); }  // SINK weak-hash\n',
+                       'const b=require("bcrypt");\nfunction h@N(pw){ return b.hashSync(pw,12); }\n'),
+    }),
+    "xss": ("xss", "HIGH", ["A03:2025"], {
+        "javascript": ('function show@N(el, s){ el.innerHTML = s; }  // SINK xss\n',
+                       'function show@N(el, s){ el.textContent = s; }\n'),
+    }),
+    "deser": ("deserialization", "HIGH", ["A08:2025"], {
+        "python": ('import pickle\ndef load@N(b):\n    return pickle.loads(b)  # SINK insecure-deserialization\n',
+                   'import json\ndef load@N(b):\n    return json.loads(b)\n'),
+    }),
+    "open-redirect": ("AuthN/AuthZ", "LOW", ["A01:2025"], {
+        "javascript": ('function go@N(res, next){ res.redirect(next); }  // SINK open-redirect\n',
+                       'const OK=new Set(["/home"]);\nfunction go@N(res, next){ res.redirect(OK.has(next)?next:"/home"); }\n'),
+        "python": ('def go@N(redirect, nxt):\n    return redirect(nxt)  # SINK open-redirect\n',
+                   'OK={"/home"}\ndef go@N(redirect, nxt):\n    return redirect(nxt if nxt in OK else "/home")\n'),
+    }),
+}
+_VARIANTS_PER = 4  # numbered variants per (family, language)
+
+
+def _build_variants() -> list:
+    out = []
+    for fam, (cat, sev, owasp, langs) in _FAMILIES.items():
+        for lang, (vt, ct) in langs.items():
+            for n in range(1, _VARIANTS_PER + 1):
+                cid = f"{lang[:2]}-{fam}-{n:02d}"
+                out.append((cid, lang, _EXT[lang], cat, sev, list(owasp),
+                            f"{fam} variant {n} ({lang}).",
+                            vt.replace("@N", str(n)), ct.replace("@N", str(n))))
+    return out
+
+
+# --- named CVE regression anchors (si-08 6.1) — representative class snippets tagged with the CVE ---
+_CVE_ANCHORS = [
+    ("cve-2026-22807-vllm-deser", "python", "py", "deserialization", "HIGH", ["CVE-2026-22807", "A08:2025"],
+     "Regression anchor CVE-2026-22807 (vLLM): untrusted object deserialized in an inference server path.",
+     'import pickle\ndef load_request(blob):\n    return pickle.loads(blob)  # SINK CVE-2026-22807 insecure-deserialization\n',
+     'import json\ndef load_request(blob):\n    return json.loads(blob)\n'),
+    ("cve-2026-22778-vllm-ssrf", "python", "py", "ssrf", "HIGH", ["CVE-2026-22778", "A01:2025"],
+     "Regression anchor CVE-2026-22778 (vLLM): server fetches a user-supplied model/url.",
+     'import requests\ndef pull_model(url):\n    return requests.get(url).content  # SINK CVE-2026-22778 ssrf\n',
+     'import requests\nALLOW={"models.internal"}\ndef pull_model(url):\n    from urllib.parse import urlparse\n    assert urlparse(url).hostname in ALLOW\n    return requests.get(url).content\n'),
+    ("cve-2025-68664-langchain-llm05", "python", "py", "improper-output-handling", "HIGH", ["CVE-2025-68664", "LLM05:2025"],
+     "Regression anchor CVE-2025-68664 (LangChain): model output executed (improper output handling).",
+     'def run_tool(llm_out):\n    return eval(llm_out)  # SINK CVE-2025-68664 improper-output-handling\n',
+     'import json, ast\ndef run_tool(llm_out):\n    return ast.literal_eval(json.loads(llm_out)["expr"])\n'),
+]
+
 
 def sink_line(content: str) -> int:
     for i, line in enumerate(content.splitlines(), start=1):
@@ -162,10 +250,16 @@ def sink_line(content: str) -> int:
     raise ValueError("no SINK marker")
 
 
+def all_cases() -> list:
+    """The full frozen set: hand-written distinct cases + per-language variants + CVE anchors."""
+    return list(C) + _build_variants() + list(_CVE_ANCHORS)
+
+
 def main() -> int:
     CASES_DIR.mkdir(parents=True, exist_ok=True)
-    written = 0
-    for cid, lang, ext, cat, sev, owasp, desc, vuln, clean in C:
+    cases = all_cases()
+    ids = []
+    for cid, lang, ext, cat, sev, owasp, desc, vuln, clean in cases:
         d = CASES_DIR / cid
         d.mkdir(parents=True, exist_ok=True)
         vfile = f"vulnerable_variant.{ext}"
@@ -180,8 +274,14 @@ def main() -> int:
             "note": desc,
         }
         (d / "label.json").write_text(json.dumps(label, indent=2) + "\n")
-        written += 1
-    print(f"generated {written} cases under {CASES_DIR}")
+        ids.append(cid)
+    # freeze marker: enumerate the locked case ids (Phase 9 T-9.1)
+    (CASES_DIR.parent / "LOCKED").write_text(
+        "# FROZEN eval corpus — locked case ids (Phase 9 T-9.1).\n"
+        "# Agent-write-blocked by confine_self_writes (T-8.4); edits go through promote_finding.py\n"
+        "# run by the human/CI identity. Regenerate with corpus/generate.py.\n"
+        + "\n".join(sorted(ids)) + "\n")
+    print(f"generated {len(ids)} cases under {CASES_DIR}; wrote LOCKED")
     return 0
 
 
