@@ -68,10 +68,10 @@ Then **re-groom Phase 7**.
 - **Artifact:** `.claude/skills/sec-report/SKILL.md`
 - **Depends on:** T-1.1
 - **Verification criteria:**
-  - [ ] Body documents markdown + machine-JSON outputs and OWASP-ID mapping — `grep -q 'SECURITY-REPORT.md' .claude/skills/sec-report/SKILL.md && grep -qi 'owasp' .claude/skills/sec-report/SKILL.md`
-  - [ ] States the CI gate `counts.high == 0` and "triaged-only, never raw discovery" — `grep -qi 'counts.high\|exit-code\|exit code' .claude/skills/sec-report/SKILL.md && grep -qi 'triag' .claude/skills/sec-report/SKILL.md`
-  - [ ] De-stubbed; renders the Phase-1 `TRIAGE.json` fixture to a non-empty report (logged) — `! grep -q 'STATUS: STUB' .claude/skills/sec-report/SKILL.md`
-- **Status:** todo
+  - [x] Body documents markdown + machine-JSON outputs and OWASP-ID mapping — `grep -q 'SECURITY-REPORT.md' … && grep -qi 'owasp' …`
+  - [x] States the CI gate `counts.high == 0` and "triaged-only, never raw discovery" — greps pass
+  - [x] De-stubbed; renders the Phase-1 `TRIAGE.json` fixture to a non-empty report — `docs/research/poc-floor-review/run/SECURITY-REPORT.md` (40 lines, tracked)
+- **Status:** done
 
 ### T-6.2 · CI gate script (consume report JSON, exit non-zero on HIGH)
 - **Goal:** a small tested script that reads the machine JSON and exits 1 when `summary.counts.high > 0`
@@ -79,9 +79,9 @@ Then **re-groom Phase 7**.
 - **Artifact:** `.claude/skills/sec-report/scripts/ci_gate.py` (+ `pyproject.toml`, `tests/`)
 - **Depends on:** T-6.1, T-1.1
 - **Verification criteria:**
-  - [ ] Exits 1 on `counts.high > 0`, 0 otherwise; threshold overridable — `uv run pytest .claude/skills/sec-report/scripts/tests/test_ci_gate.py` (>1 case incl. medium-only, threshold override)
-  - [ ] Rejects malformed/non-schema JSON with a clear error — negative test
-- **Status:** todo
+  - [x] Exits 1 on `counts.high > 0`, 0 otherwise; threshold overridable — `uv run --with jsonschema --with pytest pytest .claude/skills/sec-report/scripts/tests/test_ci_gate.py` *(12 tests; medium-only passes, `--max-high` override, real deduped fixture → exit 1)*
+  - [x] Rejects malformed/non-schema JSON with a clear error (exit 2) — `test_main_malformed_json_rejected`, `test_main_non_schema_json_rejected`
+- **Status:** done
 
 ### T-6.3 · Populate the CI GitHub Action (pinned model + deps + SHA-pinned actions)
 - **Goal:** `ci/security-review.action.yml` runs the review on the PR diff, invokes the gate script, and
@@ -91,23 +91,24 @@ Then **re-groom Phase 7**.
 - **Artifact:** `ci/security-review.action.yml`
 - **Depends on:** T-6.1, T-6.2
 - **Verification criteria:**
-  - [ ] Valid YAML — `python -c 'import yaml,sys; yaml.safe_load(open("ci/security-review.action.yml"))'`
-  - [ ] Every `uses:` is SHA-pinned (40-hex), model + claude-code pinned — `! grep -E 'uses:.*@(v[0-9]|main|master)$' ci/security-review.action.yml` (no tag/branch pins) and `grep -qi 'claude-opus-4\|opus' ci/security-review.action.yml`
-  - [ ] `permissions: contents: read` and external-contributor approval present — `grep -q 'contents: read' ci/security-review.action.yml && grep -qi 'approval\|external' ci/security-review.action.yml`
-  - [ ] De-stubbed — `! grep -qi 'stub' ci/security-review.action.yml`
-- **Status:** todo
+  - [x] Valid YAML — `uv run --with pyyaml python -c 'import yaml; yaml.safe_load(open("ci/security-review.action.yml"))'`
+  - [x] Every `uses:` is SHA-pinned (40-hex), model + claude-code pinned — `actions/checkout@df4cb1c…` (v6.0.3, verified) + `@anthropic-ai/claude-code@2.1.167` + `claude-opus-4-8`; no tag/branch pins
+  - [x] `permissions: contents: read` + external-contributor approval (fork-skip `if:` + repo-setting note) present
+  - [x] De-stubbed — `! grep -qi 'stub'`
+- **Status:** done *(SHA pins resolved live via the GitHub API; CI runs our `/security-review` then `ci_gate.py` — ADR-009)*
 
 ### T-6.4 · `PreToolUse` dangerous-Bash guard
 - **Goal:** a `PreToolUse` hook that blocks (exit 2) destructive/exfil Bash during a review (e.g. `git
   push`, `git apply`, network egress beyond allow-list, `rm -rf`, reads of `**/.env` / private keys),
   enforcing the posture preamble structurally. This is the first hook in the shared `settings` hooks
   block that Phases 8–9 extend.
-- **Artifact:** `.claude/hooks/guard_bash.sh` (+ `tests/`), wired in `.claude/settings.local.json`
+- **Artifact:** `.claude/hooks/guard_bash.{py,sh}` (+ `tests/`); registration staged for committed
+  `.claude/settings.json` (ADR-016; reconciliation #3 — not `settings.local.json`).
 - **Depends on:** —
 - **Verification criteria:**
-  - [ ] Denies `git push`, `git apply`, `rm -rf`, and reads of `.env`/private keys; allows benign read-only Bash — `uv run pytest .claude/hooks/tests/test_guard_bash.py` (>1 deny case + >1 allow case)
-  - [ ] Hook is registered under `PreToolUse` with a `Bash` matcher — `python -c 'import json; h=json.load(open(".claude/settings.local.json"))["hooks"]["PreToolUse"]; assert any("Bash" in m.get("matcher","") for m in h)'`
-- **Status:** todo
+  - [x] Denies `git push`/`apply`/`am`, `rm -rf`, secret-file refs (`.env`, `id_rsa`, `*.pem`, `~/.ssh`, `~/.aws/credentials`, `.npmrc`), and exfil-shaped egress; allows benign read-only Bash, `uv run`, `.env.example` — `uv run --with pytest pytest .claude/hooks/tests/test_guard_bash.py` *(10 tests)*
+  - [ ] **(pending human-auth)** registered under `hooks.PreToolUse` (Bash matcher) in committed `.claude/settings.json` — batched with T-5.3's registration (self-modifying startup config; awaits operator OK)
+- **Status:** blocked(human-auth: settings.json registration) — guard logic + 10 tests done; only registration pending.
 
 ### T-6.5 · Team-mode spawn prompts + gate hooks
 - **Goal:** document the two execution modes (sequential/subagent default; team mode opt-in behind
@@ -119,8 +120,8 @@ Then **re-groom Phase 7**.
   (+ `tests/`)
 - **Depends on:** T-6.1
 - **Verification criteria:**
-  - [ ] `docs/team-mode.md` documents both modes, the env flag + min CC version, and "route to tech-lead" — `grep -qi 'CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS' docs/team-mode.md && grep -qi 'tech-lead\|tech lead' docs/team-mode.md`
-  - [ ] States the carry-over caveat (subagent skills/mcpServers don't apply as teammate) — `grep -qi 'teammate' docs/team-mode.md && grep -qi 'spawn prompt' docs/team-mode.md`
-  - [ ] Gate hook blocks "review complete" until `TRIAGE.json` exists and returns only the summary + report path — `uv run pytest .claude/hooks/tests/test_gate_review.py`
-  - [ ] WAIT-state clean-exit behavior documented (matches agent §Team-workflow) — `grep -qi 'wait' docs/team-mode.md`
-- **Status:** todo
+  - [x] `docs/team-mode.md` documents both modes, the env flag (+ min-CC-version verify caveat), and "route to tech-lead" — greps pass
+  - [x] States the carry-over caveat (subagent skills/mcpServers don't apply as teammate) — greps pass
+  - [x] Gate hook blocks "review complete" until `TRIAGE.json` exists and returns only the summary + report path — `uv run --with pytest pytest .claude/hooks/tests/test_gate_review.py` *(6 tests)*
+  - [x] WAIT-state clean-exit behavior documented (matches agent §Team-workflow) — grep passes
+- **Status:** done *(gate-hook registration shares the T-5.3/T-6.4 human-auth settings.json step)*

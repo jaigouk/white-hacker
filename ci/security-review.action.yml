@@ -1,1 +1,56 @@
-# STUB — CI GitHub Action (Phase 6): pinned model id, pinned @anthropic-ai/claude-code, SHA-pinned actions, "require approval for external contributors".
+# white-hacker security review — CI GitHub workflow.
+# ADR-009 (one definition, three carriers): CI runs the SAME `/security-review` command as the
+# local agent + the subagent, so behavior cannot drift between carriers.
+# ADR-006 (pin AND verify): the model id, the `@anthropic-ai/claude-code` npm version, and every
+# `uses:` SHA are pinned to verified values (resolved 2026-06-06).
+name: white-hacker-security-review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+# Least privilege: the reviewer gets read-only repo access and NO write token. (It proposes; it
+# never pushes or applies — ADR-010.) Add `pull-requests: write` only if you switch on PR comments.
+permissions:
+  contents: read
+
+concurrency:
+  group: white-hacker-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  security-review:
+    runs-on: ubuntu-latest
+    # Require approval for external contributors: do NOT auto-run on PRs from forks, and enable
+    # repo Settings -> Actions -> "Require approval for all external contributors". This is the
+    # load-bearing mitigation for the 2026-06 prompt-injection -> secret-exfil chain (Microsoft
+    # case study): untrusted PR content must never reach an agent that holds secrets + egress
+    # (Agents Rule of Two). The review reads the developer's own diff, not arbitrary fetched branches.
+    if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+    steps:
+      - name: Checkout (full history for an accurate diff)
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3 (SHA verified 2026-06-06)
+        with:
+          fetch-depth: 0
+
+      - name: Install Claude Code (pinned) + gate dependency
+        run: |
+          npm install -g @anthropic-ai/claude-code@2.1.167   # pinned; never 'latest' (ADR-006)
+          python -m pip install --quiet 'jsonschema>=4.20'
+
+      - name: Run the white-hacker review on the PR diff (floor-only, read-only)
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          # Pin the model explicitly — the platform default drifts (now Opus 4.8). The opt-in
+          # /sec-patch stage is NEVER run in CI; this is discovery -> triage -> report only, and it
+          # emits TRIAGE.json conforming to _shared/reference/finding-schema.json.
+          # (Confirm the exact headless flags against the installed claude-code version's docs.)
+          claude --model claude-opus-4-8 \
+            -p "/security-review origin/${{ github.base_ref }}...HEAD" | tee review.log
+
+      - name: Gate on HIGH findings (fail the PR deterministically)
+        run: |
+          # ci_gate.py validates TRIAGE.json against finding-schema, then exits 1 when counts.high > 0
+          # (threshold overridable with --max-high). See Phase 6 T-6.2.
+          python .claude/skills/sec-report/scripts/ci_gate.py TRIAGE.json

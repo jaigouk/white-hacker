@@ -1,0 +1,12 @@
+[project]
+name = "sec-report-scripts"
+version = "0.1.0"
+description = "CI gate for white-hacker findings JSON (schema-validate, then gate on summary.counts)."
+requires-python = ">=3.10"
+dependencies = ["jsonschema>=4.20"]
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
