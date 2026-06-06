@@ -149,3 +149,35 @@ the agent didn't know — tooling knowledge evolves like attack-technique knowle
 prevents the legacy profile's single-tool coupling. The floor guarantees value with zero tools.
 **Alternatives:** A curated fixed tool matrix (rejected: ages fast, couples the agent to brands,
 contradicts the "there are tools I don't know" reality).
+
+## ADR-016 — Patch-write confinement is defense-in-depth; the hook is a tripwire, not the boundary
+**Status:** accepted — **addendum to ADR-010** (verified by spike-06; confinement red-team, Phase 5)
+**Context:** ADR-010 removes the agent's working-tree write / `git apply` capability. Phase-5
+grooming verified two facts that reshape *how* this is enforced: (1) the white-hacker agent already
+exposes **no `Write`/`Edit` tool** (`tools: Read, Grep, Glob, Bash, SendMessage, ToolSearch`), so the
+only residual write surface is **`Bash`**, and the artifact chain itself is written via Bash; (2) a
+red-team found a verb+path Bash-parsing hook is **trivially bypassable** (16 verified vectors:
+symlink/realpath TOCTOU, `mv`/`cp` laundering, `python3 -c`/`perl -e`/`sed -i` interpreter writes,
+`patch -p1 <diff`). Deciding whether an arbitrary command writes a forbidden path is undecidable.
+**Decision:** Enforce confinement as **defense-in-depth, strongest first**:
+1. **Structural baseline (the only real guarantee):** no `Write`/`Edit` tool granted; no patch-apply
+   capability granted; `sec-patch` emits a unified diff under `PATCHES/` and a **human applies it**.
+2. **`permissions.deny`** (Claude Code's own parser, which checks each sub-command of a compound):
+   `git apply|am|push|reset --hard|clean|config`, `patch`.
+3. **PreToolUse Bash tripwire** (`.claude/hooks/confine_patch_writes.py`): `realpath`-canonicalize a
+   candidate write target, then allow only the pinned artifact allowlist (`THREAT_MODEL.md`, the
+   `*.json` artifacts, `SECURITY-REPORT.md`, `PATCH-STATE.json`, `*.sarif`, `PATCHES/**`) + `/dev/null`
+   / OS-temp; deny redirection/tee/cp/mv/dd/truncate/`sed -i`/interpreter-writes/nested-shell/`patch`
+   /git-mutation/`.claude/**` writes. Exit 2 = hard block (spike-06).
+**Residual risk (recorded, verbatim in the hook header):** Bash-command parsing is heuristic and
+**NOT airtight** — interpreters (`uv run python -c …`), symlink TOCTOU, and exotic write syscalls evade
+it. The hook is a **tripwire/speed-bump, not the boundary.** The strong guarantee is layer 1.
+**Scope caveat (agent vs. developer):** a project `settings.json` hook/deny binds *every* Claude
+session in the repo, not just the white-hacker subagent. The deny set is therefore kept to
+patch-apply/push/destructive verbs (it does **not** block `git commit`/`add` or the Write/Edit tools),
+so it implements ADR-010 without handcuffing developer-driven sessions. **Activating** the registration
+in `.claude/settings.json` is a deliberate, human-authorized step (self-modifying startup config) — the
+hook + permissions block is provided ready to enable; disable by removing the `hooks`/`deny` block.
+**Alternatives:** (a) a globally-active hook gating the `Write` tool + `git commit` (rejected: breaks
+developer/build sessions and surprises the operator); (b) trusting the hook as the boundary (rejected:
+red-team-falsified — undecidable parsing).

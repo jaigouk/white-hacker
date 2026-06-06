@@ -159,15 +159,17 @@ realpath-canonicalizes then matches a pinned allowlist and denies interpreters /
   `PATCHES/**`, and **denies** (exit 2) any other write target **and** git-mutation verbs (`git apply|
   am|commit|push|checkout --|reset --hard|restore|clean`). The agent `tools:` line already excludes
   Write/Edit; `git apply` is denied by the hook (ADR-010). Honest residual risk documented in-hook.
-- **Artifact:** `.claude/hooks/confine_patch_writes.sh` + a testable `confine_patch_writes.py` (+
-  `scripts/`/`tests/`), registered under `hooks.PreToolUse` in `.claude/settings.local.json`
+- **Artifact:** `.claude/hooks/confine_patch_writes.sh` + testable `confine_patch_writes.py` (+
+  `pyproject.toml`/`conftest.py`/`tests/`); registration block staged for **committed**
+  `.claude/settings.json` (ADR-016; not `settings.local.json` — must survive a clone).
 - **Depends on:** spike-06, T-5.1
 - **Verification criteria:**
-  - [ ] Denies (exit 2) a Bash write to `./src/x` (`echo x > src/x`, `tee src/x`, `cp a src/x`) and **allows** a write to `./PATCHES/x` and to the artifact allowlist (`SCAN-PLAN.json`) — `uv run pytest .claude/hooks/tests/test_confine_patch_writes.py` (>1 case)
-  - [ ] Path-traversal escape (`PATCHES/../src`, abs paths, `$PWD/src`) is denied — negative test
-  - [ ] Git-mutation verbs (`git apply`, `git commit`, `git push`) are denied; read-only git (`git status`/`diff`/`log`) is allowed — asserted in tests
-  - [ ] Agent definition still exposes no working-tree write tool — `grep -E '^tools:' .claude/agents/white-hacker.md` shows no `Write`/`Edit`; and the hook is registered in `settings.local.json`
-- **Status:** todo
+  - [x] Denies (exit 2) a Bash write to `./src/x` (`echo>`, `tee`, `cp`, `mv`, `dd`, `truncate`, `sed -i`, interpreter one-liner, nested `sh -c`) and **allows** `PATCHES/`, the artifact allowlist, `/dev/null`, read-only git, `git commit`/`add`, `uv run pytest` — `uv run --with pytest pytest .claude/hooks/tests/test_confine_patch_writes.py` *(24 tests)*
+  - [x] Path-traversal (`PATCHES/../src`), absolute-into-source, `$`/backtick indirection, and **symlink-through-allowlist** (realpath-canonicalized) are denied — negative tests
+  - [x] Patch-apply / push / destructive verbs (`patch`, `git apply|am|push|reset --hard|clean|config`) denied; `.claude/**` writes denied; `git commit`/`add` + read-only git allowed — asserted in tests *(commit deliberately NOT blocked — ADR-016 scope caveat)*
+  - [x] Agent definition exposes no working-tree write tool — `grep -E '^tools:' .claude/agents/white-hacker.md` shows no `Write`/`Edit` *(already true)*
+  - [ ] **(pending human auth)** the hook + `permissions.deny` block is registered in committed `.claude/settings.json` — the harness classifies writing startup config as self-modification needing explicit OK (ADR-016); block is prepared, awaiting jkim's go-ahead.
+- **Status:** blocked(human-auth: settings.json registration) — hook + tests + ADR-016 done; only the live registration awaits explicit authorization.
 
 ### T-5.4 · Patch-ladder demonstration on a planted-vuln fixture
 - **Goal:** prove the ladder end-to-end on a buildable fixture with a planted vuln, a failing-on-vuln

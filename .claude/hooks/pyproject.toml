@@ -1,0 +1,12 @@
+[project]
+name = "white-hacker-hooks"
+version = "0.1.0"
+description = "PreToolUse confinement tripwire for sec-patch (confine shell writes to the artifact allowlist + PATCHES/)."
+requires-python = ">=3.10"
+dependencies = []
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
