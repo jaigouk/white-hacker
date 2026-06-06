@@ -103,10 +103,10 @@ batched for auth); `sec-learn`/`sec-kb-refresh` bodies de-stubbed + `harvest.sh`
   inject_cve_digest.sh,save_learnings_nudge.sh}` (+ `tests/`), wired in `.claude/settings.local.json`
 - **Depends on:** —
 - **Verification criteria:**
-  - [ ] Each hook script, fed a sample hook-event JSON on stdin, appends a well-formed JSONL line / emits the digest — `uv run pytest .claude/hooks/tests/test_capture_hooks.py` (one case per hook)
-  - [ ] Hooks are registered under the correct events with valid schema — `python -c 'import json;h=json.load(open(".claude/settings.local.json"))["hooks"];assert all(k in h for k in ["PostToolUse","SessionEnd","Stop"])'`
-  - [ ] Capture is append-only and never writes a secret value (redaction) — negative test: a `.env` read event yields a redacted trace line
-- **Status:** todo
+  - [x] Each hook (5 modes of `capture_hooks.py` behind 5 `.sh` wrappers), fed an event JSON, appends a well-formed JSONL line / emits the digest/nudge — `uv run --with pytest pytest .claude/hooks/tests/test_capture_hooks.py` *(9 tests)*
+  - [ ] **(pending human-auth)** hooks registered under PostToolUse/SessionEnd/Stop/SessionStart in committed `.claude/settings.json` — batched into the one operator-auth approval
+  - [x] Append-only + never writes a secret value (redaction) — `test_secret_value_is_redacted` + `test_append_is_additive`
+- **Status:** blocked(human-auth: settings.json registration) — capture logic + 9 tests done.
 
 ### T-8.4 · `PreToolUse` confinement + secret-block + egress guardrails
 - **Goal:** a `PreToolUse` hook (exit 2 / `permissionDecision: deny`) that: denies any `Write`/`Edit`
@@ -118,10 +118,10 @@ batched for auth); `sec-learn`/`sec-kb-refresh` bodies de-stubbed + `harvest.sh`
   `permissions.deny`
 - **Depends on:** T-6.4 (shares the hooks block)
 - **Verification criteria:**
-  - [ ] Denies a write to `src/x`, `evals/corpus/x`, `evals/keep_or_revert.py`; allows a write to `ai-attack-kb/reference/x.md` and `PATCHES/x` — `uv run pytest .claude/hooks/tests/test_confine_self_writes.py` (≥ 3 deny + ≥ 2 allow cases incl. `../` traversal)
-  - [ ] Denies a read of `.env` / private key and any egress outside the feed allow-list — dedicated negative tests
-  - [ ] `settings.local.json` `permissions.deny` lists the corpus + gate-script paths — `python -c 'import json;d=json.load(open(".claude/settings.local.json"));print(d["permissions"]["deny"])'` includes `evals/corpus` and `keep_or_revert`
-- **Status:** todo
+  - [x] Denies writes to `src/x`, `evals/corpus/x`, `evals/keep_or_revert.py`, `evals/baseline.json`, `.claude/settings.json`, and `../`-traversal into the corpus; allows `ai-attack-kb/reference/x.md`, `PATCHES/x`, `evals/traces/x` — `uv run --with pytest pytest .claude/hooks/tests/test_confine_self_writes.py` *(10 tests)*
+  - [x] Denies `.env` read (composes `guard_bash`) and egress outside the feed allow-list (incl. `169.254.169.254`); allows feed hosts (osv.dev, githubusercontent, …) — dedicated tests
+  - [ ] **(pending human-auth)** committed `.claude/settings.json` `permissions.deny` lists the corpus + gate-script paths — batched into the one operator-auth approval
+- **Status:** blocked(human-auth: settings.json registration) — confine logic + 10 tests done; composes as a 3rd PreToolUse entry with confine_patch_writes + guard_bash.
 
 ## 8c — The reflective loop + the feed/tool poller (the proposers)
 
