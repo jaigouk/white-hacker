@@ -1,0 +1,8 @@
+{
+  "_note": "Last-seen markers for sec-kb-refresh (T-8.6). The poller processes only deltas: an item whose id is already in a feed's seen_ids is skipped. Seeded empty; populated as feeds are polled.",
+  "osv": {"seen_ids": []},
+  "ghsa": {"seen_ids": []},
+  "atlas": {"seen_ids": []},
+  "arxiv": {"seen_ids": []},
+  "atom": {"seen_ids": []}
+}

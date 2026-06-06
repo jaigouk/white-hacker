@@ -136,11 +136,11 @@ batched for auth); `sec-learn`/`sec-kb-refresh` bodies de-stubbed + `harvest.sh`
 - **Artifact:** `.claude/skills/sec-learn/SKILL.md` (+ `scripts/harvest.sh` with a test)
 - **Depends on:** T-8.1, T-8.3
 - **Verification criteria:**
-  - [ ] Body documents reflect → pre-gate (N≥3) → self-critique → PATCH-over-CREATE → branch+PR-with-evidence — `for k in 'why_missed\|why_fp' 'seen.*3\|≥ *3\|>= *3' 'self-crit\|overfit' 'patch over create\|default.*patch' 'PR\|branch'; do grep -qiE "$k" .claude/skills/sec-learn/SKILL.md || echo MISSING:"$k"; done` prints nothing
-  - [ ] States it proposes tool-registry additions, not just KB/checklist (ADR-015) — `grep -q 'tool-registry' .claude/skills/sec-learn/SKILL.md`
-  - [ ] `harvest.sh` collates traces+corrections into the reflection input — `uv run pytest .claude/skills/sec-learn/scripts/tests/test_harvest.py`
-  - [ ] States "never auto-merge / behind the eval gate" and `disable-model-invocation` (manual trigger) — `grep -qi 'never.*merge\|human' .claude/skills/sec-learn/SKILL.md && grep -q 'disable-model-invocation' .claude/skills/sec-learn/SKILL.md`; de-stubbed
-- **Status:** todo
+  - [x] Body documents reflect → pre-gate (N≥3) → self-critique → PATCH-over-CREATE → branch+PR-with-evidence — *(VC corrected: `grep -E` uses plain `|`, not `\|` — the `vc-grep-gotchas` trap)* `for k in 'why_missed|why_fp' 'seen.*3|≥ *3|>= *3' 'self-crit|overfit' 'patch over create|default.*patch' 'PR|branch'; do grep -qiE "$k" .claude/skills/sec-learn/SKILL.md || echo MISSING:"$k"; done` prints nothing
+  - [x] Proposes tool-registry additions, not just KB/checklist (ADR-015) — `grep -q 'tool-registry'`
+  - [x] `harvest.py`/`.sh` collates traces+corrections — `uv run --with pytest pytest .claude/skills/sec-learn/scripts/tests/test_harvest.py` *(5 tests)*
+  - [x] States "never auto-merge / human-gated" + `disable-model-invocation`; de-stubbed
+- **Status:** done
 
 ### T-8.6 · Implement `sec-kb-refresh` feed + tool poller (incremental diff → dated draft PR)
 - **Goal:** `sec-kb-refresh/SKILL.md` + a tested poller: poll the authoritative feeds
@@ -154,22 +154,25 @@ batched for auth); `sec-learn`/`sec-kb-refresh` bodies de-stubbed + `harvest.sh`
   `tests/` with recorded feed fixtures), `evals/feed-state.json` (seed)
 - **Depends on:** T-8.1, T-8.2
 - **Verification criteria:**
-  - [ ] Poller diffs incrementally against `feed-state.json` (no re-processing seen items) and parses a recorded OSV/ATLAS/atom fixture into candidate entries — `uv run pytest .claude/skills/sec-kb-refresh/scripts/tests/test_poll_feeds.py` (>1 feed type; an unchanged-feed run yields zero new entries)
-  - [ ] Drafted entries pass `validate_kb` (mandatory source+url+retrieved) and `dedupe_kb` — test runs both on poller output
-  - [ ] SKILL states "fast tier only / never auto-merge / draft PR" and proposes tool-registry additions (ADR-015) — `grep -qi 'fast tier\|never.*merge\|draft pr' .claude/skills/sec-kb-refresh/SKILL.md && grep -q 'tool-registry' .claude/skills/sec-kb-refresh/SKILL.md`; de-stubbed
-  - [ ] No network call in tests (fixtures only); live polling honors the egress allow-list (T-8.4) — tests mock/replay; no real HTTP asserted
-- **Status:** todo
+  - [x] Poller diffs incrementally vs `feed-state.json` and parses OSV/ATLAS/atom fixtures into candidates — `uv run --with jsonschema --with pyyaml --with pytest pytest .../test_poll_feeds.py` *(8 tests; 3 feed types; unchanged feed → 0 new; partial-diff)*
+  - [x] Drafted entries pass `validate_kb` (mandatory source+url+retrieved) and `dedupe_kb` — `test_candidate_entry_validates_and_dedupes` runs both on poller output
+  - [x] SKILL states "fast tier only / never auto-merge / draft PR" + proposes tool-registry (ADR-015); de-stubbed — greps pass
+  - [x] No network in tests (fixtures only); parsers take raw content; live polling honors the T-8.4 egress allow-list
+- **Status:** done
 
-### T-8.7 · Schedule the refresh routine (cloud, off-peak, draft PR)
-- **Goal:** register `sec-kb-refresh` as a scheduled cloud Routine (via `/schedule`, hourly-minimum
-  cadence; daily JSON/RSS, weekly blogs, monthly frameworks per si-08 §4) that runs to completion on a
-  fresh clone and opens a draft PR — documented so it is reproducible, with the cadence/feed table and the
-  "shares usage quota → schedule off-peak" note.
+### T-8.7 · Document the refresh routine (cadence + how to schedule) — DOCUMENT-ONLY
+> **Re-groom (2026-06-06):** the operator's standing "no autonomous schedulers" preference means
+> T-8.7 is **document-only** — it does NOT create a live cloud Routine. The doc defines the cadence +
+> how the operator creates/disables it via `/schedule`; `poll_feeds.py` stays manually runnable.
+- **Goal:** document `sec-kb-refresh` as a schedulable cloud Routine (hourly-minimum cadence; daily
+  JSON/RSS, weekly blogs, monthly frameworks per si-08 §4) that runs to completion on a fresh clone and
+  opens a draft PR — reproducible, with the cadence/feed table and the off-peak note. **No live schedule
+  is created.**
 - **Artifact:** `docs/self-improvement/refresh-routine.md` (cadence table + schedule definition + how to
   create/disable it)
 - **Depends on:** T-8.6
 - **Verification criteria:**
-  - [ ] Doc lists the three cadence tiers with their feeds and access type — `grep -qi 'daily' docs/self-improvement/refresh-routine.md && grep -qi 'weekly' docs/self-improvement/refresh-routine.md && grep -qi 'monthly' docs/self-improvement/refresh-routine.md`
-  - [ ] States hourly-minimum cadence + off-peak + fresh-clone + draft-PR + never-auto-merge — `grep -qi 'hourly' docs/self-improvement/refresh-routine.md && grep -qi 'draft pr\|never.*merge' docs/self-improvement/refresh-routine.md`
-  - [ ] References `poll_feeds.py` and `feed-state.json` as what the routine runs — `grep -q 'poll_feeds' docs/self-improvement/refresh-routine.md`
-- **Status:** todo
+  - [x] Doc lists the three cadence tiers (daily/weekly/monthly) with their feeds — greps pass
+  - [x] States hourly-minimum + off-peak + fresh-clone + draft-PR + never-auto-merge — greps pass
+  - [x] References `poll_feeds.py` + `feed-state.json` as what the routine runs — grep passes
+- **Status:** done *(document-only — no live schedule created, per the operator's no-scheduler preference)*

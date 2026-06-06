@@ -1,0 +1,5 @@
+techniques:
+  - id: AML.T0051
+    name: LLM Prompt Injection
+  - id: AML.T0070
+    name: RAG Poisoning

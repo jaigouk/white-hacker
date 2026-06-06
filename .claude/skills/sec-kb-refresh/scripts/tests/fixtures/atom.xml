@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Embrace The Red</title>
+  <entry>
+    <id>https://embracethered.com/blog/posts/2026/memory-poisoning</id>
+    <title>New agent memory-poisoning technique via adversarial images</title>
+    <link href="https://embracethered.com/blog/posts/2026/memory-poisoning"/>
+  </entry>
+  <entry>
+    <id>https://embracethered.com/blog/posts/2026/promptware-c2</id>
+    <title>Promptware: command-and-control over an agent's tool channel</title>
+    <link href="https://embracethered.com/blog/posts/2026/promptware-c2"/>
+  </entry>
+</feed>

@@ -1,0 +1,6 @@
+{
+  "vulns": [
+    {"id": "GHSA-aaaa-bbbb-cccc", "summary": "Indirect prompt injection in example-agent via tool output"},
+    {"id": "CVE-2026-1234", "summary": "Improper output handling leads to RCE in example-llm-runner"}
+  ]
+}
