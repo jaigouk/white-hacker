@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://white-hacker/kb-entry-schema.json",
+  "title": "ai-attack-kb entry front-matter",
+  "description": "Schema for the YAML front-matter of one ai-attack-kb reference entry (ADR-012; si-08 §2.2 — Sigma+Semgrep fusion). One entry per reference/<technique-class>.md file. Validated by scripts/validate_kb.py.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id", "title", "technique_class", "severity", "confidence",
+    "status", "date", "modified", "review_by", "metadata",
+    "supersedes", "detections", "xref"
+  ],
+  "properties": {
+    "id": {
+      "description": "Typed, never-reused id. AISEC-<CLASS-TOKENS>-<NNN>.",
+      "type": "string",
+      "pattern": "^AISEC-[A-Z0-9]+(-[A-Z0-9]+)*-[0-9]{3,}$"
+    },
+    "title": { "type": "string", "minLength": 1 },
+    "technique_class": {
+      "description": "Controlled vocabulary = the five on-disk file stems (ADR-012).",
+      "enum": ["prompt-injection", "tool-poisoning", "rag-poisoning", "excessive-agency", "data-exfil"]
+    },
+    "severity": { "enum": ["high", "medium", "low"] },
+    "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+    "status": { "enum": ["active", "archived", "deprecated"] },
+    "date": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+    "modified": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+    "review_by": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+    "metadata": {
+      "description": "Provenance. All three of source/url/retrieved are MANDATORY (ADR-012: dated, sourced).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "url", "retrieved"],
+      "properties": {
+        "source": { "type": "string", "minLength": 1 },
+        "url": { "type": "string", "pattern": "^https?://" },
+        "retrieved": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" }
+      }
+    },
+    "supersedes": {
+      "description": "null for a fresh entry; the id of the entry this one replaces (audit trail).",
+      "type": ["string", "null"],
+      "pattern": "^AISEC-[A-Z0-9]+(-[A-Z0-9]+)*-[0-9]{3,}$"
+    },
+    "detections": {
+      "description": "≥1 grep/semgrep pattern hint or behavioral check.",
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "xref": {
+      "description": "External taxonomy ids (LLMxx:2025, ASIxx, MCPxx, AML.Txxxx, CVE-...). May be empty only for an unmapped draft.",
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    }
+  }
+}
