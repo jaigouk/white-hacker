@@ -191,15 +191,18 @@ on project-scope skills. See `docs/plan/PLAN.md` §7.1.
 
 ## Status
 
-**Phases 0–4 done (verified)** — the inner loop *aims, finds, refutes, tools-up, and now covers the
-AI surface* end-to-end: `sec-threat-model` + `sec-detect` (real `SCAN-PLAN.json` emitter + schema,
+**Phases 0–5 done (verified)** — the full inner loop *aims, finds, refutes, tools-up, covers the
+AI surface, and remediates* end-to-end: `sec-threat-model` + `sec-detect` (real `SCAN-PLAN.json` emitter + schema,
 incl. MCP detection) scope and calibrate a review, `sec-vuln-scan` (recall) and `sec-triage`
 (precision, adversarial, schema-gated, deduped) split discovery from verification, the **tooling
 layer is a swappable capability** (`deps-scan`/`secrets-scan` + SAST/IaC selection) that prefers
 installed tools and **degrades to the floor** — never blocking, and `ai-llm-review` consumes the
 **living `ai-attack-kb`** (dated, sourced, schema-validated entries) to flag LLM05 sinks /
 lethal-trifecta / MCP token-passthrough with `kb_refs` (mapped to OWASP LLM 2025 / Agentic 2026 /
-MCP / MITRE ATLAS). 96 tests green; polyglot + SCA + IaC + AI/MCP runs logged under `docs/research/`.
+MCP / MITRE ATLAS), and the optional `sec-patch` stage proposes verified, root-cause fixes via the
+patch ladder (build → PoC-stops → tests → re-attack) writing **only** to `PATCHES/` for a human to
+apply (ADR-010/016; confinement is structural + a PreToolUse tripwire). 136 tests green; polyglot +
+SCA + IaC + AI/MCP + patch-ladder runs logged under `docs/research/`.
 The remaining skills are stubs; the rest lands over the rollout:
 
 | Phase | Focus | Status |
@@ -209,9 +212,13 @@ The remaining skills are stubs; the rest lands over the rollout:
 | 2 | Threat-model + detect (per-language `reference/*.md`) | ✅ done |
 | 3 | Tool integration: secrets/deps scan, capability discovery, degradation ladder | ✅ done |
 | 4 | AI/LLM + API appendices + living `ai-attack-kb` (framework/MCP-triggered) | ✅ done |
-| 5 | Patch + re-attack (opt-in, capability-removed writes) | next (re-groomed) |
-| 6 | Team mode + CI Action | planned |
+| 5 | Patch + re-attack (opt-in, capability-removed writes) | ✅ done¹ |
+| 6 | Team mode + CI Action | next |
 | 7 | Eval (ongoing — validate against a labeled finding set, track FP rate) | planned |
+
+¹ Phase 5 tasks T-5.1…T-5.4 are done + verified; the only open item is **activating** the
+`confine_patch_writes` PreToolUse hook + `permissions.deny` in committed `.claude/settings.json`
+(ADR-016) — that write is self-modifying startup config, so it awaits explicit operator authorization.
 
 Full gap analysis, skill specs, tooling, and rollout: **`docs/plan/PLAN.md`**.
 

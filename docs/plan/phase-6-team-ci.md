@@ -15,6 +15,52 @@
 
 ---
 
+## Grooming (re-groomed 2026-06-06, after Phase 5)
+
+**Readiness:** ✅ READY. Phases 0–5 are done (Phase 5 modulo the human-auth settings.json registration).
+
+**Reconciliations against what Phases 0–5 actually built (own these explicitly):**
+1. **T-6.4 overlaps Phase 5's `confine_patch_writes` hook — split by concern, don't duplicate.**
+   T-5.3 already ships a PreToolUse Bash hook that confines *writes* (denies source writes, `git
+   apply`/`push`, `patch`). T-6.4 is the *review-posture* guard: deny destructive Bash (`rm -rf`),
+   **reads of secrets** (`**/.env`, private keys — the Agents-Rule-of-Two leg `confine_patch_writes`
+   does NOT cover), and network egress beyond an allow-list. **Decision:** add a **sibling**
+   `guard_bash.py` focused on read-secret + destructive + egress; let `git push`/`apply` stay denied
+   by `confine_patch_writes` + `permissions.deny` (benign overlap). Both register as **composable**
+   `hooks.PreToolUse` Bash entries (reconciliation holds with ADR-016 §composability).
+2. **Hook-registration is human-auth-blocked — cross-phase (6, 8, 9).** Writing `.claude/settings.json`
+   is self-modifying startup config; the harness requires explicit operator authorization (ADR-016).
+   So **hook LOGIC + tests are the done-gate** for T-6.4/T-6.5 (and Phase 8/9 hooks); their
+   **settings.json registration is batched into one human-auth approval** alongside T-5.3's. VCs that
+   assert "registered in settings" are marked **pending(human-auth)**, not done.
+3. **VC drift: `settings.local.json` → committed `.claude/settings.json`.** T-6.4/T-6.5 VCs name the
+   gitignored `settings.local.json`; per ADR-016 the backstop must live in **committed** `settings.json`
+   (survives a clone). Rewrite those VCs accordingly (and pending-auth per #2).
+4. **`sec-report` reuses the existing contract — no new schema.** `TRIAGE.json` already carries
+   `owasp[]`, `first_link`, `summary.tools_unavailable`, `summary.counts`. T-6.2's `ci_gate.py`
+   validates against `_shared/reference/finding-schema.json` (via the existing `validate_findings`)
+   *before* gating, and mirrors that script's pyproject/conftest/test layout.
+5. **Model pin (T-6.3):** pin `claude-opus-4-8` (current Opus id, 2026-06); SHA-pin every `uses:`;
+   pin `@anthropic-ai/claude-code`; `permissions: contents: read`; require approval for external
+   contributors. The CI review is **floor-only + read-only** (Phase 0 contract); **`/sec-patch` is
+   never run in CI** (opt-in only).
+
+**Currency to verify during build (don't assert from memory):** the agent-teams env flag
+(`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS`) + min CC version, and the `claude-code` GitHub Action input
+schema (T-6.3) — confirm via `claude-code-guide`/docs before finalizing T-6.3/T-6.5 (mirror spike-06).
+
+**Task sizing & order:** T-6.1 (M, docs) → T-6.2 (S, code+tests) → then T-6.3 (S, yaml) ∥
+T-6.4 (M, code+tests, reconciled w/ T-5.3) ∥ T-6.5 (M, docs+hook+tests).
+
+**Definition of Done (phase):** `sec-report` renders the Phase-1 `TRIAGE.json` fixture to a non-empty
+report (OWASP IDs, triaged-only); `ci_gate.py` exits 1 on `counts.high>0` (tested, threshold-overridable,
+rejects malformed JSON); `security-review.action.yml` is valid + fully pinned + least-privilege;
+`guard_bash.py` + `gate_review.sh` are implemented + tested (registration **pending human-auth**);
+`team-mode.md` documents both modes + the verified env flag/version + route-to-tech-lead + WAIT exit.
+Then **re-groom Phase 7**.
+
+---
+
 ### T-6.1 · Implement `sec-report` body (TRIAGE.json → SECURITY-REPORT.md + machine JSON)
 - **Goal:** `sec-report/SKILL.md` renders `TRIAGE.json` to a human `SECURITY-REPORT.md` (OWASP IDs,
   precondition list, `first_link`, `tools_unavailable`) and emits the machine JSON for CI; pure reasoning
