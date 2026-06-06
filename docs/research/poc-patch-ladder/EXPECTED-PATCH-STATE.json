@@ -1,0 +1,23 @@
+{
+  "schema_version": "1.0",
+  "patches": [
+    {
+      "finding_id": "F-001",
+      "patch_path": "PATCHES/F-001-command-injection.diff",
+      "ladder": {
+        "build": "n/a",
+        "poc_stopped": "pass",
+        "tests_passed": "pass",
+        "reattack": "pass"
+      },
+      "variants": [
+        {
+          "file": "app/vuln.py",
+          "line": 23,
+          "note": "run_traceroute — sibling shell=True command-injection sink (same class), fixed in the same diff"
+        }
+      ],
+      "verdict": "patched"
+    }
+  ]
+}

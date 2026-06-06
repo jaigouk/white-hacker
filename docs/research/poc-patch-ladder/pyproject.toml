@@ -1,0 +1,9 @@
+[project]
+name = "poc-patch-ladder"
+version = "0.1.0"
+description = "Buildable planted-vuln fixture for the sec-patch patch-ladder demonstration (T-5.4)."
+requires-python = ">=3.10"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

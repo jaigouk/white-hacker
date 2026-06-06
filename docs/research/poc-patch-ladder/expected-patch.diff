@@ -1,0 +1,19 @@
+diff --git a/app/vuln.py b/app/vuln.py
+index 5176a03..3a69fdb 100644
+--- a/app/vuln.py
++++ b/app/vuln.py
+@@ -13,12 +13,12 @@ import subprocess
+ def run_check(host: str) -> str:
+     """Return a check line for `host`. VULN: `host` is interpolated into a shell string."""
+     return subprocess.run(
+-        f"echo checking {host}", shell=True, capture_output=True, text=True
++        ["echo", "checking", host], capture_output=True, text=True
+     ).stdout
+ 
+ 
+ def run_traceroute(host: str) -> str:
+     """Sibling sink (same class) — the variant hunt must catch this one too."""
+     return subprocess.run(
+-        f"echo tracing {host}", shell=True, capture_output=True, text=True
++        ["echo", "tracing", host], capture_output=True, text=True
+     ).stdout

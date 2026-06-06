@@ -175,11 +175,13 @@ realpath-canonicalizes then matches a pinned allowlist and denies interpreters /
 - **Goal:** prove the ladder end-to-end on a buildable fixture with a planted vuln, a failing-on-vuln
   test, and a known PoC: `sec-patch` emits a `PATCHES/` diff, the PoC stops, tests pass, the re-attack
   agent finds no bypass, and a sibling variant is identified.
-- **Artifact:** `docs/research/poc-patch-ladder/` (buildable fixture + PoC + `README.md` ladder log)
+- **Artifact:** `docs/research/poc-patch-ladder/` — buildable fixture (`app/vuln.py` w/ two
+  command-injection sinks, `tests/`, `poc_exploit.py`), `expected-patch.diff` + `EXPECTED-PATCH-STATE.json`
+  (tracked names — `PATCHES/` and `PATCH-STATE.json` are gitignored), `README.md` ladder log.
 - **Depends on:** T-5.1, T-5.2, T-5.3
 - **Verification criteria:**
-  - [ ] After applying the proposed `PATCHES/` diff to a scratch copy, the original PoC no longer triggers — documented runnable command in README returns the "blocked" result
-  - [ ] Existing tests pass on the patched scratch copy — `uv run pytest` (or fixture's native test cmd) green, logged
-  - [ ] `PATCH-STATE.json` records `ladder.reattack: pass` and a non-empty `variants[]` — `uv run python` schema check + manual read logged
-  - [ ] No file outside `PATCHES/` was modified by `sec-patch` (confinement held) — `git status` on the fixture shows only `PATCHES/` additions, logged
-- **Status:** todo
+  - [x] After applying the proposed diff to a scratch copy, the PoC no longer triggers — `git apply expected-patch.diff && uv run python poc_exploit.py` exits 1 ("blocked") *(verified in scratch)*
+  - [x] Existing tests pass on the patched scratch copy — `uv run --with pytest pytest -q` → `2 passed` *(verified)*
+  - [x] Verdict records `ladder.reattack: pass` and a non-empty `variants[]` — `validate_patch_state` on `EXPECTED-PATCH-STATE.json` == [] AND `reattack=='pass'` AND `len(variants)>0` *(OK, variants=1: the `run_traceroute` sibling)*
+  - [x] Confinement held — `sec-patch` wrote only `PATCHES/`; `git status --porcelain` in the scratch copy showed only `?? PATCHES/` *(transcribed in README; `git apply` is the separate human step)*
+- **Status:** done *(re-attack rung = fresh-session review, transcribed one-time live demo per ADR-008; the only Phase-5 gap is T-5.3's settings.json registration, blocked on human auth)*
