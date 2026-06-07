@@ -1,0 +1,19 @@
+{
+  "case_id": "hard-pathtrav-partial-sanitizer",
+  "language": "python",
+  "category": "injection",
+  "severity": "HIGH",
+  "owasp": [
+    "A03:2025",
+    "CWE-22"
+  ],
+  "vulnerable": {
+    "file": "vulnerable_variant.py",
+    "line": 8
+  },
+  "benign_lookalike": {
+    "file": "benign_lookalike.py"
+  },
+  "note": "Bypassable path traversal: single non-recursive replace('../','') -> '....//' collapses back to '../'. Benign canonicalizes (realpath) and confirms the result stays under BASE.",
+  "difficulty": "hard"
+}

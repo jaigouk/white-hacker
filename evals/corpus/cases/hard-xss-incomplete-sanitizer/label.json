@@ -1,0 +1,19 @@
+{
+  "case_id": "hard-xss-incomplete-sanitizer",
+  "language": "python",
+  "category": "xss",
+  "severity": "HIGH",
+  "owasp": [
+    "A03:2025",
+    "CWE-79"
+  ],
+  "vulnerable": {
+    "file": "vulnerable_variant.py",
+    "line": 6
+  },
+  "benign_lookalike": {
+    "file": "benign_lookalike.py"
+  },
+  "note": "Bypassable XSS: a regex strips <script> tags only, then interpolates raw into HTML (misses onerror=, <img>, <svg>, attribute-context payloads). Benign uses html.escape.",
+  "difficulty": "hard"
+}

@@ -1,0 +1,19 @@
+{
+  "case_id": "hard-idor-cross-function",
+  "language": "python",
+  "category": "AuthN/AuthZ",
+  "severity": "HIGH",
+  "owasp": [
+    "A01:2025",
+    "CWE-639"
+  ],
+  "vulnerable": {
+    "file": "vulnerable_variant.py",
+    "line": 7
+  },
+  "benign_lookalike": {
+    "file": "benign_lookalike.py"
+  },
+  "note": "Cross-function IDOR/BOLA: object loaded by id in a helper, returned without an ownership check against current_user. Benign re-verifies invoice.owner_id == current_user.id.",
+  "difficulty": "hard"
+}

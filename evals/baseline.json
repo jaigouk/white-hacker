@@ -2,14 +2,14 @@
   "tpr": 1.0,
   "fpr": 0.0,
   "youden_j": 1.0,
-  "tp": 103,
+  "tp": 115,
   "fn": 0,
   "fp": 0,
-  "tn": 103,
-  "n_cases": 103,
+  "tn": 115,
+  "n_cases": 115,
   "date": "2026-06-07",
-  "commit": "2d3f6b2",
+  "commit": "751f9be",
   "model": "claude-sonnet",
   "findings_snapshot": "evals/runs/baseline-findings.json",
-  "note": "MEASURED baseline (Phase-12 Wave A/B/C, sonnet single-shot, 103 curated paired cases). Category fixes: open-redirect own category; SSRF allow-list recognizer; LLM05 (model-output->sink=improper-output-handling); hardcoded-secret->crypto; py-mcp-tokenpassthrough relabeled tool-poisoning->data-exfil (the label was wrong per ai-llm SS4). NOTE: J=1.0 means perfect on these 103 curated pairs (recall was ~100% from QA-8; the gains were category-name corrections), NOT a perfect agent. opus + k-run re-baseline = T-12.5."
+  "note": "MEASURED baseline (Phase-12, sonnet single-shot, 115 curated paired cases incl. 12 T-12.9 harder cases). T-12.9 added bypassable-mitigation + cross-function + FN/FP-boundary pairs with NO answer-leaking comments. The current sonnet+reference agent still scores J=1.0 on the full set (incl. all 12 hard cases) -> the corpus remains SATURATED for the top agent. HEADROOM is now DEMONSTRABLE though: on the 5 subtle FN/FP cases a reference-ablated shallow reviewer scored J=0.8 vs the reasoning agent's 1.0 (it missed authN-present/authZ-missing IDOR), so the metric responds to agent quality. Residual lever to exercise headroom vs the top agent = multi-file/whole-repo + real-CVE-in-context cases (follow-up T-12.9b) and the opus k-run re-baseline (T-12.5)."
 }

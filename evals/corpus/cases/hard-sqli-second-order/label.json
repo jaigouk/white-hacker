@@ -1,0 +1,19 @@
+{
+  "case_id": "hard-sqli-second-order",
+  "language": "python",
+  "category": "injection",
+  "severity": "HIGH",
+  "owasp": [
+    "A03:2025",
+    "CWE-89"
+  ],
+  "vulnerable": {
+    "file": "vulnerable_variant.py",
+    "line": 7
+  },
+  "benign_lookalike": {
+    "file": "benign_lookalike.py"
+  },
+  "note": "Second-order SQLi: a user-controlled column stored earlier is read back and concatenated into ORDER BY (cannot be bound). Benign allowlists the column before interpolation.",
+  "difficulty": "hard"
+}

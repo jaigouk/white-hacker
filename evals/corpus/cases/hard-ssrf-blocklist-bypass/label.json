@@ -1,0 +1,19 @@
+{
+  "case_id": "hard-ssrf-blocklist-bypass",
+  "language": "python",
+  "category": "ssrf",
+  "severity": "HIGH",
+  "owasp": [
+    "A01:2025",
+    "CWE-918"
+  ],
+  "vulnerable": {
+    "file": "vulnerable_variant.py",
+    "line": 15
+  },
+  "benign_lookalike": {
+    "file": "benign_lookalike.py"
+  },
+  "note": "Bypassable SSRF: blocklist guard (misses 0.0.0.0, [::1], decimal IP, ::ffff:127.0.0.1) -> still a finding. Benign uses an https+allowlist guard (exclusion rule 20: NOT a finding).",
+  "difficulty": "hard"
+}

@@ -1,0 +1,19 @@
+{
+  "case_id": "hard-sqli-vs-constant-interp",
+  "language": "python",
+  "category": "injection",
+  "severity": "HIGH",
+  "owasp": [
+    "A03:2025",
+    "CWE-89"
+  ],
+  "vulnerable": {
+    "file": "vulnerable_variant.py",
+    "line": 3
+  },
+  "benign_lookalike": {
+    "file": "benign_lookalike.py"
+  },
+  "note": "FP-inducer pair: vulnerable twin f-string-interpolates a user-supplied status into SQL (real SQLi); benign twin interpolates a server-side CONSTANT (no taint -> not injectable, but lexically identical f-string-in-query shape). Tests precision: an f-string in a query is not automatically a finding.",
+  "difficulty": "hard"
+}

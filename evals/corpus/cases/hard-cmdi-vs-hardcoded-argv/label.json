@@ -1,0 +1,19 @@
+{
+  "case_id": "hard-cmdi-vs-hardcoded-argv",
+  "language": "python",
+  "category": "injection",
+  "severity": "HIGH",
+  "owasp": [
+    "A03:2025",
+    "CWE-78"
+  ],
+  "vulnerable": {
+    "file": "vulnerable_variant.py",
+    "line": 5
+  },
+  "benign_lookalike": {
+    "file": "benign_lookalike.py"
+  },
+  "note": "FP-inducer pair: vulnerable twin runs user input via shell=True (real cmdi); benign twin calls subprocess.run with a fully HARDCODED argv list and no user input (scary-looking but safe). Tests precision: do NOT flag the constant-argv benign.",
+  "difficulty": "hard"
+}

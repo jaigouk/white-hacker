@@ -27,6 +27,7 @@
       "required": ["file"],
       "properties": { "file": { "type": "string", "minLength": 1 } }
     },
-    "note": { "type": "string" }
+    "note": { "type": "string" },
+    "difficulty": { "enum": ["easy", "medium", "hard"] }
   }
 }

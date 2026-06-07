@@ -1,0 +1,20 @@
+{
+  "case_id": "hard-jwt-alg-confusion",
+  "language": "python",
+  "category": "AuthN/AuthZ",
+  "severity": "HIGH",
+  "owasp": [
+    "A01:2025",
+    "A02:2025",
+    "CWE-347"
+  ],
+  "vulnerable": {
+    "file": "vulnerable_variant.py",
+    "line": 5
+  },
+  "benign_lookalike": {
+    "file": "benign_lookalike.py"
+  },
+  "note": "JWT algorithm confusion: accepting both RS256 and HS256 with the RSA public key lets an attacker forge an HS256 token signed with the public key as the HMAC secret. Benign pins a single asymmetric alg and requires exp.",
+  "difficulty": "hard"
+}

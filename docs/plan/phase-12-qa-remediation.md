@@ -138,9 +138,34 @@ Inherit `docs/plan/README.md`. TDD for any executable change; reference/KB edits
   AI/MCP variety; refreshed baseline + drift-guard.
 - **Depends on:** — (pairs with T-12.5 opus re-baseline).
 - **Verification criteria:**
-  - [ ] ≥ N new harder paired cases (labeled, neutralization-safe); corpus count + drift-guard updated
-  - [ ] the agent does NOT trivially score 1.0 on the expanded set (real headroom restored)
-- **Status:** todo
+  - [x] ≥ N new harder paired cases (labeled, neutralization-safe); corpus count + drift-guard updated
+        — **12 `hard-*` cases** (corpus 103→115), no answer-leaking comments, pinned by
+        `evals/tests/test_hard_cases_t129.py`; `baseline.json` n_cases 103→115 (J=1.0, FPR 0);
+        snapshot 103→115; `test_baseline_tracks_corpus` reproduces. `uv run --project evals --with
+        pytest --with jsonschema pytest evals/tests -q` → green.
+  - [ ] DEFERRED (→ **T-12.9b**) — the **current sonnet+reference agent still scores J=1.0** on the
+        full 115-case set (incl. all 12 hard cases); single-file synthetic pairs do not trip a
+        senior-level reviewer. **Headroom is demonstrated, not exercised:** on the 5 subtle FN/FP
+        cases an ablated shallow reviewer scored **J=0.8 vs 1.0** (missed authN-present/authZ-missing
+        IDOR), proving the metric responds to agent quality. Exercising headroom vs the top agent
+        needs multi-file/whole-repo + real-CVE-in-context cases → T-12.9b. See
+        `docs/qa/20260607/t-12.9-report.md`.
+- **Status:** done — 12 harder cases shipped + baseline refreshed (115, J=1.0) + drift-guard green;
+  headroom demonstrated via ablation (1.0 vs 0.8). Residual "trip the top agent" carved out as T-12.9b.
+
+### T-12.9b · Exercise headroom vs the top agent — multi-file / real-CVE-in-context cases (carved from T-12.9)
+- **Goal:** make the **current** sonnet+reference agent score < 1.0 (real measurable headroom), which
+  single-file synthetic pairs cannot — a senior reviewer aces them (T-12.9 proved this).
+- **Artifact:** corpus cases that need **cross-file taint** (source and sink in different modules →
+  the reviewer must build a call graph), **real un-patched CVE diffs in surrounding noise**
+  (distractors, business logic — not minimal snippets), and **genuinely-ambiguous** severity/category
+  pairs that test triage, not just detection. May require a multi-file case shape (extend the harness
+  beyond one-file-per-side) + score.py file-set matching.
+- **Depends on:** T-12.9. Pairs with T-12.5 (opus + k-run re-baseline before the first tagged release).
+- **Verification criteria:**
+  - [ ] ≥ 3 multi-file / CVE-in-context cases the current agent does NOT trivially ace (J < 1.0 on the
+        expanded subset), measured the same neutralized way; baseline + drift-guard updated
+- **Status:** todo (opt-in; budget-gated — live agent runs)
 
 ## Wave C — groomed (2026-06-07)
 Re-examined against the post-Wave-B state (baseline now **J=0.971 / FPR 0**). Grounded, not guessed.

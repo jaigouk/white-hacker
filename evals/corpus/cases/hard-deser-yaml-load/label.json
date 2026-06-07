@@ -1,0 +1,19 @@
+{
+  "case_id": "hard-deser-yaml-load",
+  "language": "python",
+  "category": "deserialization",
+  "severity": "HIGH",
+  "owasp": [
+    "A08:2025",
+    "CWE-502"
+  ],
+  "vulnerable": {
+    "file": "vulnerable_variant.py",
+    "line": 5
+  },
+  "benign_lookalike": {
+    "file": "benign_lookalike.py"
+  },
+  "note": "FP-inducer pair: vulnerable twin uses yaml.load(untrusted) (unsafe full loader); benign twin uses yaml.safe_load (safe but lexically similar). Tests precision: do NOT flag safe_load.",
+  "difficulty": "hard"
+}

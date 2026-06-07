@@ -1,0 +1,19 @@
+{
+  "case_id": "hard-authz-missing-ownership",
+  "language": "python",
+  "category": "AuthN/AuthZ",
+  "severity": "HIGH",
+  "owasp": [
+    "A01:2025",
+    "CWE-639"
+  ],
+  "vulnerable": {
+    "file": "vulnerable_variant.py",
+    "line": 5
+  },
+  "benign_lookalike": {
+    "file": "benign_lookalike.py"
+  },
+  "note": "Looks-safe-but-isn't: an authentication check (is_active) is present, which can mask that the OWNERSHIP check is absent -> IDOR. Benign adds the doc.owner_id == current_user.id check. Tests whether the reviewer distinguishes authN-present from authZ-missing.",
+  "difficulty": "hard"
+}

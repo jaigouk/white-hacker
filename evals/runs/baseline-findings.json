@@ -3,7 +3,8 @@
     "run": "full-103 + waveB + waveC(llm05+secret+mcp-relabel)",
     "model": "claude-sonnet",
     "date": "2026-06-07",
-    "note": "REAL agent run over all 103 frozen corpus cases (blind, neutralized filenames)."
+    "note": "REAL agent run over all 103 frozen corpus cases (blind, neutralized filenames).",
+    "n_findings": 115
   },
   "findings": [
     {
@@ -623,6 +624,78 @@
       "line": 3,
       "category": "improper-output-handling",
       "confidence": 0.9
+    },
+    {
+      "file": "hard-sqli-second-order/vulnerable_variant.py",
+      "line": 7,
+      "category": "injection",
+      "confidence": 0.95
+    },
+    {
+      "file": "hard-llm05-chained-exec/vulnerable_variant.py",
+      "line": 8,
+      "category": "improper-output-handling",
+      "confidence": 0.97
+    },
+    {
+      "file": "hard-idor-cross-function/vulnerable_variant.py",
+      "line": 7,
+      "category": "AuthN/AuthZ",
+      "confidence": 0.9
+    },
+    {
+      "file": "hard-ssrf-blocklist-bypass/vulnerable_variant.py",
+      "line": 14,
+      "category": "ssrf",
+      "confidence": 0.85
+    },
+    {
+      "file": "hard-xss-incomplete-sanitizer/vulnerable_variant.py",
+      "line": 6,
+      "category": "xss",
+      "confidence": 0.9
+    },
+    {
+      "file": "hard-jwt-alg-confusion/vulnerable_variant.py",
+      "line": 5,
+      "category": "AuthN/AuthZ",
+      "confidence": 0.92
+    },
+    {
+      "file": "hard-pathtrav-partial-sanitizer/vulnerable_variant.py",
+      "line": 8,
+      "category": "injection",
+      "confidence": 0.9
+    },
+    {
+      "file": "hard-authz-missing-ownership/vulnerable_variant.py",
+      "line": 4,
+      "category": "AuthN/AuthZ",
+      "confidence": 0.85
+    },
+    {
+      "file": "hard-ssrf-allowlist-suffix-bypass/vulnerable_variant.py",
+      "line": 9,
+      "category": "ssrf",
+      "confidence": 0.8
+    },
+    {
+      "file": "hard-sqli-vs-constant-interp/vulnerable_variant.py",
+      "line": 3,
+      "category": "injection",
+      "confidence": 0.92
+    },
+    {
+      "file": "hard-cmdi-vs-hardcoded-argv/vulnerable_variant.py",
+      "line": 5,
+      "category": "injection",
+      "confidence": 0.97
+    },
+    {
+      "file": "hard-deser-yaml-load/vulnerable_variant.py",
+      "line": 5,
+      "category": "deserialization",
+      "confidence": 0.95
     }
   ]
 }
