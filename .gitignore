@@ -39,3 +39,18 @@ uv.lock
 
 # OS
 .DS_Store
+
+# Beads / Dolt: ignore everything under .beads/ except the version-controlled ticket data
+# (mirrors the reference project — keeps the Dolt DB, hooks, metadata, backups OUT of git)
+.beads/*
+!.beads/issues.jsonl
+!.beads/config.yaml
+!.beads/README.md
+!.beads/.gitignore
+.dolt/
+*.db
+.beads-credential-key
+
+# bd-generated shared settings (registers SessionStart/PreCompact `bd prime` hooks).
+# Kept local like the reference project; un-ignore + commit deliberately to share with clones.
+.claude/settings.json

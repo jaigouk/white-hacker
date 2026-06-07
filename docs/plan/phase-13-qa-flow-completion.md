@@ -1,14 +1,16 @@
 # Phase 13 — QA-flow completion & doc reconciliation
 
-> **Status:** groomed (todo). Date: 2026-06-07. Owner: ping@jaigouk.kim.
-> Closes the open verification tiers in `docs/qa/20260607/qa-flows.md` and reconciles the QA docs
-> with the post-Phase-12 / T-12.9 state. Plan-only; ACs below are the success criteria (each
-> objective + a runnable probe), per CLAUDE.md rule #4. Nothing here is executed yet.
+> **Status:** ⚙️ **TRACKED IN BEADS — epic `wh-4ym`** (source of truth; `bd show wh-4ym`,
+> `bd ready`). This file is the **human-readable overview**; live ticket status, deps, and waves
+> live in beads. Wave A **closed**; Wave B **ready**; Wave C **gated**. Date: 2026-06-08. Owner: ping@jaigouk.kim.
 >
-> **Ticket IDs are the execution order** (T-13.1 → T-13.10), grouped into Waves A/B/C by dependency
-> (matching the Phase-12 Wave convention, rule #11). Wave N starts after Wave N-1; within a wave,
-> tickets are independent (non-overlapping files) and can fan out to a mini-team. T-13.R is optional
-> and unordered.
+> **T-13.x → beads id map:** T-13.1=`wh-4ym.1` · T-13.2=`wh-4ym.2` · T-13.3=`wh-4ym.3` (Wave A, closed) ·
+> T-13.4=`wh-4ym.4` · T-13.5=`wh-4ym.5` · T-13.6=`wh-4ym.6` (Wave B) ·
+> T-13.7=`wh-4ym.7` · T-13.8=`wh-4ym.8` · T-13.9=`wh-4ym.9` · T-13.10=`wh-4ym.10` (Wave C, gated).
+> The full groomed Wave-B ticket bodies now live in the beads tickets (the standalone
+> `phase-13-wave-b-tickets.md` grooming doc was retired into beads). Closes the open verification
+> tiers in `docs/qa/20260607/qa-flows.md`; ACs below are the success criteria (objective + runnable
+> probe), per CLAUDE.md rule #4. Ticket IDs are the execution order, grouped into Waves A/B/C.
 
 ## Context — answers to "anything to refactor? have we covered all QA?"
 1. **Refactor: effectively none.** No dead code in committed source. The `propose_policy.py` `TODO`
