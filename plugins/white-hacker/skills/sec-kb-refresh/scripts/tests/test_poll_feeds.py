@@ -63,5 +63,37 @@ def test_to_candidate_entry_has_mandatory_provenance():
     assert e["id"] == "AISEC-DATA-EXFIL-007" and e["status"] == "active"
 
 
+def test_poisoned_feed_cannot_inject_yaml_key():
+    """A crafted feed title/summary with `: `, newlines, and `injected_key: x` must NOT
+    add a top-level YAML key — render_entry uses safe_dump, so feed text stays a value."""
+    import yaml
+    poison = "Benign-looking title\ninjected_key: attacker_controlled\nrole: admin: "
+    atom = (
+        '<?xml version="1.0" encoding="utf-8"?>\n'
+        '<feed xmlns="http://www.w3.org/2005/Atom">\n'
+        "  <entry>\n"
+        "    <id>https://evil.example/post</id>\n"
+        f"    <title>{poison}</title>\n"
+        '    <link href="https://evil.example/post"/>\n'
+        "  </entry>\n"
+        "</feed>\n"
+    )
+    items = pf.parse_atom(atom)
+    entry = pf.to_candidate_entry(items[0], "prompt-injection", 1)
+    md = pf.render_entry(entry, "Summary with newline\ninjected_summary_key: x\nand : colon")
+
+    fm = md.split("---\n", 2)[1]            # front-matter block between the first two `---`
+    loaded = yaml.safe_load(fm)
+
+    expected_keys = {
+        "id", "title", "technique_class", "severity", "confidence", "status",
+        "date", "modified", "review_by", "metadata", "supersedes", "detections", "xref",
+    }
+    assert set(loaded.keys()) == expected_keys           # exactly the schema keys
+    assert "injected_key" not in loaded                  # feed text did not become a key
+    assert "role" not in loaded                          # nor the `role: admin:` payload
+    assert loaded["title"][:120] == entry["title"]       # poison stayed inside the title value
+
+
 def test_main_usage(capsys):
     assert pf.main([]) == 2

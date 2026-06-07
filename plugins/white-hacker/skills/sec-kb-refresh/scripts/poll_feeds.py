@@ -58,7 +58,8 @@ def parse_atom(raw: str) -> list[dict]:
         link = kids.get("link")
         href = (link.get("href") if link is not None and link.get("href") else
                 (link.text if link is not None else None))
-        idc = kids.get("id") or kids.get("guid")
+        idc = kids.get("id")
+        idc = idc if idc is not None else kids.get("guid")
         iid = (idc.text if idc is not None and idc.text else href) or "?"
         title = kids["title"].text if "title" in kids and kids["title"].text else ""
         out.append({"feed": "atom", "id": iid, "title": title, "url": href or iid})

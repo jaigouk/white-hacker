@@ -358,4 +358,4 @@ def test_plugin_entry_extra_keys_are_still_allowed(tmp_path):
 
 def test_real_repo_marketplace_has_no_unknown_top_level_keys():
     # the real repo must validate clean -- $schema was removed; metadata is allowed
-    assert vm.validate_marketplace(".") == []
+    assert vm.validate_marketplace(REPO_ROOT) == []
