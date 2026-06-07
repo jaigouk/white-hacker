@@ -1,6 +1,9 @@
 ---
 name: deps-scan
-description: Software-composition analysis: native low-FP gates (govulncheck/pip-audit/npm audit) first, then OSV-Scanner/Trivy fallback. Use during discovery to find vulnerable dependencies.
+description: >
+  Software-composition analysis: native low-FP gates (govulncheck/pip-audit/npm
+  audit) first, then OSV-Scanner/Trivy fallback. Use during discovery to find
+  vulnerable dependencies.
 ---
 
 # deps-scan — SCA capability (native-gate-first, degrade to the floor)

@@ -1,6 +1,10 @@
 ---
 name: ai-llm-review
-description: AI/LLM/MCP/Agentic security review: improper output handling (LLM05), lethal trifecta, prompt-injection architecture, MCP token-passthrough/tool poisoning, RAG/vector poisoning, excessive agency, unbounded consumption. Use when the repo contains LLM/agent/MCP code.
+description: >
+  AI/LLM/MCP/Agentic security review: improper output handling (LLM05), lethal
+  trifecta, prompt-injection architecture, MCP token-passthrough/tool poisoning,
+  RAG/vector poisoning, excessive agency, unbounded consumption. Use when the repo
+  contains LLM/agent/MCP code.
 ---
 
 # ai-llm-review — the AI/LLM/MCP/Agentic discovery pass

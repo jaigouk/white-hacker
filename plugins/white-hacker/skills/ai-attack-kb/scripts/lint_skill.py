@@ -6,6 +6,13 @@ Enforces the always-loaded-surface caps so skills/the KB stay cheap to load:
   * `description` + `when_to_use` <= 1536 chars
   * `SKILL.md` < 500 lines
   * `reference/` is one level deep (no nested subdirs)
+  * front-matter is **strict-YAML-parseable** (matches `claude plugin validate`)
+
+The strict-YAML gate (T-QA-3) is the load-bearing one for shipping: `claude plugin
+validate` parses front-matter with strict YAML, where a plain unquoted value containing
+`: ` (an inner colon) is read as a nested mapping and the whole front-matter is silently
+dropped at runtime. The lenient char-cap extractor below tolerates that, so it must be
+backed by an explicit strict parse or broken skills ship green (3 did).
 
 This is the script every "lint passes" criterion in the plan refers to. KB *entry* schema +
 provenance is enforced separately by `validate_kb.py` (T-4.1).
@@ -19,6 +26,8 @@ from __future__ import annotations
 import re
 import sys
 from pathlib import Path
+
+import yaml
 
 
 def split_front_matter(text: str) -> tuple[str | None, str]:
@@ -79,6 +88,27 @@ def lint_skill_file(path: Path) -> list[str]:
     if front is None:
         errors.append("missing or unterminated YAML front-matter")
         return errors
+
+    # Strict-YAML gate: matches `claude plugin validate`. A plain value with an inner
+    # `: ` parses as a nested mapping (or errors), silently dropping all metadata at
+    # runtime. Use a folded/literal block scalar (`description: >`) for colon-bearing
+    # values. We keep the lenient char-cap extraction below regardless, so caps are
+    # still reported even on a malformed front-matter.
+    try:
+        parsed = yaml.safe_load(front)
+        if not isinstance(parsed, dict):
+            errors.append(
+                "front-matter is not a strict YAML mapping "
+                f"(parsed as {type(parsed).__name__}); "
+                "claude plugin validate would drop all metadata"
+            )
+    except yaml.YAMLError as exc:
+        detail = str(exc).splitlines()[0] if str(exc) else exc.__class__.__name__
+        errors.append(
+            f"front-matter is not strict YAML ({detail}); a value with an inner ': ' "
+            "must use a folded block scalar (e.g. `description: >`)"
+        )
+
     meta = front_fields(front)
     name = meta.get("name", "")
     desc = meta.get("description", "")

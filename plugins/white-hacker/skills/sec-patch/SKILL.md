@@ -1,6 +1,9 @@
 ---
 name: sec-patch
-description: Generate candidate fixes (opt-in). Patch ladder: build -> original PoC stops -> tests pass -> re-attack with a fresh agent. Root-cause fix, variant hunt, minimal diff. Writes ONLY to ./PATCHES/. Use only when explicitly asked to propose patches.
+description: >
+  Generate candidate fixes (opt-in). Patch ladder: build -> original PoC stops ->
+  tests pass -> re-attack with a fresh agent. Root-cause fix, variant hunt, minimal
+  diff. Writes ONLY to ./PATCHES/. Use only when explicitly asked to propose patches.
 ---
 
 # sec-patch — remediation with verification (opt-in, capability-removed writes)
