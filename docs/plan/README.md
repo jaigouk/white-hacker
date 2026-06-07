@@ -42,6 +42,13 @@ to hack AI products" (`docs/research/si-07-threat-feeds.md`).
 | 9 | [`phase-9-eval-guardrails.md`](phase-9-eval-guardrails.md) | Frozen eval corpus; keep-or-revert gate; `PreToolUse` confinement guardrails; passive-drift re-score | si-08 §6, §3.4, §5.2; ADR-004 |
 | 10 | [`phase-10-distribution-init.md`](phase-10-distribution-init.md) | Plugin packaging + marketplace; `.claude/`(dev) vs `plugins/`(payload) split; project-detecting init → gated project-scope companion | spike-07; ADR-014→017 |
 | 11 | [`phase-11-security-policy.md`](phase-11-security-policy.md) | `SECURITY.md`/`security.txt` awareness: detect → inspect (untrusted) → consume (scope never suppresses) → propose/modify to `PATCHES/`; absent → hygiene advisory | spike-08; ADR-018 |
+| 12 | [`phase-12-qa-remediation.md`](phase-12-qa-remediation.md) | Resolve QA-8 findings via the **outer loop**: lift AuthN/AuthZ recall (J=0.25), cut SSRF false-positives, fix singletons — each re-measured vs the J=0.835 gate; then opus re-baseline | QA-8; ADR-001/004 |
+
+**Cross-cutting QA.** QA artifacts live under `docs/qa/<YYYYMMDD>/` (per cycle). Latest:
+[`docs/qa/20260607/`](../qa/20260607/) — plan [`qa-flows.md`](../qa/20260607/qa-flows.md) (4 tiers:
+unit · artifact · live · adversarial) + cycle report. 2026-06-07: QA-2 (outer loop) ✅, QA-1 inner
+loop ✅ incl. a live scoped run (J=1.0), QA-7 confinement ✅. Open gap: a **full 103-case live run**
+to replace the stale/synthetic eval baseline (QA-8).
 
 **Ordering note.** Phases 0–5 are the inner loop and ship value first (Phase 0 alone beats
 the legacy single-pass Go agent on any language). Phase 7 stands up a *minimum* eval baseline

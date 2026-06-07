@@ -84,6 +84,12 @@ THREAT_MODEL.md → SCAN-PLAN.json → VULN-FINDINGS.json → TRIAGE.json → PA
 
 ## Quick start
 
+> **Requirements:** Claude Code. Your existing **Pro/Max subscription works as-is — no separate
+> `ANTHROPIC_API_KEY` is needed** to install or run the agent, skills, commands, or `/security-review`
+> locally. A key (or a Claude Code OAuth token) is only required to run the *optional* headless CI
+> action (`ci/security-review.action.yml`) non-interactively in GitHub Actions; the standard test/lint
+> CI (`.github/workflows/ci.yml`) needs no credential at all.
+
 The agent has three carriers, one definition.
 
 **1 — Slash command (human entry point)**

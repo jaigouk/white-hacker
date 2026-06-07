@@ -1,222 +1,658 @@
 {
-  "_note": "SYNTHETIC representative snapshot (not a measured agent run) \u2014 Phase 9 replaces it with a captured real run. Documented FN set {py-prompt-injection,py-rag-poisoning,go-weakrng} + 1 FP (js-cors) so the baseline is a realistic floor, not a J=1 ceiling.",
   "summary": {
-    "counts": {
-      "high": 0,
-      "medium": 0,
-      "low": 0
-    }
+    "run": "full-103-baseline",
+    "model": "claude-sonnet",
+    "date": "2026-06-07",
+    "note": "REAL agent run over all 103 frozen corpus cases (blind, neutralized filenames)."
   },
   "findings": [
     {
-      "id": "F-001",
+      "file": "cve-2025-68664-langchain-llm05/vulnerable_variant.py",
+      "line": 2,
+      "category": "improper-output-handling",
+      "confidence": 0.95
+    },
+    {
+      "file": "cve-2026-22778-vllm-ssrf/vulnerable_variant.py",
+      "line": 3,
+      "category": "ssrf",
+      "confidence": 0.98
+    },
+    {
+      "file": "cve-2026-22807-vllm-deser/vulnerable_variant.py",
+      "line": 3,
+      "category": "deserialization",
+      "confidence": 0.98
+    },
+    {
       "file": "go-cmdi/vulnerable_variant.go",
       "line": 4,
       "category": "injection",
-      "severity": "HIGH"
+      "confidence": 0.98
     },
     {
-      "id": "F-002",
+      "file": "go-cmdi-01/vulnerable_variant.go",
+      "line": 4,
+      "category": "injection",
+      "confidence": 0.95
+    },
+    {
+      "file": "go-cmdi-02/vulnerable_variant.go",
+      "line": 4,
+      "category": "injection",
+      "confidence": 0.95
+    },
+    {
+      "file": "go-cmdi-03/vulnerable_variant.go",
+      "line": 4,
+      "category": "injection",
+      "confidence": 0.95
+    },
+    {
+      "file": "go-cmdi-04/vulnerable_variant.go",
+      "line": 4,
+      "category": "injection",
+      "confidence": 0.95
+    },
+    {
       "file": "go-pathtraversal/vulnerable_variant.go",
       "line": 4,
       "category": "injection",
-      "severity": "HIGH"
+      "confidence": 0.95
     },
     {
-      "id": "F-003",
+      "file": "go-pathtraversal-01/vulnerable_variant.go",
+      "line": 4,
+      "category": "injection",
+      "confidence": 0.95
+    },
+    {
+      "file": "go-pathtraversal-02/vulnerable_variant.go",
+      "line": 4,
+      "category": "injection",
+      "confidence": 0.95
+    },
+    {
+      "file": "go-pathtraversal-03/vulnerable_variant.go",
+      "line": 4,
+      "category": "injection",
+      "confidence": 0.95
+    },
+    {
+      "file": "go-pathtraversal-04/vulnerable_variant.go",
+      "line": 4,
+      "category": "injection",
+      "confidence": 0.95
+    },
+    {
       "file": "go-sqli/vulnerable_variant.go",
       "line": 4,
       "category": "injection",
-      "severity": "HIGH"
+      "confidence": 0.98
     },
     {
-      "id": "F-004",
+      "file": "go-sqli-01/vulnerable_variant.go",
+      "line": 4,
+      "category": "injection",
+      "confidence": 0.98
+    },
+    {
+      "file": "go-sqli-02/vulnerable_variant.go",
+      "line": 4,
+      "category": "injection",
+      "confidence": 0.98
+    },
+    {
+      "file": "go-sqli-03/vulnerable_variant.go",
+      "line": 4,
+      "category": "injection",
+      "confidence": 0.97
+    },
+    {
+      "file": "go-sqli-04/vulnerable_variant.go",
+      "line": 4,
+      "category": "injection",
+      "confidence": 0.97
+    },
+    {
       "file": "go-ssrf/vulnerable_variant.go",
       "line": 4,
       "category": "ssrf",
-      "severity": "HIGH"
+      "confidence": 0.97
     },
     {
-      "id": "F-005",
+      "file": "go-ssrf-01/vulnerable_variant.go",
+      "line": 4,
+      "category": "ssrf",
+      "confidence": 0.97
+    },
+    {
+      "file": "go-ssrf-02/vulnerable_variant.go",
+      "line": 4,
+      "category": "ssrf",
+      "confidence": 0.97
+    },
+    {
+      "file": "go-ssrf-03/vulnerable_variant.go",
+      "line": 4,
+      "category": "ssrf",
+      "confidence": 0.97
+    },
+    {
+      "file": "go-ssrf-04/vulnerable_variant.go",
+      "line": 4,
+      "category": "ssrf",
+      "confidence": 0.97
+    },
+    {
+      "file": "go-weakrng/vulnerable_variant.go",
+      "line": 4,
+      "category": "crypto",
+      "confidence": 0.97
+    },
+    {
+      "file": "ja-cmdi-01/vulnerable_variant.js",
+      "line": 2,
+      "category": "injection",
+      "confidence": 0.97
+    },
+    {
+      "file": "ja-cmdi-02/vulnerable_variant.js",
+      "line": 2,
+      "category": "injection",
+      "confidence": 0.97
+    },
+    {
+      "file": "ja-cmdi-03/vulnerable_variant.js",
+      "line": 2,
+      "category": "injection",
+      "confidence": 0.97
+    },
+    {
+      "file": "ja-cmdi-04/vulnerable_variant.js",
+      "line": 2,
+      "category": "injection",
+      "confidence": 0.97
+    },
+    {
+      "file": "ja-open-redirect-01/vulnerable_variant.js",
+      "line": 1,
+      "category": "improper-output-handling",
+      "confidence": 0.95
+    },
+    {
+      "file": "ja-open-redirect-02/vulnerable_variant.js",
+      "line": 1,
+      "category": "improper-output-handling",
+      "confidence": 0.95
+    },
+    {
+      "file": "ja-open-redirect-03/vulnerable_variant.js",
+      "line": 1,
+      "category": "improper-output-handling",
+      "confidence": 0.95
+    },
+    {
+      "file": "ja-open-redirect-04/vulnerable_variant.js",
+      "line": 1,
+      "category": "improper-output-handling",
+      "confidence": 0.95
+    },
+    {
+      "file": "ja-sqli-01/vulnerable_variant.js",
+      "line": 1,
+      "category": "injection",
+      "confidence": 0.99
+    },
+    {
+      "file": "ja-sqli-02/vulnerable_variant.js",
+      "line": 1,
+      "category": "injection",
+      "confidence": 0.99
+    },
+    {
+      "file": "ja-sqli-03/vulnerable_variant.js",
+      "line": 1,
+      "category": "injection",
+      "confidence": 0.99
+    },
+    {
+      "file": "ja-sqli-04/vulnerable_variant.js",
+      "line": 1,
+      "category": "injection",
+      "confidence": 0.99
+    },
+    {
+      "file": "ja-ssrf-01/vulnerable_variant.js",
+      "line": 1,
+      "category": "ssrf",
+      "confidence": 0.95
+    },
+    {
+      "file": "ja-ssrf-02/vulnerable_variant.js",
+      "line": 1,
+      "category": "ssrf",
+      "confidence": 0.95
+    },
+    {
+      "file": "ja-ssrf-03/vulnerable_variant.js",
+      "line": 1,
+      "category": "ssrf",
+      "confidence": 0.95
+    },
+    {
+      "file": "ja-ssrf-04/vulnerable_variant.js",
+      "line": 1,
+      "category": "ssrf",
+      "confidence": 0.95
+    },
+    {
+      "file": "ja-weakhash-01/vulnerable_variant.js",
+      "line": 2,
+      "category": "crypto",
+      "confidence": 0.95
+    },
+    {
+      "file": "ja-weakhash-02/vulnerable_variant.js",
+      "line": 2,
+      "category": "crypto",
+      "confidence": 0.95
+    },
+    {
+      "file": "ja-weakhash-03/vulnerable_variant.js",
+      "line": 2,
+      "category": "crypto",
+      "confidence": 0.95
+    },
+    {
+      "file": "ja-weakhash-04/vulnerable_variant.js",
+      "line": 2,
+      "category": "crypto",
+      "confidence": 0.95
+    },
+    {
+      "file": "ja-xss-01/vulnerable_variant.js",
+      "line": 1,
+      "category": "xss",
+      "confidence": 0.95
+    },
+    {
+      "file": "ja-xss-02/vulnerable_variant.js",
+      "line": 1,
+      "category": "xss",
+      "confidence": 0.95
+    },
+    {
+      "file": "ja-xss-03/vulnerable_variant.js",
+      "line": 1,
+      "category": "xss",
+      "confidence": 0.95
+    },
+    {
+      "file": "ja-xss-04/vulnerable_variant.js",
+      "line": 1,
+      "category": "xss",
+      "confidence": 0.95
+    },
+    {
       "file": "js-bopla/vulnerable_variant.js",
       "line": 2,
       "category": "AuthN/AuthZ",
-      "severity": "HIGH"
+      "confidence": 0.95
     },
     {
-      "id": "F-006",
       "file": "js-cmdi/vulnerable_variant.js",
       "line": 3,
       "category": "injection",
-      "severity": "HIGH"
+      "confidence": 0.97
     },
     {
-      "id": "F-007",
       "file": "js-cors/vulnerable_variant.js",
       "line": 2,
       "category": "config",
-      "severity": "MEDIUM"
+      "confidence": 0.95
     },
     {
-      "id": "F-008",
-      "file": "js-cors/benign_lookalike.js",
-      "line": 1,
-      "category": "config",
-      "severity": "LOW"
-    },
-    {
-      "id": "F-009",
       "file": "js-open-redirect/vulnerable_variant.js",
       "line": 2,
-      "category": "AuthN/AuthZ",
-      "severity": "LOW"
+      "category": "improper-output-handling",
+      "confidence": 0.95
     },
     {
-      "id": "F-010",
       "file": "js-sqli/vulnerable_variant.js",
       "line": 2,
       "category": "injection",
-      "severity": "HIGH"
+      "confidence": 0.95
     },
     {
-      "id": "F-011",
       "file": "js-ssrf/vulnerable_variant.js",
       "line": 2,
       "category": "ssrf",
-      "severity": "HIGH"
+      "confidence": 0.95
     },
     {
-      "id": "F-012",
       "file": "js-xss/vulnerable_variant.js",
       "line": 2,
       "category": "xss",
-      "severity": "HIGH"
+      "confidence": 0.95
     },
     {
-      "id": "F-013",
       "file": "py-bola/vulnerable_variant.py",
       "line": 2,
       "category": "AuthN/AuthZ",
-      "severity": "HIGH"
+      "confidence": 0.9
     },
     {
-      "id": "F-014",
       "file": "py-cmdi/vulnerable_variant.py",
       "line": 3,
       "category": "injection",
-      "severity": "HIGH"
+      "confidence": 0.99
     },
     {
-      "id": "F-015",
+      "file": "py-cmdi-01/vulnerable_variant.py",
+      "line": 3,
+      "category": "injection",
+      "confidence": 0.99
+    },
+    {
+      "file": "py-cmdi-02/vulnerable_variant.py",
+      "line": 3,
+      "category": "injection",
+      "confidence": 0.99
+    },
+    {
+      "file": "py-cmdi-03/vulnerable_variant.py",
+      "line": 3,
+      "category": "injection",
+      "confidence": 0.99
+    },
+    {
+      "file": "py-cmdi-04/vulnerable_variant.py",
+      "line": 3,
+      "category": "injection",
+      "confidence": 0.98
+    },
+    {
       "file": "py-data-exfil/vulnerable_variant.py",
       "line": 3,
       "category": "data-exfil",
-      "severity": "HIGH"
+      "confidence": 0.95
     },
     {
-      "id": "F-016",
+      "file": "py-deser-01/vulnerable_variant.py",
+      "line": 3,
+      "category": "deserialization",
+      "confidence": 0.98
+    },
+    {
+      "file": "py-deser-02/vulnerable_variant.py",
+      "line": 3,
+      "category": "deserialization",
+      "confidence": 0.98
+    },
+    {
+      "file": "py-deser-03/vulnerable_variant.py",
+      "line": 3,
+      "category": "deserialization",
+      "confidence": 0.95
+    },
+    {
+      "file": "py-deser-04/vulnerable_variant.py",
+      "line": 3,
+      "category": "deserialization",
+      "confidence": 0.95
+    },
+    {
       "file": "py-excessive-agency/vulnerable_variant.py",
       "line": 2,
       "category": "excessive-agency",
-      "severity": "HIGH"
+      "confidence": 0.92
     },
     {
-      "id": "F-017",
       "file": "py-hardcoded-secret/vulnerable_variant.py",
       "line": 1,
-      "category": "crypto",
-      "severity": "HIGH"
+      "category": "config",
+      "confidence": 0.95
     },
     {
-      "id": "F-018",
       "file": "py-ldap/vulnerable_variant.py",
       "line": 2,
       "category": "injection",
-      "severity": "MEDIUM"
+      "confidence": 0.98
     },
     {
-      "id": "F-019",
       "file": "py-llm05-rce/vulnerable_variant.py",
       "line": 3,
       "category": "improper-output-handling",
-      "severity": "HIGH"
+      "confidence": 0.97
     },
     {
-      "id": "F-020",
       "file": "py-llm05-ssrf/vulnerable_variant.py",
       "line": 3,
-      "category": "improper-output-handling",
-      "severity": "HIGH"
+      "category": "ssrf",
+      "confidence": 0.95
     },
     {
-      "id": "F-021",
       "file": "py-mcp-tokenpassthrough/vulnerable_variant.py",
       "line": 3,
-      "category": "tool-poisoning",
-      "severity": "HIGH"
+      "category": "data-exfil",
+      "confidence": 0.95
     },
     {
-      "id": "F-022",
+      "file": "py-open-redirect-01/vulnerable_variant.py",
+      "line": 2,
+      "category": "improper-output-handling",
+      "confidence": 0.95
+    },
+    {
+      "file": "py-open-redirect-02/vulnerable_variant.py",
+      "line": 2,
+      "category": "improper-output-handling",
+      "confidence": 0.95
+    },
+    {
+      "file": "py-open-redirect-03/vulnerable_variant.py",
+      "line": 2,
+      "category": "improper-output-handling",
+      "confidence": 0.95
+    },
+    {
+      "file": "py-open-redirect-04/vulnerable_variant.py",
+      "line": 2,
+      "category": "improper-output-handling",
+      "confidence": 0.95
+    },
+    {
       "file": "py-pathtraversal/vulnerable_variant.py",
       "line": 2,
       "category": "injection",
-      "severity": "HIGH"
+      "confidence": 0.95
     },
     {
-      "id": "F-023",
+      "file": "py-pathtraversal-01/vulnerable_variant.py",
+      "line": 2,
+      "category": "injection",
+      "confidence": 0.95
+    },
+    {
+      "file": "py-pathtraversal-02/vulnerable_variant.py",
+      "line": 2,
+      "category": "injection",
+      "confidence": 0.95
+    },
+    {
+      "file": "py-pathtraversal-03/vulnerable_variant.py",
+      "line": 2,
+      "category": "injection",
+      "confidence": 0.95
+    },
+    {
+      "file": "py-pathtraversal-04/vulnerable_variant.py",
+      "line": 2,
+      "category": "injection",
+      "confidence": 0.95
+    },
+    {
       "file": "py-pickle/vulnerable_variant.py",
       "line": 3,
       "category": "deserialization",
-      "severity": "HIGH"
+      "confidence": 0.98
     },
     {
-      "id": "F-024",
+      "file": "py-prompt-injection/vulnerable_variant.py",
+      "line": 2,
+      "category": "prompt-injection",
+      "confidence": 0.92
+    },
+    {
+      "file": "py-rag-poisoning/vulnerable_variant.py",
+      "line": 2,
+      "category": "rag-poisoning",
+      "confidence": 0.92
+    },
+    {
       "file": "py-sqli/vulnerable_variant.py",
       "line": 2,
       "category": "injection",
-      "severity": "HIGH"
+      "confidence": 0.98
     },
     {
-      "id": "F-025",
+      "file": "py-sqli-01/vulnerable_variant.py",
+      "line": 2,
+      "category": "injection",
+      "confidence": 0.98
+    },
+    {
+      "file": "py-sqli-02/vulnerable_variant.py",
+      "line": 2,
+      "category": "injection",
+      "confidence": 0.98
+    },
+    {
+      "file": "py-sqli-03/vulnerable_variant.py",
+      "line": 2,
+      "category": "injection",
+      "confidence": 0.98
+    },
+    {
+      "file": "py-sqli-04/vulnerable_variant.py",
+      "line": 2,
+      "category": "injection",
+      "confidence": 0.98
+    },
+    {
+      "file": "py-ssrf/benign_lookalike.py",
+      "line": 6,
+      "category": "ssrf",
+      "confidence": 0.75
+    },
+    {
       "file": "py-ssrf/vulnerable_variant.py",
       "line": 3,
       "category": "ssrf",
-      "severity": "HIGH"
+      "confidence": 0.98
     },
     {
-      "id": "F-026",
+      "file": "py-ssrf-01/vulnerable_variant.py",
+      "line": 3,
+      "category": "ssrf",
+      "confidence": 0.98
+    },
+    {
+      "file": "py-ssrf-01/benign_lookalike.py",
+      "line": 6,
+      "category": "ssrf",
+      "confidence": 0.75
+    },
+    {
+      "file": "py-ssrf-02/benign_lookalike.py",
+      "line": 6,
+      "category": "ssrf",
+      "confidence": 0.75
+    },
+    {
+      "file": "py-ssrf-02/vulnerable_variant.py",
+      "line": 3,
+      "category": "ssrf",
+      "confidence": 0.98
+    },
+    {
+      "file": "py-ssrf-03/vulnerable_variant.py",
+      "line": 3,
+      "category": "ssrf",
+      "confidence": 0.95
+    },
+    {
+      "file": "py-ssrf-03/benign_lookalike.py",
+      "line": 6,
+      "category": "ssrf",
+      "confidence": 0.75
+    },
+    {
+      "file": "py-ssrf-04/benign_lookalike.py",
+      "line": 6,
+      "category": "ssrf",
+      "confidence": 0.75
+    },
+    {
+      "file": "py-ssrf-04/vulnerable_variant.py",
+      "line": 3,
+      "category": "ssrf",
+      "confidence": 0.95
+    },
+    {
       "file": "py-ssti/vulnerable_variant.py",
       "line": 3,
       "category": "injection",
-      "severity": "HIGH"
+      "confidence": 0.95
     },
     {
-      "id": "F-027",
       "file": "py-weakhash/vulnerable_variant.py",
       "line": 3,
       "category": "crypto",
-      "severity": "MEDIUM"
+      "confidence": 0.95
     },
     {
-      "id": "F-028",
+      "file": "py-weakhash-01/vulnerable_variant.py",
+      "line": 3,
+      "category": "crypto",
+      "confidence": 0.95
+    },
+    {
+      "file": "py-weakhash-02/vulnerable_variant.py",
+      "line": 3,
+      "category": "crypto",
+      "confidence": 0.95
+    },
+    {
+      "file": "py-weakhash-03/vulnerable_variant.py",
+      "line": 3,
+      "category": "crypto",
+      "confidence": 0.95
+    },
+    {
+      "file": "py-weakhash-04/vulnerable_variant.py",
+      "line": 3,
+      "category": "crypto",
+      "confidence": 0.95
+    },
+    {
       "file": "py-xxe/vulnerable_variant.py",
       "line": 3,
       "category": "injection",
-      "severity": "MEDIUM"
+      "confidence": 0.95
     },
     {
-      "id": "F-029",
       "file": "py-yaml/vulnerable_variant.py",
       "line": 3,
       "category": "deserialization",
-      "severity": "HIGH"
+      "confidence": 0.9
     },
     {
-      "id": "F-030",
       "file": "ts-jwt-none/vulnerable_variant.ts",
       "line": 3,
       "category": "AuthN/AuthZ",
-      "severity": "HIGH"
+      "confidence": 0.85
     }
   ]
 }
