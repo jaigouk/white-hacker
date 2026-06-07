@@ -26,11 +26,15 @@ Do **not** report the following as findings (absent specific, demonstrated explo
 15. **Outdated library** with no reachable vulnerable sink (reachability beats presence).
 16. **Missing audit logs** / observability gaps.
 17. **Documentation** / comment / typo / style issues.
-18. **Open redirect** with no credential/token leakage or chained impact, and **CSRF** on
-    non-state-changing or already-token-protected endpoints.
+18. **Inert open redirect** — same-origin / relative-only, or allowlist-validated targets; and **CSRF**
+    on non-state-changing or already-token-protected endpoints. (A user-controlled **absolute/external**
+    redirect IS a **LOW `open-redirect`** finding — see core-checklist §2a — not excluded.)
 19. **Missing security policy** (`SECURITY.md` / RFC 9116 `security.txt`) — surface as an
     INFORMATIONAL supply-chain-hygiene **advisory** (no severity / no CVSS), via the
     hygiene-advisory channel; **NEVER** a vuln finding in `VULN-FINDINGS.json` / `TRIAGE.json`.
+20. **Allow-list-guarded SSRF** — a server-side fetch whose host is validated against a *static*
+    allowlist immediately before the request (e.g. `assert urlparse(url).hostname in ALLOW` then
+    `get(url)`). Only flag fetches with **no** such gate on the user-controlled URL.
 
 ## Application notes
 - If a candidate matches an exclusion **but** the finder attached concrete proof of impact

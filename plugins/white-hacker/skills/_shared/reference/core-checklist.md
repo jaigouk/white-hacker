@@ -9,8 +9,8 @@
 > operation), and whether data reaches the sink **unsanitized across a trust boundary**. No
 > source→sink path = not a finding. Severity is decided in triage (`severity-rubric.md`), never here.
 
-Category tags (for tooling): `injection` `AuthN/AuthZ` `ssrf` `crypto` `deserialization` `xss`
-`config` `supply-chain` `error` `data-exposure` `resource`.
+Category tags (for tooling): `injection` `AuthN/AuthZ` `ssrf` `open-redirect` `crypto`
+`deserialization` `xss` `config` `supply-chain` `error` `data-exposure` `resource`.
 
 ---
 
@@ -40,16 +40,26 @@ on every object and function.
 - **Sessions:** rotation on privilege change, idle/absolute expiry, secure/httponly/samesite cookies.
 - **AuthN:** credential stuffing controls, secure password storage (see crypto), MFA bypass.
 
+# 2a. Open redirect  — `open-redirect`  (CWE-601)
+User-controlled URL used as a redirect target (`redirect(userInput)`, `Location:` header, `sendRedirect`).
+- **Report as LOW** when the target is attacker-controlled (an absolute/external URL derived from user
+  input) — a real phishing / OAuth-token-theft vector. Use the `open-redirect` category, NOT `AuthN/AuthZ`.
+- **Not a finding** when the redirect is same-origin / relative-only, or validated against an allowlist
+  of paths/hosts (see exclusion-rules).
+
 # 3. Server-Side Request Forgery  — `ssrf`  (folded into A01:2025; treat first-class)
 Server makes a request to a user-influenced URL/host.
 - Host **allowlist** (not blocklist); resolve DNS once and pin the IP used.
+- A host-allowlist check **immediately before the fetch is a sufficient mitigation — a guarded fetch is
+  NOT a finding.** Only flag a fetch where no allowlist/validation gates the user URL before the request.
 - Block RFC1918 / loopback / link-local / `169.254.169.254` (metadata) across **all encodings**
   (decimal, octal, hex, IPv6-mapped, `[::]`).
 - Re-resolve and re-check **every redirect hop** (DNS rebinding).
 - Prefer IMDSv2; never reflect raw user URLs into server-side fetchers.
 
 # 4. Cryptography & secrets  — `crypto`  (A02:2025 Security Misconfiguration incl. crypto)
-- **Hardcoded credentials / keys / tokens** in code, config, or history.
+- **Hardcoded credentials / keys / tokens** in code, config, or history → category **`crypto`** (a
+  secrets failure), NOT `config`.
 - Weak algorithms: MD5/SHA1 for passwords (use argon2/bcrypt/scrypt); ECB; static IV/nonce.
 - CSPRNG: use `secrets`/`crypto.randomBytes`/`SecureRandom`, never `random`/`Math.random` for tokens.
 - TLS/cert validation disabled or hostname checks bypassed.
