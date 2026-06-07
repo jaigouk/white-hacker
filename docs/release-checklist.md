@@ -4,9 +4,13 @@ Run before tagging a release (the inner-loop "did we regress?" gate; Phase 9 har
 frozen keep-or-revert merge gate).
 
 ## 1. Tests green
+Per package (this is exactly what `.github/workflows/ci.yml` runs in CI; each package resolves its
+own declared deps via `--project`, so no `--with jsonschema/pyyaml` is needed):
 ```bash
-uv run --with jsonschema --with pyyaml --with pytest pytest \
-  .claude/skills/*/scripts/ .claude/hooks/tests/ evals/tests/
+for pp in $(find plugins/white-hacker evals packaging -name pyproject.toml -not -path '*/.venv/*' | sort); do
+  pkg="${pp%/pyproject.toml}"; [ -d "$pkg/tests" ] || continue
+  uv run --project "$pkg" --with pytest pytest "$pkg/tests" -q || echo "FAILED: $pkg"
+done
 ```
 
 ## 2. Eval: score the corpus and compare to the recorded baseline
@@ -29,8 +33,10 @@ uv run --with jsonschema python evals/score.py \
   representative run (not a measured agent run).
 
 ## 3. Pins current (ADR-006)
-- CI action model id + `@anthropic-ai/claude-code` version + every `uses:` SHA still resolve and are
-  current (`ci/security-review.action.yml`).
+- Every `uses:` SHA in `.github/workflows/ci.yml` and `ci/security-review.action.yml` still resolves
+  and is current; the uv version pinned in `ci.yml` is current.
+- The security-review action's model id + `@anthropic-ai/claude-code` version are current
+  (`ci/security-review.action.yml`).
 
 ## 4. Plugin package valid (ADR-017)
 Since white-hacker ships as a Claude Code plugin via a marketplace, the package must validate

@@ -1,0 +1,52 @@
+# CI — full test suite + plugin/marketplace manifest validation.
+# Security posture (ADR-006): least-privilege token (contents: read), third-party Actions pinned to a
+# commit SHA, and the uv toolchain pinned to an exact version. No secrets are used — this workflow is
+# hermetic (tests + stdlib manifest validator only); the API-backed security-review lives separately
+# in ci/security-review.action.yml.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: tests + manifest
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3 (SHA verified 2026-06-06)
+
+      - name: Install uv (pinned 0.11.2)
+        run: |
+          curl -LsSf https://astral.sh/uv/0.11.2/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Validate plugin + marketplace manifest (stdlib floor)
+        run: python3 packaging/validate_manifest.py .
+
+      - name: Run test suite (per package)
+        run: |
+          fail=0
+          for pp in $(find plugins/white-hacker evals packaging -name pyproject.toml -not -path '*/.venv/*' | sort); do
+            pkg="${pp%/pyproject.toml}"
+            [ -d "$pkg/tests" ] || continue
+            echo "::group::$pkg"
+            if uv run --project "$pkg" --with pytest pytest "$pkg/tests" -q; then
+              echo "ok: $pkg"
+            else
+              echo "::error::tests failed in $pkg"
+              fail=1
+            fi
+            echo "::endgroup::"
+          done
+          exit "$fail"
