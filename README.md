@@ -245,6 +245,34 @@ of each session (the agent still treats injected content as untrusted). Register
 As an alternative one-time onboarding carrier, the `claude --init-only` **Setup-hook** path can
 run the same detection once at launch instead of via the user-invoked skill.
 
+### Security-policy awareness (ADR-018)
+
+Onboarding also detects whether the repo ships a coordinated-disclosure policy. `sec-init`
+looks for a `SECURITY.md` in GitHub precedence order (`.github/` → root → `docs/`, first match
+wins) plus an RFC 9116 `security.txt`, and records **facts only** — booleans, a closed
+reporting-channel enum, the repo-relative path, and `security.txt` expiry — in the project
+profile's `security_policy` block. No file-body span is ever stored: the policy is
+attacker-influenceable, and the agent is itself an injection target, so it is **untrusted
+data, never instructions** (spike-08). The SessionStart hook surfaces these facts as plain
+factual context (a malicious `path`/channel is dropped by the F-001 allowlist before it can
+reach the model); the recommendation to *add* a policy never rides in here — it lives in the
+hygiene-advisory channel below. The same project-scope registration caveat applies
+([#16538](https://github.com/anthropics/claude-code/issues/16538)).
+
+At review time the two states diverge:
+
+- **Present** → `sec-policy` parses the existing policy STRUCTURALLY as untrusted data and
+  emits a gap report. Declared scope/embargo is used to **annotate** a finding — it **never
+  suppresses a real, exploitable HIGH** (a malicious policy could "scope away" a bug). The
+  propose path can optionally draft a **merged** `SECURITY.md` that **APPENDS** only the
+  missing best-practice sections, preserving every maintainer-declared fact verbatim.
+- **Absent** → an informational **hygiene advisory** (not a blocking finding), plus an
+  optional best-practice skeleton draft.
+
+Either way, drafts land in `PATCHES/` only and are **human-applied, never pushed** (the same
+capability-removed boundary as `sec-patch`; ADR-010/016/018). See
+`docs/research/spike-08-security-md-policy-2026-06.md`.
+
 ### Dev (`.claude/`) vs ship (`plugins/white-hacker/`)
 
 | Path | Role | Shipped to users? |
@@ -262,52 +290,6 @@ Caveat: a subagent's `skills` / `mcpServers` frontmatter does **not** apply when
 team teammate (teammates load skills/MCP from project + user settings); plugin subagents ignore
 `permissionMode` / `mcpServers` / `hooks`. Put operational detail in the spawn prompt and rely
 on project-scope skills. See `docs/plan/PLAN.md` §7.1.
-
----
-
-## Status
-
-**Phases 0–9 done (verified)** — both loops complete: the inner review loop + team/CI packaging + the
-eval baseline, and the outer self-improvement loop with its frozen keep-or-revert gate: `sec-threat-model` + `sec-detect` (real `SCAN-PLAN.json` emitter + schema,
-incl. MCP detection) scope and calibrate a review, `sec-vuln-scan` (recall) and `sec-triage`
-(precision, adversarial, schema-gated, deduped) split discovery from verification, the **tooling
-layer is a swappable capability** (`deps-scan`/`secrets-scan` + SAST/IaC selection) that prefers
-installed tools and **degrades to the floor** — never blocking, and `ai-llm-review` consumes the
-**living `ai-attack-kb`** (dated, sourced, schema-validated entries) to flag LLM05 sinks /
-lethal-trifecta / MCP token-passthrough with `kb_refs` (mapped to OWASP LLM 2025 / Agentic 2026 /
-MCP / MITRE ATLAS), and the optional `sec-patch` stage proposes verified, root-cause fixes via the
-patch ladder (build → PoC-stops → tests → re-attack) writing **only** to `PATCHES/` for a human to
-apply (ADR-010/016; confinement is structural + a PreToolUse tripwire). Phase 6 packages it for
-**team mode + CI** (`sec-report` → `SECURITY-REPORT.md`, `ci_gate.py` fail-on-HIGH, a fully-pinned
-GitHub workflow running our own `/security-review`, and the `guard_bash`/`gate_review` review-posture
-hooks), and Phase 7 stands up the **eval baseline** (a 32-case labeled corpus + a deterministic
-`score.py` TPR/FPR/Youden's-J scorer + a recorded `baseline.json` regression gate). Phases 8–9 add the **outer loop**: KB lint/dedup/staleness gates,
-the `sec-learn` reflective pass + `sec-kb-refresh` feed poller (both PR-gated, never auto-merge),
-deterministic capture + confinement hooks, and the **frozen 103-case corpus + asymmetric
-keep-or-revert gate + 10-gate pre-commit checklist** that lets the KB ratchet up without drift.
-**373 tests green**; polyglot + SCA + IaC + AI/MCP + patch-ladder + eval runs logged under
-`docs/research/` + `evals/`. All ten phases are built:
-
-| Phase | Focus | Status |
-|-------|-------|--------|
-| 0 | Skeleton: generic persona + `/security-review` (discovery→triage→report on Read/Grep/Glob) | ✅ done |
-| 1 | FP discipline + structure: adversarial N-of-N, exclusion list, precondition severity, JSON schema, dedup | ✅ done |
-| 2 | Threat-model + detect (per-language `reference/*.md`) | ✅ done |
-| 3 | Tool integration: secrets/deps scan, capability discovery, degradation ladder | ✅ done |
-| 4 | AI/LLM + API appendices + living `ai-attack-kb` (framework/MCP-triggered) | ✅ done |
-| 5 | Patch + re-attack (opt-in, capability-removed writes) | ✅ done¹ |
-| 6 | Team mode + CI Action (sec-report, ci_gate, pinned workflow, posture hooks) | ✅ done¹ |
-| 7 | Eval baseline (32-case labeled corpus, score.py TPR/FPR/Youden's J, baseline gate) | ✅ done |
-| 8 | Self-improvement (KB lint/dedup/staleness, sec-learn, sec-kb-refresh, capture+confine hooks) | ✅ done¹ |
-| 9 | Frozen 103-case corpus + keep-or-revert gate + 10-gate pre-commit + drift/ratchet | ✅ done¹ |
-
-¹ Phases 5 & 6 tasks are done + verified; the one shared open item is **activating** the PreToolUse
-hooks (`confine_patch_writes`, `guard_bash`, `gate_review`; Phase 8 adds capture + `confine_self_writes`)
-+ `permissions.deny` in committed `.claude/settings.json` (ADR-016). Each hook's *logic* is committed +
-tested; the *registration* is one self-modifying startup-config write that awaits explicit operator
-authorization (batched into a single approval).
-
-Full gap analysis, skill specs, tooling, and rollout: **`docs/plan/PLAN.md`**.
 
 ---
 

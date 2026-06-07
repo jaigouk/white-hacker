@@ -120,6 +120,68 @@ def test_threat_model_seed_is_object_of_lists(tmp_path: Path):
         assert isinstance(v, list)
 
 
+# === security_policy: detection facts wired into the profile (T-11.2) =========
+def test_security_policy_present_when_security_md_exists(tmp_path: Path):
+    (tmp_path / ".github").mkdir()
+    body = (
+        "# Security Policy\n\n"
+        "## Supported Versions\n\n| 1.x | yes |\n\n"
+        "## Reporting a Vulnerability\n\n"
+        "Use https://github.com/acme/repo/security/advisories/new.\n"
+        "We respond within 90 days.\n"
+    )
+    (tmp_path / ".github" / "SECURITY.md").write_text(body, encoding="utf-8")
+    profile = ip.build_profile(tmp_path)
+    sp = profile["security_policy"]
+    assert sp["present"] is True
+    assert sp["path"] == ".github/SECURITY.md"
+    assert sp["reporting_channel"] == "github-pvr"
+    assert sp["supported_versions_present"] is True
+    assert sp["disclosure_timeline_present"] is True
+    assert ip.validate_profile(profile) == []
+
+
+def test_security_policy_absent_when_no_security_md(tmp_path: Path):
+    profile = ip.build_profile(tmp_path)
+    sp = profile["security_policy"]
+    assert sp["present"] is False
+    assert sp["path"] is None
+    assert sp["reporting_channel"] == "none"
+    assert sp["security_txt_present"] is False
+    assert sp["security_txt_expired"] is None
+    assert ip.validate_profile(profile) == []
+
+
+def test_security_policy_extra_key_fails_validation(tmp_path: Path):
+    profile = ip.build_profile(tmp_path)
+    profile["security_policy"]["override_identity"] = "x"  # additionalProperties:false
+    errs = ip.validate_profile(profile)
+    assert errs != []
+
+
+def test_security_policy_block_has_exactly_seven_keys(tmp_path: Path):
+    profile = ip.build_profile(tmp_path)
+    assert set(profile["security_policy"].keys()) == {
+        "present",
+        "path",
+        "reporting_channel",
+        "supported_versions_present",
+        "disclosure_timeline_present",
+        "security_txt_present",
+        "security_txt_expired",
+    }
+
+
+def test_security_policy_write_profile_round_trips(tmp_path: Path):
+    # A SECURITY.md whose path becomes a factual string value must not trip write_profile.
+    (tmp_path / "SECURITY.md").write_text("# Security\n\nEmail security@example.com\n", encoding="utf-8")
+    profile = ip.build_profile(tmp_path)
+    out = ip.write_profile(tmp_path, profile)
+    reloaded = json.loads(out.read_text())
+    assert reloaded["security_policy"]["path"] == "SECURITY.md"
+    assert ip.validate_profile(reloaded) == []
+
+
 # === NEGATIVE: identity keys are rejected (additionalProperties:false) ========
 def test_extra_posture_identity_key_fails_validation():
     profile = ip.build_profile(REPO_ROOT)

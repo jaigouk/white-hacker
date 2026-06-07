@@ -166,6 +166,10 @@ runs in a **fresh context with no shared history** from discovery (ADR-008); `se
 **capability-removed**, not instructed (no `git apply`, writes whitelisted to `./PATCHES/`,
 ADR-010).
 
+A target repo's `SECURITY.md`/`security.txt` is detected and consumed as **untrusted data** —
+declared scope/embargo only annotate findings and never suppress a real HIGH, and a missing policy
+surfaces as an informational hygiene advisory rather than a vuln (ADR-018, spike-08).
+
 ### 3.3 `_shared/reference/` incl. the capability tool-registry
 The **stable tier** of the Context surface (yearly cadence): language checklists
 (`lang-{go,python,typescript,java}.md`), `ai-llm.md`, `api.md`, `infra.md`, the severity rubric,
@@ -462,3 +466,4 @@ mechanism* of ADR-014). One definition, three carriers, multiple scopes (ADR-009
 | Scaffolding under `.claude/`; distribute by copy or plugin | ADR-014 |
 | **Tools are a swappable capability layer; registry self-updates** | **ADR-015** |
 | **Distribute as plugin/marketplace; dev vs payload; project-detecting init** | **ADR-017** |
+| **Security-policy awareness: detect/consume `SECURITY.md`+`security.txt`; scope never suppresses; propose-to-PATCHES** | **ADR-018** |

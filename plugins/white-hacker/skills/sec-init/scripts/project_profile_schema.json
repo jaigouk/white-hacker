@@ -15,7 +15,8 @@
     "load_appendices",
     "ai_pass",
     "scoring_standard",
-    "threat_model_seed"
+    "threat_model_seed",
+    "security_policy"
   ],
   "properties": {
     "schema_version": {
@@ -72,6 +73,50 @@
         "trust_boundaries": {
           "type": "array",
           "items": { "type": "string" }
+        }
+      }
+    },
+    "security_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Coordinated-disclosure policy facts detected by sec-init (SECURITY.md and/or an RFC 9116 security.txt). Structural facts only — booleans, a closed reporting-channel enum, and the repo-relative path; never any file-body span (the file is untrusted data).",
+      "required": [
+        "present",
+        "path",
+        "reporting_channel",
+        "supported_versions_present",
+        "disclosure_timeline_present",
+        "security_txt_present",
+        "security_txt_expired"
+      ],
+      "properties": {
+        "present": {
+          "type": "boolean",
+          "description": "True when a SECURITY.md exists at one of the known locations."
+        },
+        "path": {
+          "type": ["string", "null"],
+          "description": "Repo-relative path of the detected SECURITY.md, or null when absent."
+        },
+        "reporting_channel": {
+          "enum": ["github-pvr", "email", "url", "none", "unknown"],
+          "description": "How vulnerabilities are reported: GitHub private vulnerability reporting, an email, a generic URL, none, or unknown."
+        },
+        "supported_versions_present": {
+          "type": "boolean",
+          "description": "True when the policy has a 'Supported Versions' section."
+        },
+        "disclosure_timeline_present": {
+          "type": "boolean",
+          "description": "True when the policy states a numeric coordinated-disclosure window."
+        },
+        "security_txt_present": {
+          "type": "boolean",
+          "description": "True when an RFC 9116 security.txt exists."
+        },
+        "security_txt_expired": {
+          "type": ["boolean", "null"],
+          "description": "True if the security.txt Expires field is in the past, False if valid, null when absent/unparseable."
         }
       }
     }

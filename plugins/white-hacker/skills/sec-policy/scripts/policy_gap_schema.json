@@ -1,0 +1,117 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://white-hacker/skills/sec-policy/policy-gap.schema.json",
+  "title": "white-hacker security-policy gap report",
+  "description": "A STRUCTURED gap report for an existing SECURITY.md / RFC 9116 security.txt, emitted by sec-policy (ADR-018, spike-08). The source files are UNTRUSTED DATA: this report contains ONLY booleans, a closed reporting-channel enum, section-name strings, and integer scores — NEVER any file-body span. additionalProperties:false (top level AND every nested object) GUARANTEES no raw policy text can ever leak through.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "present",
+    "path",
+    "sections",
+    "missing_sections",
+    "reporting_channel",
+    "scorecard",
+    "security_txt",
+    "injection_suspected"
+  ],
+  "properties": {
+    "present": {
+      "type": "boolean",
+      "description": "True when a SECURITY.md exists at one of the known locations."
+    },
+    "path": {
+      "type": ["string", "null"],
+      "description": "Repo-relative path of the detected SECURITY.md, or null when absent."
+    },
+    "sections": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Presence of each best-practice section (heading match only).",
+      "required": [
+        "supported_versions",
+        "reporting",
+        "response_timeline",
+        "coordinated_disclosure",
+        "scope",
+        "safe_harbor",
+        "acknowledgments"
+      ],
+      "properties": {
+        "supported_versions": { "type": "boolean" },
+        "reporting": { "type": "boolean" },
+        "response_timeline": { "type": "boolean" },
+        "coordinated_disclosure": { "type": "boolean" },
+        "scope": { "type": "boolean" },
+        "safe_harbor": { "type": "boolean" },
+        "acknowledgments": { "type": "boolean" }
+      }
+    },
+    "missing_sections": {
+      "type": "array",
+      "description": "Section-name strings absent from the policy (a subset of the seven keys).",
+      "items": {
+        "enum": [
+          "supported_versions",
+          "reporting",
+          "response_timeline",
+          "coordinated_disclosure",
+          "scope",
+          "safe_harbor",
+          "acknowledgments"
+        ]
+      },
+      "uniqueItems": true
+    },
+    "reporting_channel": {
+      "enum": ["github-pvr", "email", "url", "none"],
+      "description": "How vulnerabilities are reported, per the T-11.2 detector."
+    },
+    "scorecard": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "OpenSSF Scorecard Security-Policy signals modeled structurally.",
+      "required": ["contact", "free_form_text", "specific", "score"],
+      "properties": {
+        "contact": {
+          "type": "boolean",
+          "description": "A reporting channel is present (detector != 'none')."
+        },
+        "free_form_text": {
+          "type": "boolean",
+          "description": "Substantive prose beyond a bare link/email (word-count threshold, URLs/emails excluded)."
+        },
+        "specific": {
+          "type": "boolean",
+          "description": ">=2 vuln*/disclos* hits AND a numeric time expectation."
+        },
+        "score": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10,
+          "description": "6*contact + 3*free_form_text + 1*specific."
+        }
+      }
+    },
+    "security_txt": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "RFC 9116 security.txt facts.",
+      "required": ["present", "expired"],
+      "properties": {
+        "present": {
+          "type": "boolean",
+          "description": "True when an RFC 9116 security.txt exists."
+        },
+        "expired": {
+          "type": ["boolean", "null"],
+          "description": "True if the Expires field is in the past, False if valid, null when absent/unparseable."
+        }
+      }
+    },
+    "injection_suspected": {
+      "type": "boolean",
+      "description": "Denylist screen: True when any indirect-prompt-injection marker matched. A BOOLEAN signal only — no attacker text is echoed."
+    }
+  }
+}

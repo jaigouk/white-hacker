@@ -28,6 +28,9 @@ Do **not** report the following as findings (absent specific, demonstrated explo
 17. **Documentation** / comment / typo / style issues.
 18. **Open redirect** with no credential/token leakage or chained impact, and **CSRF** on
     non-state-changing or already-token-protected endpoints.
+19. **Missing security policy** (`SECURITY.md` / RFC 9116 `security.txt`) — surface as an
+    INFORMATIONAL supply-chain-hygiene **advisory** (no severity / no CVSS), via the
+    hygiene-advisory channel; **NEVER** a vuln finding in `VULN-FINDINGS.json` / `TRIAGE.json`.
 
 ## Application notes
 - If a candidate matches an exclusion **but** the finder attached concrete proof of impact

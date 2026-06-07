@@ -37,6 +37,10 @@ Reachability · attacker control of the input · preconditions · authentication
 Downstream tooling branches on **class**, not outcome; precondition-derived ordering is distinct
 from the `severity_label`. This prevents "real/confirmed" from silently inflating into "critical".
 
+**Hygiene advisories carry NO severity label** (and no CVSS): they are *informational*, not
+scored. A supply-chain-hygiene advisory (e.g. missing `SECURITY.md`, see `exclusion-rules.md`
+rule 19) is never assigned a HIGH/MEDIUM/LOW tier — it is never a finding to score.
+
 ## 5. Swappable scoring standard
 `sec-threat-model` asks which standard the project uses and records it in `THREAT_MODEL.md`; triage
 applies it. Do **not** hard-code one:

@@ -35,14 +35,19 @@ from pathlib import Path
 
 import jsonschema
 
-# Make the sibling sec-detect's detect_tools importable even outside pytest
-# (the conftest shim only applies under pytest). Insert its scripts dir on path.
+# Make the sibling sec-detect's detect_tools and the _shared policy_detect importable
+# even outside pytest (the conftest shim only applies under pytest). Insert both scripts
+# dirs on path, mirroring the conftest shim.
 _HERE = Path(__file__).resolve().parent
 _SEC_DETECT_SCRIPTS = _HERE.parent.parent / "sec-detect" / "scripts"
 if str(_SEC_DETECT_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(_SEC_DETECT_SCRIPTS))
+_SHARED_SCRIPTS = _HERE.parent.parent / "_shared" / "scripts"
+if str(_SHARED_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(_SHARED_SCRIPTS))
 
 import detect_tools as dt  # noqa: E402  (path shim above must run first)
+import policy_detect  # noqa: E402  (path shim above must run first)
 
 SCHEMA_VERSION = "1.0"
 SCHEMA_PATH = _HERE / "project_profile_schema.json"
@@ -148,6 +153,9 @@ def build_profile(repo_root) -> dict:
             "entry_points": [],
             "trust_boundaries": [],
         },
+        # Coordinated-disclosure policy facts (SECURITY.md / RFC 9116 security.txt).
+        # Structural facts only; the source files are treated as untrusted data.
+        "security_policy": policy_detect.security_policy_facts(root),
     }
 
 
