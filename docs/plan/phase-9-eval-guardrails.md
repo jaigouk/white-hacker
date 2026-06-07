@@ -88,7 +88,7 @@
   - [x] CI gate (DeepEval assertions) fails the job on REVERT — `pytest evals/tests/test_gate_ci.py` *(3 tests)*; the `kb-keep-or-revert-gate` job in `ci/security-review.action.yml` references `keep_or_revert`
   - [x] The `PreToolUse` hook gates a KB-edit event (blocks on REVERT/no-verdict, allows on KEEP) — `pytest test_gate_kb_edit.py` *(7 tests; Write/Edit + Bash)*
   - [x] A regressing KB diff is blocked end-to-end — `evals/audit-log.md` records the REVERT demonstration
-- **Status:** done *(gate_kb_edit registration batched into the operator-auth settings.json approval)*
+- **Status:** done *(gate_kb_edit now WIRED in the plugin `hooks/hooks.json` PreToolUse chain — registration gap closed in the 2026-06-07 outer-loop QA, +1 test. Verified: no-verdict→block, KEEP→allow, REVERT→block, non-KB→allow. Safe to ship plugin-wide: it only fires on edits to `ai-attack-kb/`/`_shared/reference/` paths, a no-op in a user's repo.)*
 
 ### T-9.4 · Pre-commit safety checklist enforcement (the 10 gates)
 - **Goal:** enforce the si-08 §5.2 mandatory checklist as a single PreToolUse-blocked self-write gate:

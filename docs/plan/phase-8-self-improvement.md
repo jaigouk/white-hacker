@@ -106,7 +106,7 @@ batched for auth); `sec-learn`/`sec-kb-refresh` bodies de-stubbed + `harvest.sh`
   - [x] Each hook (5 modes of `capture_hooks.py` behind 5 `.sh` wrappers), fed an event JSON, appends a well-formed JSONL line / emits the digest/nudge — `uv run --with pytest pytest .claude/hooks/tests/test_capture_hooks.py` *(9 tests)*
   - [ ] **(pending human-auth)** hooks registered under PostToolUse/SessionEnd/Stop/SessionStart in committed `.claude/settings.json` — batched into the one operator-auth approval
   - [x] Append-only + never writes a secret value (redaction) — `test_secret_value_is_redacted` + `test_append_is_additive`
-- **Status:** blocked(human-auth: settings.json registration) — capture logic + 9 tests done.
+- **Status:** done (logic + 9 tests) — capture is **opt-in by design** and intentionally NOT in the shipped plugin `hooks.json`: a plugin installed into others' repos must not auto-capture their session traces (privacy). The maintainer enables it via repo-local settings for self-improvement. Confirmed deliberate in the 2026-06-07 outer-loop QA (the outer loop runs in the maintainer repo, not in an installer's review).
 
 ### T-8.4 · `PreToolUse` confinement + secret-block + egress guardrails
 - **Goal:** a `PreToolUse` hook (exit 2 / `permissionDecision: deny`) that: denies any `Write`/`Edit`
@@ -121,7 +121,7 @@ batched for auth); `sec-learn`/`sec-kb-refresh` bodies de-stubbed + `harvest.sh`
   - [x] Denies writes to `src/x`, `evals/corpus/x`, `evals/keep_or_revert.py`, `evals/baseline.json`, `.claude/settings.json`, and `../`-traversal into the corpus; allows `ai-attack-kb/reference/x.md`, `PATCHES/x`, `evals/traces/x` — `uv run --with pytest pytest .claude/hooks/tests/test_confine_self_writes.py` *(10 tests)*
   - [x] Denies `.env` read (composes `guard_bash`) and egress outside the feed allow-list (incl. `169.254.169.254`); allows feed hosts (osv.dev, githubusercontent, …) — dedicated tests
   - [ ] **(pending human-auth)** committed `.claude/settings.json` `permissions.deny` lists the corpus + gate-script paths — batched into the one operator-auth approval
-- **Status:** blocked(human-auth: settings.json registration) — confine logic + 10 tests done; composes as a 3rd PreToolUse entry with confine_patch_writes + guard_bash.
+- **Status:** done — `confine_self_writes` is WIRED in the plugin `hooks/hooks.json` PreToolUse chain (alongside `guard_bash` + `confine_patch_writes`, and now `gate_kb_edit`); confirmed in the 2026-06-07 outer-loop QA. (Phase 10/11 generalized it to also deny control files / `.claude-plugin/`.)
 
 ## 8c — The reflective loop + the feed/tool poller (the proposers)
 

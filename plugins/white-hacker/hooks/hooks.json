@@ -18,6 +18,11 @@
             "type": "command",
             "command": "${CLAUDE_PLUGIN_ROOT}/hooks/confine_self_writes.sh",
             "timeout": 600
+          },
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/gate_kb_edit.sh",
+            "timeout": 600
           }
         ]
       }

@@ -60,6 +60,15 @@ def test_registers_the_three_confinement_scripts():
     assert needed <= referenced, f"missing: {needed - referenced}"
 
 
+def test_registers_gate_kb_edit_guardrail():
+    """The outer-loop keep-or-revert KB-edit gate (T-9.3) must be wired, not just present as
+    logic+tests: an in-session edit to ai-attack-kb/** or _shared/reference/** is blocked unless
+    evals/gate-verdict.json says KEEP. Belt-and-suspenders to the CI merge gate."""
+    manifest = _load()
+    referenced = {os.path.basename(c) for c in _commands(manifest)}
+    assert "gate_kb_edit.sh" in referenced, f"gate_kb_edit not registered; got: {referenced}"
+
+
 def _sessionstart_commands(manifest: dict) -> list[str]:
     cmds: list[str] = []
     for group in manifest["hooks"].get("SessionStart", []):
