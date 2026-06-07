@@ -1,7 +1,7 @@
 {
   "case_id": "py-mcp-tokenpassthrough",
   "language": "python",
-  "category": "tool-poisoning",
+  "category": "data-exfil",
   "severity": "HIGH",
   "owasp": [
     "MCP01:2025"

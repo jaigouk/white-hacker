@@ -46,6 +46,8 @@ before tagging:
 - **Validate the manifest + catalog.** Either tool passes:
 ```bash
 # Stdlib floor validator (no Claude CLI required) — exit 0 on success.
+# Rejects unknown top-level keys in plugin.json/marketplace.json (e.g. a stray `$schema`),
+# matching `claude plugin validate` — so a bogus key fails CI without the Claude CLI installed.
 uv run python packaging/validate_manifest.py .
 # Optional, if the CLI is installed:
 claude plugin validate

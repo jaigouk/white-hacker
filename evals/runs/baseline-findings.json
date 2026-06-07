@@ -1,6 +1,6 @@
 {
   "summary": {
-    "run": "full-103-baseline",
+    "run": "full-103 + waveB + waveC(llm05+secret+mcp-relabel)",
     "model": "claude-sonnet",
     "date": "2026-06-07",
     "note": "REAL agent run over all 103 frozen corpus cases (blind, neutralized filenames)."
@@ -11,12 +11,6 @@
       "line": 2,
       "category": "improper-output-handling",
       "confidence": 0.95
-    },
-    {
-      "file": "cve-2026-22778-vllm-ssrf/vulnerable_variant.py",
-      "line": 3,
-      "category": "ssrf",
-      "confidence": 0.98
     },
     {
       "file": "cve-2026-22807-vllm-deser/vulnerable_variant.py",
@@ -115,36 +109,6 @@
       "confidence": 0.97
     },
     {
-      "file": "go-ssrf/vulnerable_variant.go",
-      "line": 4,
-      "category": "ssrf",
-      "confidence": 0.97
-    },
-    {
-      "file": "go-ssrf-01/vulnerable_variant.go",
-      "line": 4,
-      "category": "ssrf",
-      "confidence": 0.97
-    },
-    {
-      "file": "go-ssrf-02/vulnerable_variant.go",
-      "line": 4,
-      "category": "ssrf",
-      "confidence": 0.97
-    },
-    {
-      "file": "go-ssrf-03/vulnerable_variant.go",
-      "line": 4,
-      "category": "ssrf",
-      "confidence": 0.97
-    },
-    {
-      "file": "go-ssrf-04/vulnerable_variant.go",
-      "line": 4,
-      "category": "ssrf",
-      "confidence": 0.97
-    },
-    {
       "file": "go-weakrng/vulnerable_variant.go",
       "line": 4,
       "category": "crypto",
@@ -175,30 +139,6 @@
       "confidence": 0.97
     },
     {
-      "file": "ja-open-redirect-01/vulnerable_variant.js",
-      "line": 1,
-      "category": "improper-output-handling",
-      "confidence": 0.95
-    },
-    {
-      "file": "ja-open-redirect-02/vulnerable_variant.js",
-      "line": 1,
-      "category": "improper-output-handling",
-      "confidence": 0.95
-    },
-    {
-      "file": "ja-open-redirect-03/vulnerable_variant.js",
-      "line": 1,
-      "category": "improper-output-handling",
-      "confidence": 0.95
-    },
-    {
-      "file": "ja-open-redirect-04/vulnerable_variant.js",
-      "line": 1,
-      "category": "improper-output-handling",
-      "confidence": 0.95
-    },
-    {
       "file": "ja-sqli-01/vulnerable_variant.js",
       "line": 1,
       "category": "injection",
@@ -221,30 +161,6 @@
       "line": 1,
       "category": "injection",
       "confidence": 0.99
-    },
-    {
-      "file": "ja-ssrf-01/vulnerable_variant.js",
-      "line": 1,
-      "category": "ssrf",
-      "confidence": 0.95
-    },
-    {
-      "file": "ja-ssrf-02/vulnerable_variant.js",
-      "line": 1,
-      "category": "ssrf",
-      "confidence": 0.95
-    },
-    {
-      "file": "ja-ssrf-03/vulnerable_variant.js",
-      "line": 1,
-      "category": "ssrf",
-      "confidence": 0.95
-    },
-    {
-      "file": "ja-ssrf-04/vulnerable_variant.js",
-      "line": 1,
-      "category": "ssrf",
-      "confidence": 0.95
     },
     {
       "file": "ja-weakhash-01/vulnerable_variant.js",
@@ -313,21 +229,9 @@
       "confidence": 0.95
     },
     {
-      "file": "js-open-redirect/vulnerable_variant.js",
-      "line": 2,
-      "category": "improper-output-handling",
-      "confidence": 0.95
-    },
-    {
       "file": "js-sqli/vulnerable_variant.js",
       "line": 2,
       "category": "injection",
-      "confidence": 0.95
-    },
-    {
-      "file": "js-ssrf/vulnerable_variant.js",
-      "line": 2,
-      "category": "ssrf",
       "confidence": 0.95
     },
     {
@@ -409,12 +313,6 @@
       "confidence": 0.92
     },
     {
-      "file": "py-hardcoded-secret/vulnerable_variant.py",
-      "line": 1,
-      "category": "config",
-      "confidence": 0.95
-    },
-    {
       "file": "py-ldap/vulnerable_variant.py",
       "line": 2,
       "category": "injection",
@@ -427,39 +325,9 @@
       "confidence": 0.97
     },
     {
-      "file": "py-llm05-ssrf/vulnerable_variant.py",
-      "line": 3,
-      "category": "ssrf",
-      "confidence": 0.95
-    },
-    {
       "file": "py-mcp-tokenpassthrough/vulnerable_variant.py",
       "line": 3,
       "category": "data-exfil",
-      "confidence": 0.95
-    },
-    {
-      "file": "py-open-redirect-01/vulnerable_variant.py",
-      "line": 2,
-      "category": "improper-output-handling",
-      "confidence": 0.95
-    },
-    {
-      "file": "py-open-redirect-02/vulnerable_variant.py",
-      "line": 2,
-      "category": "improper-output-handling",
-      "confidence": 0.95
-    },
-    {
-      "file": "py-open-redirect-03/vulnerable_variant.py",
-      "line": 2,
-      "category": "improper-output-handling",
-      "confidence": 0.95
-    },
-    {
-      "file": "py-open-redirect-04/vulnerable_variant.py",
-      "line": 2,
-      "category": "improper-output-handling",
       "confidence": 0.95
     },
     {
@@ -541,66 +409,6 @@
       "confidence": 0.98
     },
     {
-      "file": "py-ssrf/benign_lookalike.py",
-      "line": 6,
-      "category": "ssrf",
-      "confidence": 0.75
-    },
-    {
-      "file": "py-ssrf/vulnerable_variant.py",
-      "line": 3,
-      "category": "ssrf",
-      "confidence": 0.98
-    },
-    {
-      "file": "py-ssrf-01/vulnerable_variant.py",
-      "line": 3,
-      "category": "ssrf",
-      "confidence": 0.98
-    },
-    {
-      "file": "py-ssrf-01/benign_lookalike.py",
-      "line": 6,
-      "category": "ssrf",
-      "confidence": 0.75
-    },
-    {
-      "file": "py-ssrf-02/benign_lookalike.py",
-      "line": 6,
-      "category": "ssrf",
-      "confidence": 0.75
-    },
-    {
-      "file": "py-ssrf-02/vulnerable_variant.py",
-      "line": 3,
-      "category": "ssrf",
-      "confidence": 0.98
-    },
-    {
-      "file": "py-ssrf-03/vulnerable_variant.py",
-      "line": 3,
-      "category": "ssrf",
-      "confidence": 0.95
-    },
-    {
-      "file": "py-ssrf-03/benign_lookalike.py",
-      "line": 6,
-      "category": "ssrf",
-      "confidence": 0.75
-    },
-    {
-      "file": "py-ssrf-04/benign_lookalike.py",
-      "line": 6,
-      "category": "ssrf",
-      "confidence": 0.75
-    },
-    {
-      "file": "py-ssrf-04/vulnerable_variant.py",
-      "line": 3,
-      "category": "ssrf",
-      "confidence": 0.95
-    },
-    {
       "file": "py-ssti/vulnerable_variant.py",
       "line": 3,
       "category": "injection",
@@ -653,6 +461,168 @@
       "line": 3,
       "category": "AuthN/AuthZ",
       "confidence": 0.85
+    },
+    {
+      "file": "cve-2026-22778-vllm-ssrf/vulnerable_variant.py",
+      "line": 3,
+      "category": "ssrf",
+      "confidence": 0.95
+    },
+    {
+      "file": "go-ssrf/vulnerable_variant.go",
+      "line": 4,
+      "category": "ssrf",
+      "confidence": 0.95
+    },
+    {
+      "file": "go-ssrf-01/vulnerable_variant.go",
+      "line": 4,
+      "category": "ssrf",
+      "confidence": 0.95
+    },
+    {
+      "file": "go-ssrf-02/vulnerable_variant.go",
+      "line": 4,
+      "category": "ssrf",
+      "confidence": 0.95
+    },
+    {
+      "file": "go-ssrf-03/vulnerable_variant.go",
+      "line": 4,
+      "category": "ssrf",
+      "confidence": 0.95
+    },
+    {
+      "file": "go-ssrf-04/vulnerable_variant.go",
+      "line": 4,
+      "category": "ssrf",
+      "confidence": 0.95
+    },
+    {
+      "file": "ja-open-redirect-01/vulnerable_variant.js",
+      "line": 1,
+      "category": "open-redirect",
+      "confidence": 0.95
+    },
+    {
+      "file": "ja-open-redirect-02/vulnerable_variant.js",
+      "line": 1,
+      "category": "open-redirect",
+      "confidence": 0.95
+    },
+    {
+      "file": "ja-open-redirect-03/vulnerable_variant.js",
+      "line": 1,
+      "category": "open-redirect",
+      "confidence": 0.95
+    },
+    {
+      "file": "ja-open-redirect-04/vulnerable_variant.js",
+      "line": 1,
+      "category": "open-redirect",
+      "confidence": 0.95
+    },
+    {
+      "file": "ja-ssrf-01/vulnerable_variant.js",
+      "line": 1,
+      "category": "ssrf",
+      "confidence": 0.95
+    },
+    {
+      "file": "ja-ssrf-02/vulnerable_variant.js",
+      "line": 1,
+      "category": "ssrf",
+      "confidence": 0.95
+    },
+    {
+      "file": "ja-ssrf-03/vulnerable_variant.js",
+      "line": 1,
+      "category": "ssrf",
+      "confidence": 0.95
+    },
+    {
+      "file": "ja-ssrf-04/vulnerable_variant.js",
+      "line": 1,
+      "category": "ssrf",
+      "confidence": 0.95
+    },
+    {
+      "file": "js-open-redirect/vulnerable_variant.js",
+      "line": 2,
+      "category": "open-redirect",
+      "confidence": 0.95
+    },
+    {
+      "file": "js-ssrf/vulnerable_variant.js",
+      "line": 2,
+      "category": "ssrf",
+      "confidence": 0.95
+    },
+    {
+      "file": "py-open-redirect-01/vulnerable_variant.py",
+      "line": 2,
+      "category": "open-redirect",
+      "confidence": 0.95
+    },
+    {
+      "file": "py-open-redirect-02/vulnerable_variant.py",
+      "line": 2,
+      "category": "open-redirect",
+      "confidence": 0.95
+    },
+    {
+      "file": "py-open-redirect-03/vulnerable_variant.py",
+      "line": 2,
+      "category": "open-redirect",
+      "confidence": 0.95
+    },
+    {
+      "file": "py-open-redirect-04/vulnerable_variant.py",
+      "line": 2,
+      "category": "open-redirect",
+      "confidence": 0.95
+    },
+    {
+      "file": "py-ssrf/vulnerable_variant.py",
+      "line": 3,
+      "category": "ssrf",
+      "confidence": 0.95
+    },
+    {
+      "file": "py-ssrf-01/vulnerable_variant.py",
+      "line": 3,
+      "category": "ssrf",
+      "confidence": 0.95
+    },
+    {
+      "file": "py-ssrf-02/vulnerable_variant.py",
+      "line": 3,
+      "category": "ssrf",
+      "confidence": 0.95
+    },
+    {
+      "file": "py-ssrf-03/vulnerable_variant.py",
+      "line": 3,
+      "category": "ssrf",
+      "confidence": 0.95
+    },
+    {
+      "file": "py-ssrf-04/vulnerable_variant.py",
+      "line": 3,
+      "category": "ssrf",
+      "confidence": 0.95
+    },
+    {
+      "file": "py-hardcoded-secret/vulnerable_variant.py",
+      "line": 1,
+      "category": "crypto",
+      "confidence": 0.95
+    },
+    {
+      "file": "py-llm05-ssrf/vulnerable_variant.py",
+      "line": 3,
+      "category": "improper-output-handling",
+      "confidence": 0.9
     }
   ]
 }

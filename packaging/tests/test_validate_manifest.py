@@ -279,3 +279,83 @@ def test_plugin_json_alone_in_claude_plugin_is_allowed(tmp_path):
 def test_main_returns_one_when_invalid(tmp_path):
     # missing everything -> CLI must exit non-zero
     assert vm.main([str(tmp_path)]) == 1
+
+
+# ---------- UNKNOWN TOP-LEVEL KEY rejection (T-12.7 / QA-3 gap) ---------------
+# The official `claude plugin validate` rejects unknown top-level keys (e.g. a stray
+# `$schema`). The floor validator used to accept them. These pin the parity.
+
+def test_plugin_unknown_top_level_key_schema_is_error(tmp_path):
+    # a bogus `$schema` top-level key (the exact key that slipped past CI) must be rejected
+    plugin_dir = tmp_path / "plugins" / "demo-plugin"
+    _write_json(
+        plugin_dir / ".claude-plugin" / "plugin.json",
+        {"name": "demo-plugin", "$schema": "https://example.com/schema.json"},
+    )
+    errors = vm.validate_plugin(plugin_dir)
+    assert any("$schema" in e for e in errors), errors
+    assert any("unknown" in e.lower() for e in errors), errors
+
+
+def test_plugin_unknown_top_level_key_bogus_is_error(tmp_path):
+    plugin_dir = tmp_path / "plugins" / "demo-plugin"
+    _write_json(
+        plugin_dir / ".claude-plugin" / "plugin.json",
+        {"name": "demo-plugin", "BOGUS_UNKNOWN_KEY": 1},
+    )
+    errors = vm.validate_plugin(plugin_dir)
+    assert any("BOGUS_UNKNOWN_KEY" in e for e in errors), errors
+
+
+def test_plugin_known_top_level_keys_are_allowed(tmp_path):
+    # a manifest using only documented optional keys must stay clean
+    plugin_dir = tmp_path / "plugins" / "demo-plugin"
+    _write_json(
+        plugin_dir / ".claude-plugin" / "plugin.json",
+        {
+            "name": "demo-plugin",
+            "version": "0.1.0",
+            "description": "x",
+            "author": {"name": "Tester"},
+            "license": "Apache-2.0",
+            "repository": "https://example.com/repo",
+            "keywords": ["a"],
+        },
+    )
+    assert vm.validate_plugin(plugin_dir) == []
+
+
+def test_marketplace_unknown_top_level_key_is_error(tmp_path):
+    mp = _valid_marketplace()
+    mp["$schema"] = "https://example.com/marketplace.schema.json"
+    _make_marketplace(tmp_path, mp)
+    _make_plugin(tmp_path / "plugins" / "demo-plugin")
+    errors = vm.validate_marketplace(tmp_path)
+    assert any("$schema" in e for e in errors), errors
+    assert any("unknown" in e.lower() for e in errors), errors
+
+
+def test_marketplace_known_metadata_top_level_key_is_allowed(tmp_path):
+    # `metadata` is a documented top-level marketplace key -> must NOT be flagged
+    mp = _valid_marketplace()
+    mp["metadata"] = {"pluginRoot": "./plugins", "description": "demo"}
+    _make_marketplace(tmp_path, mp)
+    _make_plugin(tmp_path / "plugins" / "demo-plugin")
+    assert vm.validate_marketplace(tmp_path) == []
+
+
+def test_plugin_entry_extra_keys_are_still_allowed(tmp_path):
+    # unknown-key rejection is scoped to the TWO top-level manifests only.
+    # Plugin ENTRIES inside plugins[] may carry extra keys (category/tags/etc.) -> allowed.
+    mp = _valid_marketplace()
+    mp["plugins"][0]["category"] = "security"
+    mp["plugins"][0]["tags"] = ["sast", "owasp"]
+    mp["plugins"][0]["description"] = "demo"
+    _make_marketplace(tmp_path, mp)
+    _make_plugin(tmp_path / "plugins" / "demo-plugin")
+    assert vm.validate_marketplace(tmp_path) == []
+
+
+def test_real_repo_marketplace_has_no_unknown_top_level_keys():
+    # the real repo must validate clean -- $schema was removed; metadata is allowed
+    assert vm.validate_marketplace(".") == []

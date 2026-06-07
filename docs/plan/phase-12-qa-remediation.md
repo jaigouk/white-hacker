@@ -8,10 +8,22 @@
 ## What the baseline found (the issues to resolve)
 | # | Issue | Evidence |
 |---|-------|----------|
-| I-1 | **AuthN/AuthZ recall is poor** | J=0.25 — 9 of 12 cases missed (FN) |
-| I-2 | **SSRF false-positives** | 5 FP, all `py-ssrf*` benign look-alikes over-flagged |
+| I-1 | **AuthN/AuthZ J=0.25** — Wave A: NOT recall, an open-redirect taxonomy issue. **✅ Wave B FIXED** → open-redirect J=1.0 | J=0.25→**1.0** |
+| I-2 | **SSRF false-positives** — allow-list guard not credited. **✅ Wave B FIXED** → ssrf J=1.0, FP 0 | 5 FP → **0** |
 | I-3 | **Singleton misses** | 1 FN each in crypto, improper-output-handling, tool-poisoning |
 | I-4 | **Baseline is sonnet / single-shot** | DEFERRED in QA-8 — not yet production-opus + k-run |
+
+> **Wave A done (2026-06-07)** — see [`../qa/20260607/wave-a-findings.md`](../qa/20260607/wave-a-findings.md):
+> I-1 root-caused as **taxonomy/scope** (recall is fine — the agent found all 9 open-redirects), I-2 as
+> an **allow-list mitigation the agent doesn't credit**, and the QA-3 smoke caught **4 shipping bugs**
+> (plugin/marketplace `$schema`; 3 skills' invalid-YAML frontmatter → silently-dropped metadata) — all
+> **FIXED**, `lint_skill` hardened with a strict-YAML gate, `claude plugin validate` now ✔ passes.
+
+> **Wave B done (2026-06-07)** — see [`../qa/20260607/waveb-report.md`](../qa/20260607/waveb-report.md):
+> T-12.2 (open-redirect own category) + T-12.3 (SSRF allow-list recognizer) landed as outer-loop
+> Context edits, TDD'd, and verified by a 25-case respin → `keep_or_revert` **KEEP**, baseline
+> **ratcheted 0.835 → 0.971 (FPR → 0)**. Remaining: **T-12.4** (3 singleton FN), **T-12.5** (opus
+> re-baseline), **T-12.6/T-12.7** (remaining tiers + validator hardening).
 
 ## This is outer-loop work (the elegant part)
 The fixes are **Context-surface edits** (reference appendices, checklists, the KB) — *not* code, *not*
@@ -37,44 +49,43 @@ Inherit `docs/plan/README.md`. TDD for any executable change; reference/KB edits
 
 ### T-12.1 · Root-cause the AuthN/AuthZ misses (analysis-first; harness vs agent vs label)
 - **Goal:** explain WHY 9/12 authz cases were missed and decide the cause class (a/b/c above) per case.
-- **Artifact:** `docs/qa/20260607/authz-miss-analysis.md` — per FN case: the agent's actual verdict
-  (from `full-run-mapping.json` + verdicts) vs the label; cause class; fix hypothesis.
+- **Artifact:** `docs/qa/20260607/wave-a-findings.md` — per-finding root cause, cause class, fix hypothesis.
 - **Depends on:** — (consumes QA-8).
 - **Verification criteria:**
-  - [ ] all 9 authz FN cases listed with agent-verdict vs label and a cause class (a/b/c)
-  - [ ] **harness-artifact check:** re-review ≥3 of them giving the agent the FULL case (route+handler+ownership, not the stripped single file); record whether recall improves — i.e. is J=0.25 partly a harness artifact, not a true agent gap?
-  - [ ] a concrete, testable fix hypothesis per real-gap case (what Context edit would catch it)
-- **Status:** todo
+  - [x] all 9 authz FN analysed — ALL are `*-open-redirect-*`: the agent flagged them (right line) but categorized `improper-output-handling` vs the label's `AuthN/AuthZ`. Real authz (BOLA/BOPLA/JWT) = TP. Cause = **(c) taxonomy/scope**.
+  - [x] harness-artifact hypothesis **REJECTED** — the agent flagged every case; not a recall/batching gap (full-case re-review unnecessary).
+  - [x] fix hypothesis: relabel open-redirect to its own category + agent vocab + reconcile exclusion-rule 18 (→ T-12.2).
+- **Status:** done — see `docs/qa/20260607/wave-a-findings.md`.
 
 ### T-12.2 · Lift AuthN/AuthZ recall via the outer loop (Context edit + re-measure)
-- **Goal:** raise the AuthN/AuthZ subset J above 0.25 without regressing overall J or FPR.
-- **Artifact:** `sec-learn`-proposed edits to `plugins/white-hacker/skills/_shared/reference/{api.md,core-checklist.md}` (BOLA/IDOR/BFLA reachability + ownership-check heuristics); re-measured run under `docs/qa/<date>/`.
-- **Depends on:** T-12.1 (only for the cases T-12.1 classes as real agent gaps).
+- **Goal (reframed by T-12.1):** make open-redirect score correctly — a **taxonomy/scope** fix, NOT a recall fix (the agent already finds all 9). Give open-redirect its own category + reconcile scope with exclusion-rule 18.
+- **Artifact:** relabel the 9 `*-open-redirect-*` corpus `label.json` `category` `AuthN/AuthZ`→`open-redirect`; add `open-redirect` to the agent's category vocabulary (review prompt / reference); decide exclusion-rule 18 (keep user-controlled open-redirect as a LOW finding); re-measured run under `docs/qa/<date>/`.
+- **Depends on:** T-12.1.
 - **Verification criteria:**
-  - [ ] AuthN/AuthZ subset J improves materially (target ≥ 0.50) on a re-run — `evals/score.py` per-category
-  - [ ] overall **J ≥ 0.835** and **FPR ≤ 0.049** — `evals/keep_or_revert.py` returns KEEP vs `evals/baseline.json`
-  - [ ] reference edits pass `lint_skill` size caps; diff is reviewable (PATCHES/sec-learn path, human-applied)
-- **Status:** todo
+  - [x] the 9 open-redirect cases score **TP** (category aligned) on the re-run — `evals/score.py`: open-redirect J=1.00
+  - [x] overall **J 0.835→0.971**, **FPR 0.049→0.0** — `keep_or_revert` returned **KEEP**; baseline ratcheted
+  - [x] exclusion-rule 18 decision recorded (user-controlled open-redirect = LOW `open-redirect`; inert excluded); corpus + core-checklist consistent; TDD `test_open_redirect_taxonomy.py`
+- **Status:** done — see `docs/qa/20260607/waveb-report.md`.
 
 ### T-12.3 · Cut the SSRF false-positives (the 5 `py-ssrf*` benigns)
 - **Goal:** stop flagging safe SSRF look-alikes (allow-list + DNS-pin + no server-side fetch) without missing real SSRF.
 - **Artifact:** edits to `_shared/reference/` SSRF guidance + `exclusion-rules.md` ("mitigated SSRF" recognizer; path-only-SSRF already excluded); re-measured ssrf subset.
-- **Depends on:** T-12.1 (FP root-cause of the 5).
+- **Depends on:** — (Wave-A root cause done: the agent doesn't credit a host allow-list `assert urlparse(url).hostname in ALLOW` immediately before the fetch; flagged at conf 0.75, borderline).
 - **Verification criteria:**
-  - [ ] the 5 `py-ssrf*` benigns are NOT flagged on a re-run (subset FP → 0) — `score.py` ssrf `fp`
-  - [ ] ssrf true-positives unchanged (tp = 16; no new FN) and overall J ≥ 0.835 — keep_or_revert KEEP
-  - [ ] a regression case pins it: a benign mitigated-SSRF fixture stays clean AND a real SSRF stays flagged
-- **Status:** todo
+  - [x] the 5 `py-ssrf*` benigns are NOT flagged on the re-run (ssrf **fp 5→0**) — `score.py`
+  - [x] ssrf true-positives unchanged (**tp = 16**, no new FN); overall J ≥ 0.835 — `keep_or_revert` KEEP
+  - [x] pinned by the corpus allow-list benigns (now clean) + core-checklist §3 + exclusion-rule 20 + `test_open_redirect_taxonomy.py::test_ssrf_allowlist_guard_is_excluded`
+- **Status:** done — see `docs/qa/20260607/waveb-report.md`.
 
-### T-12.4 · Resolve the singleton misses (crypto, improper-output-handling, tool-poisoning)
-- **Goal:** root-cause + fix the 1 FN each; reconcile architectural classes with the exclusion rules.
-- **Artifact:** per-case note in the authz/miss analysis doc; targeted reference/KB tweak where it's a real gap.
-- **Depends on:** T-12.1.
+### T-12.4 · Resolve the singleton "misses" (crypto, improper-output-handling, tool-poisoning)
+- **Goal (reframed in Wave-C grooming):** NOT recall — the agent found all 3 (conf 0.95, right line); each is a defensible **category mismatch**. Decide the canonical category per case (or accept synonyms via T-12.8), and teach the LLM05 precedence for `py-llm05-ssrf`.
+- **Artifact:** `docs/qa/20260607/wave-a-findings.md` (root cause); per-case decision + (if chosen) the `score.py` alias map (T-12.8) and/or a core-checklist note that model/tool-output→sink ⇒ `improper-output-handling`.
+- **Depends on:** T-12.8 (if the alias-map route is chosen).
 - **Verification criteria:**
-  - [ ] each of the 3 FN root-caused (real gap vs harness artifact vs label/scope nuance)
-  - [ ] **tool-poisoning** explicitly reconciled: if it's architectural (like prompt-injection on the DO-NOT-REPORT line), record it as a label/scope decision, NOT an agent defect — update the corpus label note or the exclusion rationale rather than forcing a finding
-  - [ ] any Context fix re-measured: overall J ≥ 0.835, no FPR regression — keep_or_revert KEEP
-- **Status:** todo
+  - [x] 3 FN root-caused (Wave-C): `py-hardcoded-secret` crypto↔config; `py-llm05-ssrf` improper-output-handling↔ssrf (real LLM05-framing gap); `py-mcp-tokenpassthrough` tool-poisoning↔data-exfil — all *found*, miscategorized
+  - [ ] decision recorded + applied (per-case align vs alias-map vs accept); re-measured — `keep_or_revert` KEEP, no FPR regression
+  - [ ] `py-llm05-ssrf`: the agent categorizes model/tool-output→sink as `improper-output-handling` (the flagship AI check)
+- **Status:** done — all 3 category nits resolved as correctness fixes (LLM05; hardcoded-secret→`crypto`; `py-mcp-tokenpassthrough` relabeled `tool-poisoning`→`data-exfil`) → **J 0.971→1.0**, `keep_or_revert` KEEP, baseline ratcheted. See `docs/qa/20260607/wavec-report.md`.
 
 ### T-12.5 · Production re-baseline (opus + k-run bootstrap) — the DEFERRED QA-8 item
 - **Goal:** replace the sonnet single-shot baseline with a production-opus, k-run paired-bootstrap baseline so the gate is production-grade.
@@ -83,7 +94,7 @@ Inherit `docs/plan/README.md`. TDD for any executable change; reference/KB edits
 - **Verification criteria:**
   - [ ] baseline.json `model` = opus, k≥3 runs aggregated; drift-guard (`test_baseline_tracks_corpus`) green
   - [ ] refresh documented in `docs/release-checklist.md`; cost recorded
-- **Status:** todo
+- **Status:** DEFERRED (2026-06-07) — trigger: before the first tagged release (production ships `model: opus`). Not now: sonnet already saturates the corpus (J=1.0) and an opus k-run ≈ multi-M tokens. Pairs with T-12.9.
 
 ### T-12.6 · Close the remaining QA tiers (from `qa-flows.md`)
 - **Goal:** finish the live/adversarial tiers still open after the 2026-06-07 cycle.
@@ -93,10 +104,80 @@ Inherit `docs/plan/README.md`. TDD for any executable change; reference/KB edits
   - [ ] QA-3 live: `claude plugin validate` (and/or `--plugin-dir`) loads the plugin; skills namespaced; hooks register
   - [ ] QA-6 live: the first GitHub Actions run (post-push) observed green; fix any runner-specific issue
   - [ ] QA-5 live: a real team-mode handoff (white-hacker → tech-lead via SendMessage, WAIT-exit) exercised
-  - [ ] QA-7: untrusted-input sweep across the remaining ingestion points (reviewed code, KB text, feed content)
+  - [x] QA-7 **reviewed-code** ingestion: agent resists stand-down + FP prompt-injection (`obeyed_any_injected_instruction=false`) — done 2026-06-07. [ ] remaining ingestion points (KB text, feed content)
 - **Status:** todo
 
 ---
+
+### T-12.7 · Harden `validate_manifest.py` to match `claude plugin validate` (QA-3 follow-up)
+- **Goal:** the CI floor validator must reject **unknown top-level keys** in `plugin.json` / `marketplace.json` — the gap that let `$schema` ship past CI until the official `claude plugin validate` caught it (Wave A).
+- **Artifact:** `packaging/validate_manifest.py` + tests.
+- **Depends on:** — (QA-3 finding).
+- **Verification criteria:**
+  - [x] an unknown top-level key → validation error (negative test); real repo validates clean — `validate_manifest.py .` exit 0; packaging suite 29→40
+  - [~] (optional) CI step invokes `claude plugin validate` when present — deferred (CLI/auth not guaranteed in CI)
+- **Status:** done — see `docs/qa/20260607/wavec-report.md`.
+
+### T-12.8 · (optional) `score.py` category-alias map — stop penalizing defensible synonyms
+- **Goal:** credit a finding whose category is a defensible synonym of the label's (Wave-C finding: the
+  agent's recall is ~100%; every FN is a category-NAME disagreement). Add an alias/overlap map so e.g. a
+  `config` finding matches a `crypto` hardcoded-secret — WITHOUT masking genuinely-wrong categories.
+- **Artifact:** `evals/score.py` (conservative alias map + matching) + tests; a documented alias table.
+- **Depends on:** — (QA-8 / Wave-C finding).
+- **Verification criteria:**
+  - [ ] TDD: the alias map credits the defined synonyms; a clearly-wrong category (e.g. `xss` for an SSRF) still scores FN — negative test
+  - [ ] re-score the snapshot → J rises only via accepted synonyms; baseline refreshed transparently (drift-guard green)
+  - [ ] the alias table is conservative + documented (which pairs, and why)
+- **Status:** DECLINED (2026-06-07) — an alias-map masks real miscategorizations (e.g. hardcoded-secret, where the *agent* was the loose one). Resolved instead by per-case correctness alignment in T-12.4.
+
+### T-12.9 · Restore eval headroom — add harder corpus cases (J=1.0 saturation follow-up)
+- **Goal:** the corpus is saturated (J=1.0; recall ~100%) — add discriminating cases so the eval can
+  *measure* agent improvement again, not only catch regressions.
+- **Artifact:** new `evals/corpus/cases/*` paired cases — subtle cross-function/ownership authz,
+  **bypassable** mitigations (weak allow-lists, partial sanitizers), multi-step/chained sinks, broader
+  AI/MCP variety; refreshed baseline + drift-guard.
+- **Depends on:** — (pairs with T-12.5 opus re-baseline).
+- **Verification criteria:**
+  - [ ] ≥ N new harder paired cases (labeled, neutralization-safe); corpus count + drift-guard updated
+  - [ ] the agent does NOT trivially score 1.0 on the expanded set (real headroom restored)
+- **Status:** todo
+
+## Wave C — groomed (2026-06-07)
+Re-examined against the post-Wave-B state (baseline now **J=0.971 / FPR 0**). Grounded, not guessed.
+
+**Headline finding (reframes T-12.4):** the 3 remaining FN are the *same* pattern as open-redirect —
+the agent **found all 3** (vulnerable=true, right line, conf 0.95) but assigned a defensible-but-different
+category. ⇒ **the agent's detection recall on this corpus is ~100%; every J<1.0 is a category-NAME
+disagreement, not a missed vuln.** That changes "remediation" from "improve recall" to "reconcile taxonomy."
+
+**Re-sequenced by readiness:**
+- **T-12.7 (do first)** — gap **confirmed** (a `BOGUS_UNKNOWN_KEY` plugin.json passes `validate_manifest`
+  today). Deterministic, in-session, cheap; closes the CI floor-validator gap. No live run.
+- **T-12.4 / T-12.8 — a DECISION, low urgency** (J=0.971 already). Pick one: (1) per-case align — small
+  but `crypto/config` & `tool-poisoning/data-exfil` are genuinely ambiguous, so partly arbitrary;
+  (2) **T-12.8 alias-map** — general root-cause fix, risk of masking real miscategorizations;
+  (3) teach the **LLM05 precedence** (model/tool-output→sink ⇒ `improper-output-handling`) for
+  `py-llm05-ssrf` only. **TL lean:** T-12.8 alias-map for the 2 ambiguous cases + option-3 for
+  `py-llm05-ssrf` (it's the flagship AI check — worth the right category).
+- **T-12.5 (opus re-baseline) — cost-flagged.** 103 × opus × k≥3 ≈ multi-M tokens; sonnet already hits
+  0.971 with ~perfect recall, so opus's marginal value is mostly *fidelity*. Options: opus **single-shot
+  first** (bound cost) → k-run later; or **defer** until a release needs a production-grade gate.
+- **T-12.6 split by feasibility:** **QA-7** (untrusted-input red-team) doable **in-session now**;
+  **QA-5** (live team-mode) needs `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` + the white-hacker agent type
+  (disconnected this session) → **env-dependent**; **QA-6** (observe CI) needs `gh`/Actions → **manual**.
+
+**Groomed Wave-C order:** T-12.7 (now) → T-12.4 decision (+ T-12.8 if chosen) → QA-7 (in-session) →
+T-12.5 / QA-5 / QA-6 (env- or budget-gated, opt-in).
+
+**Wave C done + decisions resolved (2026-06-07)** — see [`../qa/20260607/wavec-report.md`](../qa/20260607/wavec-report.md):
+**T-12.7 DONE** (validator rejects unknown keys; packaging 40 tests). **T-12.4 DONE** — all 3 category
+nits resolved as correctness fixes (LLM05 model-output→`improper-output-handling`; hardcoded-secret→
+`crypto`; `py-mcp-tokenpassthrough` relabeled `tool-poisoning`→`data-exfil`, the label was wrong per
+ai-llm §4) → **J 0.971→1.0**, `keep_or_revert` KEEP, baseline ratcheted. **T-12.8 DECLINED**
+(alias-map masks real miscategorizations). **QA-7 DONE** (agent resists stand-down + FP injection in
+reviewed code). **T-12.5 DEFERRED** (opus, before a tagged release). **651 tests green.**
+**⚠️ J=1.0 = corpus SATURATED** (recall was ~100%; gains were category corrections) → headroom to
+*measure* improvement is gone, only regression-catching remains → **T-12.9: add harder cases.**
 
 ## Priority / ordering
 **I-1/I-2 first** (highest-impact agent-quality issues), starting with **T-12.1 root-cause** — it may
@@ -121,7 +202,7 @@ before merge. The gate (overall **J ≥ 0.835**, **FPR ≤ 0.049**) is checked p
 |------|--------------|--------|------|
 | **A — analysis** (no gate) | **T-12.1** authz root-cause (incl. harness-vs-agent re-review) · **T-12.3 step 1** ssrf-FP root-cause · **T-12.6 partial** (QA-3 plugin smoke, QA-6 observe CI) | Dev-1+QA · Dev-2 · QA | — |
 | **B — fixes** (parallel, after A) | **T-12.2** authz recall · **T-12.3 step 2** ssrf FP fix · **T-12.4** singletons | Dev-1 · Dev-2 · Dev-3; white-hacker reviews ssrf/exclusion + untrusted-input edits; QA measures each | per-fix + combined: KEEP vs `baseline.json` |
-| **C — after fixes land** | **T-12.5** opus + k-run re-baseline · **T-12.6 remainder** (QA-5 team-mode, QA-7 input sweep) | TL+QA · Dev+white-hacker | drift-guard green |
+| **C — groomed (see Wave-C section)** | **T-12.7** (do first, in-session) → **T-12.4**+**T-12.8** taxonomy decision → **QA-7** (in-session) → **T-12.5** / **QA-5** / **QA-6** (budget/env-gated, opt-in) | Dev (T-12.7/12.8) · TL decides T-12.4 · white-hacker (QA-7) | T-12.7: validate rejects unknown keys · T-12.4/12.8: keep_or_revert KEEP · T-12.5: drift-guard green |
 
 **Dependency DAG:** `T-12.1 → {T-12.2, T-12.4}` · `T-12.3` independent (own analysis) ·
 `{T-12.2, T-12.3, T-12.4} → T-12.5` · `T-12.6` opportunistic. Wave A and the cheap T-12.6 items can

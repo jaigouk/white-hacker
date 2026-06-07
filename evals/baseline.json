@@ -1,15 +1,15 @@
 {
-  "tpr": 0.883495145631068,
-  "fpr": 0.04854368932038835,
-  "youden_j": 0.8349514563106797,
-  "tp": 91,
-  "fn": 12,
-  "fp": 5,
-  "tn": 98,
+  "tpr": 1.0,
+  "fpr": 0.0,
+  "youden_j": 1.0,
+  "tp": 103,
+  "fn": 0,
+  "fp": 0,
+  "tn": 103,
   "n_cases": 103,
   "date": "2026-06-07",
-  "commit": "1e3de23",
+  "commit": "2d3f6b2",
   "model": "claude-sonnet",
   "findings_snapshot": "evals/runs/baseline-findings.json",
-  "note": "MEASURED baseline \u2014 real agent run over all 103 frozen corpus cases (blind, neutralized filenames), 2026-06-07 (QA-8). Replaces the prior SYNTHETIC 32-case snapshot. Model: sonnet (cost-bounded); a production opus run would likely score higher \u2014 re-baseline on opus before relying on the gate for production. Weak spots surfaced: AuthN/AuthZ recall (J=0.25, 9 FN) and SSRF benign over-flagging (5 FP, all py-ssrf*). See docs/qa/20260607/full-baseline-report.md."
+  "note": "MEASURED baseline (Phase-12 Wave A/B/C, sonnet single-shot, 103 curated paired cases). Category fixes: open-redirect own category; SSRF allow-list recognizer; LLM05 (model-output->sink=improper-output-handling); hardcoded-secret->crypto; py-mcp-tokenpassthrough relabeled tool-poisoning->data-exfil (the label was wrong per ai-llm SS4). NOTE: J=1.0 means perfect on these 103 curated pairs (recall was ~100% from QA-8; the gains were category-name corrections), NOT a perfect agent. opus + k-run re-baseline = T-12.5."
 }

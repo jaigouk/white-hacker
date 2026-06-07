@@ -47,6 +47,11 @@ validation. Treat model output exactly like raw user input. Grep the sinks (lang
   - Safe: sanitize (DOMPurify) + strict CSP; block `javascript:`/`data:` URLs.
 - **File path → traversal**, **URL → SSRF** (cross-link `core-checklist.md` §3 / `api.md` API7),
   **template → SSTI**, **`pickle`/`yaml.load`/`Marshal`/`readObject` → unsafe deserialization**.
+- **Categorize as `improper-output-handling`** whenever the tainted *source* is model / tool / RAG
+  output — **even when the sink is SSRF / SQLi / XSS / path / SSTI / deser.** The sink-specific
+  category (`ssrf`, `injection`, `xss`, …) is for *user-input* sources; a **model-output** source rolls
+  up to LLM05 (the AI root cause). E.g. a model-chosen URL passed to `requests.get` is
+  `improper-output-handling`, not `ssrf`.
 - Rule: **enforce structured output (JSON schema / function-call args) and validate it BEFORE any
   sink.** A schema-validated structured value used in a parameterized call is the clean look-alike —
   it must NOT be flagged.

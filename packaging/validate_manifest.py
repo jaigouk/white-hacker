@@ -33,6 +33,41 @@ import sys
 
 KEBAB = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 
+# Allowed TOP-LEVEL keys for plugin.json. The official `claude plugin validate` rejects
+# unknown top-level keys (e.g. a stray "$schema"); we match that floor (T-12.7 / QA-3).
+PLUGIN_TOP_LEVEL_KEYS = frozenset({
+    "name",
+    "displayName",
+    "version",
+    "description",
+    "author",
+    "homepage",
+    "repository",
+    "license",
+    "keywords",
+    "skills",
+    "commands",
+    "agents",
+    "hooks",
+    "mcpServers",
+    "outputStyles",
+    "lspServers",
+    "experimental",
+    "dependencies",
+    "defaultEnabled",
+})
+
+# Allowed TOP-LEVEL keys for marketplace.json. Scoped to the marketplace object ONLY --
+# plugin ENTRIES (plugins[]) and nested objects are NOT key-checked (too varied/risky).
+MARKETPLACE_TOP_LEVEL_KEYS = frozenset({
+    "name",
+    "owner",
+    "plugins",
+    "metadata",
+    "version",
+    "description",
+})
+
 # Component directories that belong at the PLUGIN ROOT, never inside .claude-plugin/.
 COMPONENT_DIRS = {
     "commands",
@@ -75,6 +110,23 @@ def load_plugin(plugin_dir) -> dict:
     """Load and return a plugin manifest dict (raises on read/parse error)."""
     path = pathlib.Path(plugin_dir) / PLUGIN_MANIFEST_REL
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+# --------------------------------------------------------------------------- #
+# unknown-key rejection (top-level manifest objects ONLY)
+# --------------------------------------------------------------------------- #
+def _unknown_top_level_keys(obj: dict, allowed: frozenset[str], what: str) -> list[str]:
+    """Return one error per top-level key in `obj` not present in `allowed`.
+
+    Scoped intentionally to the top-level manifest object: it must NOT be applied to
+    plugin entries (plugins[]) or nested objects, which carry varied/optional keys.
+    """
+    unknown = sorted(k for k in obj if k not in allowed)
+    return [
+        f"{what} has unknown top-level key {k!r} "
+        f"(allowed: {', '.join(sorted(allowed))})"
+        for k in unknown
+    ]
 
 
 # --------------------------------------------------------------------------- #
@@ -124,6 +176,10 @@ def validate_plugin(plugin_dir) -> list[str]:
         errors.append(f"plugin manifest {manifest_path} missing required field 'name'")
     elif not isinstance(name, str) or not KEBAB.match(name):
         errors.append(f"plugin manifest {manifest_path} 'name' must be kebab-case (^[a-z0-9]+(-[a-z0-9]+)*$), got {name!r}")
+
+    errors.extend(
+        _unknown_top_level_keys(obj, PLUGIN_TOP_LEVEL_KEYS, f"plugin manifest {manifest_path}")
+    )
 
     return errors
 
@@ -193,6 +249,9 @@ def validate_marketplace(repo_root) -> list[str]:
 
     if not isinstance(obj, dict):
         return [f"marketplace manifest {manifest_path} must be a JSON object"]
+
+    # unknown top-level keys (marketplace OBJECT only -- plugin entries are not key-checked)
+    errors.extend(_unknown_top_level_keys(obj, MARKETPLACE_TOP_LEVEL_KEYS, "marketplace"))
 
     # required: name (kebab-case)
     name = obj.get("name")
