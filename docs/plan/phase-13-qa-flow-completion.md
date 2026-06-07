@@ -42,30 +42,34 @@ parallel) → `{T-13.7, T-13.8, T-13.9, T-13.10}` (gated tier-3, opportunistic).
 ---
 
 ## Wave A — truth & cheap deterministic (do first; no dependencies)
+> ✅ **Wave A complete (2026-06-07).** T-13.1 qa-flows.md reconciled · T-13.2 QA-1 floor-only **PASS** ·
+> T-13.3 QA-6 CI-contract **PASS**. Evidence: `docs/qa/20260607/qa-1-floor-only-verdict.md`,
+> `qa-6-ci-contract-verdict.md`, the reconciled `qa-flows.md`, and `docs/qa/20260607/wave-a-readme.md`.
+> Method: produce → adversarial-verify (workflow `w1fgb150u`, 4 agents) + maintainer independent re-run.
 
 ### T-13.1 · Reconcile qa-flows.md (+ QA cycle README) with post-T-12.9 state
 - **Why:** rule #7 (source wins) + living-docs — the plan doc reads as the pre-Phase-12 era and will
   mislead the next reader / release decision.
 - **ACs:**
-  - [ ] Coverage matrix QA-1 row → `✅ full 115-case run, J=1.0`; QA-8 row → `n=115, J=1.0`.
-  - [ ] "Why" para test count `634 → 668`; J/n figures current; FINDING-QA1 + QA-8 weak-spots marked
+  - [x] Coverage matrix QA-1 row → `✅ full 115-case run, J=1.0`; QA-8 row → `n=115, J=1.0`.
+  - [x] "Why" para test count `634 → 668`; J/n figures current; FINDING-QA1 + QA-8 weak-spots marked
         resolved with links to `phase-12-qa-remediation.md` + `t-12.9-report.md`.
-  - [ ] T-12.9 / T-12.9b cross-referenced from QA-1/QA-8.
-  - [ ] Probe: `grep -nE 'J=0\.835|634 tests' docs/qa/20260607/qa-flows.md` returns only clearly-marked
+  - [x] T-12.9 / T-12.9b cross-referenced from QA-1/QA-8.
+  - [x] Probe: `grep -nE 'J=0\.835|634 tests' docs/qa/20260607/qa-flows.md` returns only clearly-marked
         *historical* lines (no live-state claim still at 0.835).
 
 ### T-13.2 · QA-1 tier-2 floor-only / tool-degradation
 - **ACs:**
-  - [ ] Run the inner chain with NO external tools available → `SCAN-PLAN.json`/findings carry
+  - [x] Run the inner chain with NO external tools available → `SCAN-PLAN.json`/findings carry
         `tool_assisted:false`, confidence capped, `tools_unavailable` listed; the run does NOT block on
         a missing tool (graceful degradation to the Read/Grep/Glob floor).
-  - [ ] Probe recorded (commands + the degraded artifact).
+  - [x] Probe recorded (commands + the degraded artifact). → `docs/qa/20260607/qa-1-floor-only-verdict.md`
 
 ### T-13.3 · QA-6 CI contract check (tier-2)
 - **ACs:**
-  - [ ] `.github/workflows/ci.yml` valid; per-package loop discovers all **15** packages (probe:
+  - [x] `.github/workflows/ci.yml` valid; per-package loop discovers all **15** packages (probe:
         `find … -name pyproject.toml … | while …; [ -d tests ]` count == 15 == loop count).
-  - [ ] All `uses:` pinned to SHAs; uv version pinned; `ci/security-review.action.yml` pins (model id,
+  - [x] All `uses:` pinned to SHAs; uv version pinned; `ci/security-review.action.yml` pins (model id,
         `@anthropic-ai/claude-code`, action SHAs) current per ADR-006.
 
 ---
