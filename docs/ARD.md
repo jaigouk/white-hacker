@@ -80,6 +80,20 @@ reserved for high-value HIGHs.
 **Rationale:** Safe for side projects; PoC detonation is the strongest FP-killer but costly.
 "No PoC" is weak evidence, not proof of safety.
 
+### Risk register (2026 container-escape evidence) — added 2026-06-08
+*Additive note; the ADR-007 decision above is unchanged.* A container shares the **host
+kernel**, so a single kernel CVE can become a **container → host escape** — every tenant on a
+shared kernel is exposed by one bug. 2026 evidence sharpens the ceiling for any future
+PoC-detonation host: (a) the shared-kernel LPE wave turns "a kernel CVE" into a host-escape
+primitive; (b) microVM (Firecracker/Kata) hardware isolation can still be **bypassed via
+operation-forwarding**; (c) frontier LLMs show **measurable container-sandbox-escape
+capability** (arXiv 2603.02277). Conclusion: **microVM is the ceiling — the strongest practical
+boundary — for any future PoC-detonation host** (gVisor/Docker reduce but do not eliminate
+host-syscall surface), and **shared-kernel CI runners are the weakest link**. This reinforces
+ADR-007's sandboxed-only execution; it does not change what white-hacker reviews (no new
+app-repo detector). Ref: spike-10 (`docs/research/spike-10-linux-kernel-security-2026-06.md`,
+F4 / Decision §INWARD).
+
 ## ADR-008 — Separate discovery (recall) from verification/triage (precision)
 **Status:** accepted
 **Decision:** Discovery and verification are distinct stages with **separate agents** and a

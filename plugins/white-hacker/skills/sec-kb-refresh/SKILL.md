@@ -19,6 +19,11 @@ never auto-merged**. It touches the **fast tier only** (`ai-attack-kb/reference/
    *Live* fetching honors the egress allow-list enforced by `confine_self_writes` (T-8.4).
 2. **Extract.** LLM-extract each new item into a candidate technique **or a newly-useful tool**, and
    map it to a `technique_class` (the five stems) + an ATLAS/OWASP/CVE **source**.
+   - **Kernel-LPE / host-escape / container-escape intel is BACKGROUND threat-intel, NOT a per-repo
+     `ai-attack-kb` technique-class.** It is a host/container concern, not app-source — do **NOT**
+     mint a per-repo app-detector entry for it. Route it as background threat-intel (a researcher
+     memory / note, e.g. `kernel-threat-landscape-2026`), preserving the app-review vs threat-intel
+     separation spike-10 drew (`docs/research/spike-10-linux-kernel-security-2026-06.md`, F1/F4).
 3. **Draft.** Render schema-conforming dated entries — **`metadata.source`+`url`+`retrieved` are
    mandatory** (`to_candidate_entry` / `render_entry`); `confidence` starts low (auto-extracted).
 4. **Validate.** Run `validate_kb` (schema + size caps) and `dedupe_kb` (no duplicate ids; flag
