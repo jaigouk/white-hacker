@@ -57,10 +57,10 @@ Apply on top of DDD + TDD. Bias: **caution over speed on non-trivial work.**
 - **One agent** `.claude/agents/white-hacker.md` (the senior-security-engineer identity +
   stage dispatch), reusable as a `/security-review` command, a delegated subagent, and an
   agent-team teammate.
-- **Composable skills** `.claude/skills/sec-*` chained via on-disk JSON artifacts
+- **Composable skills** `plugins/white-hacker/skills/sec-*` chained via on-disk JSON artifacts
   (`THREAT_MODEL.md → SCAN-PLAN.json → VULN-FINDINGS.json → TRIAGE.json → PATCHES/`).
   Discovery (recall) and triage (precision, fresh context, adversarial N-of-N) are **separate**.
-- **Living KB** `.claude/skills/ai-attack-kb/reference/` — dated, sourced AI-attack technique
+- **Living KB** `plugins/white-hacker/skills/ai-attack-kb/reference/` — dated, sourced AI-attack technique
   entries, progressive-disclosure loaded.
 - **Self-improvement** `/sec-learn` (reflect on FPs/misses → propose diffs) and
   `/sec-kb-refresh` (poll feeds → propose dated KB entries); guardrails via PreToolUse hooks.
@@ -74,7 +74,7 @@ Tools are an implementation detail behind **capability interfaces**. The agent d
 - **Discover, don't assume:** detect which tools are installed at runtime, map them to
   capabilities, and **degrade gracefully** — never block on a missing tool (fall back to the
   floor, mark `tool_assisted:false`, cap confidence, list `tools_unavailable`).
-- **Extensible tool registry** (`.claude/skills/_shared/reference/tool-registry.md`): examples
+- **Extensible tool registry** (`plugins/white-hacker/skills/_shared/reference/tool-registry.md`): examples
   *today* are Opengrep (SAST), OSV-Scanner / Trivy (SCA), gitleaks / trufflehog (secrets),
   native gates (govulncheck/pip-audit/npm audit). These are **illustrative defaults, not
   requirements** — any equivalent tool plugs in behind the same capability.
