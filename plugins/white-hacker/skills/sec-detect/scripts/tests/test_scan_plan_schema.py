@@ -53,6 +53,37 @@ def test_empty_repo_plan_is_valid(tmp_path: Path):
     assert plan["ai_pass"] is False
 
 
+# --- wh-a49: kernel_adjacency is additive + backward-compatible ------------
+def test_emitter_kernel_adjacency_validates(tmp_path: Path):
+    # An eBPF repo: to_dict() now carries kernel_adjacency=["ebpf"] and STILL validates.
+    (tmp_path / "tracer.bpf.c").write_text("// ebpf\n")
+    plan = _plan_dict(tmp_path)
+    assert plan["kernel_adjacency"] == ["ebpf"]   # == expected
+    assert vsp.validate(plan) == []               # validates against the schema
+
+
+def test_emitter_kernel_adjacency_always_present(tmp_path: Path):
+    # The key is always emitted (empty list when no markers) and validates.
+    plan = _plan_dict(tmp_path)
+    assert plan["kernel_adjacency"] == []
+    assert vsp.validate(plan) == []
+
+
+def test_kernel_adjacency_wrong_item_type_is_rejected(tmp_path: Path):
+    # array-of-strings: a non-string item must fail (!= silently accepted).
+    plan = _plan_dict(tmp_path)
+    plan["kernel_adjacency"] = [123]
+    assert vsp.validate(plan) != []
+
+
+def test_kernel_adjacency_optional_for_legacy_artifacts(tmp_path: Path):
+    # Backward-compat: an older SCAN-PLAN with NO kernel_adjacency still validates
+    # (the field is NOT in `required`).
+    legacy = _plan_dict(tmp_path)
+    del legacy["kernel_adjacency"]
+    assert vsp.validate(legacy) == []
+
+
 # --- negative cases --------------------------------------------------------
 def test_missing_degraded_is_rejected(tmp_path: Path):
     plan = _plan_dict(tmp_path, "opengrep")

@@ -66,6 +66,12 @@
       "items": {"type": "string"},
       "uniqueItems": true
     },
-    "fallback": {"type": "string"}
+    "fallback": {"type": "string"},
+    "kernel_adjacency": {
+      "type": "array",
+      "description": "ADVISORY trust-boundary markers (kernel-adjacent / privileged-container code present). Informational only — drives an agent advisory note, NOT a finding (no CVSS, never a VULN-FINDINGS.json entry). Optional, so legacy SCAN-PLAN artifacts without it still validate.",
+      "items": {"type": "string"},
+      "uniqueItems": true
+    }
   }
 }

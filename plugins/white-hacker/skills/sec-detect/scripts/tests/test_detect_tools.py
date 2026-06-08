@@ -251,7 +251,156 @@ def test_to_dict_has_required_scan_plan_keys(tmp_path: Path):
     d = dt.build_scan_plan(tmp_path, _which_only("opengrep")).to_dict()
     for key in ("schema_version", "languages", "infra", "frameworks",
                 "available_tools", "ai_pass", "category_tool", "degraded",
-                "reference_appendices", "fallback"):
+                "reference_appendices", "fallback", "kernel_adjacency"):
         assert key in d, f"missing {key}"
     assert isinstance(d["degraded"], list)
     assert isinstance(d["ai_pass"], bool)
+
+
+# === wh-a49 (spike-10 T-A): kernel/container trust-boundary awareness ======
+# ADVISORY altitude (ADR-018): deterministic detection only — NO CVSS, NEVER a
+# VULN-FINDINGS entry. Each invariant pins == expected AND != the wrong value
+# (Rule 9). Markers: "ebpf", "kernel-module", "privileged-container".
+
+# --- eBPF marker ---
+def test_kernel_adjacency_ebpf_bpf_c_file(tmp_path: Path):
+    (tmp_path / "tracer.bpf.c").write_text("// SEC(\"tracepoint\")\n")
+    markers = dt.detect_kernel_adjacency(tmp_path)
+    assert "ebpf" in markers          # == expected
+    assert "kernel-module" not in markers  # != the wrong class
+    assert "privileged-container" not in markers
+
+
+def test_kernel_adjacency_ebpf_go_mod_libbpf(tmp_path: Path):
+    (tmp_path / "go.mod").write_text(
+        "module x\n\nrequire github.com/cilium/ebpf v0.16.0\n"
+    )
+    markers = dt.detect_kernel_adjacency(tmp_path)
+    assert "ebpf" in markers
+    assert markers == ["ebpf"]  # only the eBPF class, nothing spurious
+
+
+def test_kernel_adjacency_ebpf_bpf2go(tmp_path: Path):
+    (tmp_path / "go.mod").write_text(
+        "module x\n\nrequire github.com/aquasecurity/libbpfgo v0.7.0\n"
+    )
+    assert "ebpf" in dt.detect_kernel_adjacency(tmp_path)
+
+
+def test_kernel_adjacency_ebpf_bpftrace_script(tmp_path: Path):
+    (tmp_path / "trace.bt").write_text("tracepoint:syscalls:sys_enter_open { @[comm] = count(); }\n")
+    assert dt.detect_kernel_adjacency(tmp_path) == ["ebpf"]
+
+
+# --- kernel-module marker ---
+def test_kernel_adjacency_kbuild(tmp_path: Path):
+    (tmp_path / "Kbuild").write_text("obj-m += foo.o\n")
+    markers = dt.detect_kernel_adjacency(tmp_path)
+    assert "kernel-module" in markers
+    assert "ebpf" not in markers
+
+
+def test_kernel_adjacency_makefile_obj_m(tmp_path: Path):
+    (tmp_path / "Makefile").write_text("obj-m += hello.o\n\nall:\n\tmake -C /lib/modules\n")
+    assert dt.detect_kernel_adjacency(tmp_path) == ["kernel-module"]
+
+
+def test_kernel_adjacency_ko_file(tmp_path: Path):
+    (tmp_path / "driver.ko").write_bytes(b"\x7fELF")
+    assert "kernel-module" in dt.detect_kernel_adjacency(tmp_path)
+
+
+def test_kernel_adjacency_dkms_conf(tmp_path: Path):
+    (tmp_path / "dkms.conf").write_text('PACKAGE_NAME="foo"\nPACKAGE_VERSION="1.0"\n')
+    assert dt.detect_kernel_adjacency(tmp_path) == ["kernel-module"]
+
+
+def test_plain_makefile_without_obj_m_is_not_kernel_module(tmp_path: Path):
+    # A normal app Makefile must NOT be misread as a kernel module.
+    (tmp_path / "Makefile").write_text("build:\n\tgo build ./...\ntest:\n\tgo test ./...\n")
+    assert dt.detect_kernel_adjacency(tmp_path) == []
+
+
+# --- privileged-container marker ---
+def test_kernel_adjacency_compose_privileged(tmp_path: Path):
+    (tmp_path / "docker-compose.yml").write_text(
+        "services:\n  app:\n    image: x\n    privileged: true\n"
+    )
+    markers = dt.detect_kernel_adjacency(tmp_path)
+    assert "privileged-container" in markers
+    assert "ebpf" not in markers
+
+
+def test_kernel_adjacency_k8s_privileged_pod(tmp_path: Path):
+    (tmp_path / "pod.yaml").write_text(
+        "apiVersion: v1\nkind: Pod\nspec:\n  containers:\n  - name: c\n"
+        "    securityContext:\n      privileged: true\n"
+    )
+    assert dt.detect_kernel_adjacency(tmp_path) == ["privileged-container"]
+
+
+def test_kernel_adjacency_k8s_host_namespaces(tmp_path: Path):
+    (tmp_path / "deploy.yaml").write_text(
+        "apiVersion: apps/v1\nkind: Deployment\nspec:\n  template:\n    spec:\n"
+        "      hostPID: true\n      hostNetwork: true\n"
+    )
+    assert "privileged-container" in dt.detect_kernel_adjacency(tmp_path)
+
+
+def test_kernel_adjacency_k8s_hostpath(tmp_path: Path):
+    (tmp_path / "vol.yaml").write_text(
+        "apiVersion: v1\nkind: Pod\nspec:\n  volumes:\n  - name: h\n"
+        "    hostPath:\n      path: /\n"
+    )
+    assert "privileged-container" in dt.detect_kernel_adjacency(tmp_path)
+
+
+def test_kernel_adjacency_cap_sys_admin(tmp_path: Path):
+    (tmp_path / "pod.yaml").write_text(
+        "spec:\n  containers:\n  - securityContext:\n      capabilities:\n"
+        "        add: [CAP_SYS_ADMIN]\n"
+    )
+    assert "privileged-container" in dt.detect_kernel_adjacency(tmp_path)
+
+
+# --- negative: plain app repo -> empty (the key advisory invariant) ---
+def test_plain_app_repo_has_no_kernel_adjacency(tmp_path: Path):
+    (tmp_path / "go.mod").write_text("module x\nrequire github.com/go-chi/chi v5\n")
+    (tmp_path / "main.go").write_text("package main\nfunc main() {}\n")
+    (tmp_path / "Dockerfile").write_text("FROM scratch\nUSER 10001\n")
+    (tmp_path / "deploy.yaml").write_text(
+        "apiVersion: apps/v1\nkind: Deployment\nspec:\n  template:\n    spec:\n"
+        "      securityContext:\n        runAsNonRoot: true\n"
+    )
+    assert dt.detect_kernel_adjacency(tmp_path) == []  # == empty
+
+
+def test_empty_repo_has_no_kernel_adjacency(tmp_path: Path):
+    assert dt.detect_kernel_adjacency(tmp_path) == []
+
+
+# --- combined repo: multiple marker classes, sorted + deduped ---
+def test_kernel_adjacency_multiple_classes_sorted(tmp_path: Path):
+    (tmp_path / "probe.bpf.c").write_text("// ebpf\n")
+    (tmp_path / "Kbuild").write_text("obj-m += m.o\n")
+    (tmp_path / "docker-compose.yml").write_text("services:\n  a:\n    privileged: true\n")
+    markers = dt.detect_kernel_adjacency(tmp_path)
+    assert markers == ["ebpf", "kernel-module", "privileged-container"]  # sorted, deduped
+
+
+# --- the field is additive on ScanPlan / to_dict + populated in build_scan_plan ---
+def test_scan_plan_populates_kernel_adjacency(tmp_path: Path):
+    (tmp_path / "tracer.bpf.c").write_text("// ebpf\n")
+    plan = dt.build_scan_plan(tmp_path, _which_only())
+    assert plan.kernel_adjacency == ["ebpf"]
+    assert plan.to_dict()["kernel_adjacency"] == ["ebpf"]
+
+
+def test_scan_plan_kernel_adjacency_default_empty(tmp_path: Path):
+    # Always emitted, empty list when no markers (advisory metadata, not a finding).
+    (tmp_path / "go.mod").write_text("module x\n")
+    plan = dt.build_scan_plan(tmp_path, _which_only())
+    assert plan.kernel_adjacency == []
+    d = plan.to_dict()
+    assert d["kernel_adjacency"] == []
+    assert isinstance(d["kernel_adjacency"], list)

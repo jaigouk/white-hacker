@@ -121,6 +121,31 @@ SCANNER_PREFERENCE: dict[str, list[tuple[str, str]]] = {
 # Categories whose relevance is conditional on something in the repo.
 _CONDITIONAL_CATEGORIES = {"iac", "ai-redteam"}
 
+# --- kernel/container trust-boundary awareness (spike-10 T-A, ADR-018) -----
+# ADVISORY altitude: this is informational SCAN-PLAN metadata that DRIVES an
+# agent advisory note (like the absent-SECURITY.md hygiene note) — it is NOT a
+# finding (no CVSS, never a VULN-FINDINGS.json entry). It recognizes that a repo
+# ships kernel-adjacent / privileged-container code so the agent can route
+# attention to specialist tooling. **NO kernel/eBPF memory-safety auditing**
+# (Rule 5: that is fuzzer/specialist work, out of this review's scope — spike-10
+# F2/F6). Detection is deterministic file-presence + light content scan only.
+
+# eBPF go.mod import-path tokens (matched case-insensitively in go.mod text).
+_EBPF_GOMOD_TOKENS: tuple[str, ...] = (
+    "libbpf",
+    "cilium/ebpf",
+    "aquasecurity/libbpfgo",
+    "bpf2go",
+)
+# Privileged-container markers in compose / k8s YAML (matched case-insensitively).
+_PRIVILEGED_CONTAINER_TOKENS: tuple[str, ...] = (
+    "privileged:",
+    "hostpid",
+    "hostnetwork",
+    "hostpath",
+    "cap_sys_admin",
+)
+
 
 @dataclass
 class ScanPlan:
@@ -133,6 +158,9 @@ class ScanPlan:
     category_tool: dict[str, str | None] = field(default_factory=dict)
     degraded_categories: list[str] = field(default_factory=list)
     reference_appendices: list[str] = field(default_factory=list)
+    # ADVISORY trust-boundary markers (spike-10 T-A, ADR-018): informational
+    # metadata that drives an agent advisory note — NOT a finding, no CVSS.
+    kernel_adjacency: list[str] = field(default_factory=list)
 
     @property
     def degraded(self) -> bool:
@@ -151,6 +179,8 @@ class ScanPlan:
             "degraded": self.degraded_categories,
             "reference_appendices": self.reference_appendices,
             "fallback": "read-grep-glob heuristic pass (confidence capped)",
+            # Always emitted; empty list when no kernel-adjacent markers found.
+            "kernel_adjacency": self.kernel_adjacency,
         }
 
 
@@ -172,6 +202,69 @@ def detect_infra(root: Path) -> list[str]:
         if (root / signal).exists():
             found.add(label)
     return sorted(found)
+
+
+def _iter_files(root: Path):
+    """Yield regular files under `root` (recursive), skipping unreadable trees."""
+    try:
+        for p in root.rglob("*"):
+            if p.is_file():
+                yield p
+    except OSError:
+        return
+
+
+def detect_kernel_adjacency(root: Path) -> list[str]:
+    """Sorted marker classes for kernel-adjacent / privileged-container code.
+
+    ADVISORY only (spike-10 T-A, ADR-018): deterministic file-presence + light
+    content scan. Returns a subset of {"ebpf", "kernel-module",
+    "privileged-container"} — informational metadata that drives an agent
+    advisory note, NOT a finding (no CVSS, never a VULN-FINDINGS.json entry).
+    **No memory-safety verdicts** (Rule 5).
+
+    - ebpf: a `*.bpf.c` file, OR libbpf/cilium/ebpf/aquasecurity/libbpfgo/bpf2go
+      in `go.mod`, OR a bpftrace (`*.bt`) script.
+    - kernel-module: a `Kbuild` file, `obj-m` in a `Makefile`, a `*.ko`, or
+      `dkms.conf`.
+    - privileged-container: `privileged:` in a docker-compose file, OR k8s
+      `privileged: true` / hostPID / hostNetwork / hostPath / `CAP_SYS_ADMIN`
+      in a YAML manifest.
+    """
+    markers: set[str] = set()
+
+    # --- kernel-module: exact-name signals (no content read needed) ---
+    if (root / "Kbuild").exists() or (root / "dkms.conf").exists():
+        markers.add("kernel-module")
+
+    # `obj-m` in a Makefile is the canonical out-of-tree module build line.
+    makefile = root / "Makefile"
+    if makefile.is_file() and "obj-m" in _read_manifest_text(root, "Makefile"):
+        markers.add("kernel-module")
+
+    # --- eBPF: go.mod import paths ---
+    gomod = _read_manifest_text(root, "go.mod")
+    if gomod and any(tok in gomod for tok in _EBPF_GOMOD_TOKENS):
+        markers.add("ebpf")
+
+    # --- file-suffix + content signals (single recursive walk) ---
+    for path in _iter_files(root):
+        name = path.name.lower()
+        if name.endswith(".bpf.c") or name.endswith(".bt"):
+            markers.add("ebpf")
+            continue
+        if name.endswith(".ko"):
+            markers.add("kernel-module")
+            continue
+        if name.endswith((".yml", ".yaml")):
+            try:
+                text = path.read_text(encoding="utf-8", errors="ignore").lower()
+            except (OSError, ValueError):
+                continue
+            if any(tok in text for tok in _PRIVILEGED_CONTAINER_TOKENS):
+                markers.add("privileged-container")
+
+    return sorted(markers)
 
 
 def _read_manifest_text(root: Path, filename: str) -> str:
@@ -272,6 +365,7 @@ def build_scan_plan(root: Path, which=shutil.which) -> ScanPlan:
         category_tool=category_tool,
         degraded_categories=degraded,
         reference_appendices=reference_appendices(languages, frameworks, infra, ai_pass),
+        kernel_adjacency=detect_kernel_adjacency(root),
     )
 
 

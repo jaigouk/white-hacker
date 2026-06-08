@@ -24,6 +24,18 @@ ARG NPM_TOKEN=...                    USER 10001
 - Render before scanning: `helm template . | trivy config -` (scan the *rendered* manifests).
 - No secrets in `ConfigMap`/plain manifests; use a secret store / sealed secrets.
 
+> **Why these hardening checks matter — shared-kernel → host escape** (spike-10): a container is **not**
+> a VM. Every container on a host **shares the one host kernel**, so a single kernel CVE turns a
+> weakly-confined container into a **host escape** — the 2024–2026 LPE wave repeatedly demonstrated
+> "kernel bug ⇒ container breakout." The checklist above (run as non-root + numeric UID, drop `ALL`
+> capabilities, no `--privileged` / `CAP_SYS_ADMIN`, no `hostPID`/`hostNetwork`/`hostPath`,
+> `allowPrivilegeEscalation: false`, digest-pinned base image) **is** the mitigation: it shrinks the
+> kernel-syscall attack surface a compromised container can reach. A container that runs `--privileged`
+> or adds `CAP_SYS_ADMIN` effectively re-shares the host kernel with near-root reach — that is the case
+> where the kernel-adjacency advisory note (below) matters most. **Out of scope:** auditing the host
+> kernel itself, eBPF bytecode verifier-safety, or kernel memory-safety (Rule 5 — fuzzer/specialist work;
+> use `kernel-hardening-checker`/KSPP for host config, syzkaller/Buzzer for kernel/eBPF bugs).
+
 ## GitHub Actions / CI
 - **Least privilege:** top-level `permissions: contents: read`; widen per-job only as needed; prefer
   OIDC over long-lived cloud creds.
@@ -41,3 +53,21 @@ ARG NPM_TOKEN=...                    USER 10001
 `FROM .*:latest` / `USER root` / `ARG .*(TOKEN|SECRET|KEY)` · k8s `privileged: true` / `hostPath` /
 missing `runAsNonRoot` · Actions `pull_request_target` + `actions/checkout` of the PR head · `${{
 github.event` inside `run:` · `uses: .*@v[0-9]` (tag, not SHA) · base images without `@sha256:`.
+
+### Kernel/container trust-boundary markers (ADVISORY only — spike-10, ADR-018)
+`sec-detect` surfaces these as `kernel_adjacency` in `SCAN-PLAN.json`; they drive an **informational
+trust-boundary note**, NOT a finding (no CVSS, never a `VULN-FINDINGS.json` entry). When present, the
+code crosses into kernel-execution / elevated-privilege territory — verifier-safety and kernel
+memory-safety are **out of this review's scope** (Rule 5); point the developer at specialist tooling.
+- **eBPF** — `*.bpf.c` programs · `libbpf` / `cilium/ebpf` / `aquasecurity/libbpfgo` / `bpf2go` in
+  `go.mod` · `bpftrace` (`*.bt`) scripts. (These load programs that run **in-kernel** with
+  `CAP_BPF`/`CAP_SYS_ADMIN`.) Specialist: syzkaller/Buzzer.
+- **kernel-module / driver / DKMS** — `Kbuild` · `obj-m` in a `Makefile` · `*.ko` · `dkms.conf`.
+  Specialist: kernel review + the SCA pin-and-verify path for out-of-tree module/DKMS sources (ADR-006).
+- **privileged-container** — compose `privileged:` · k8s `privileged: true` / `hostPID` / `hostNetwork`
+  / `hostPath` / `CAP_SYS_ADMIN`. (This is the shared-kernel → host-escape case above.)
+
+The **in-scope** review for these is ordinary **privilege/authorization review of the *userspace*
+loader code** (which capabilities are requested, whether program/module loading is gated by untrusted
+input, whether maps/volumes are over-exposed) — the marker just *routes attention*; it does not add a
+verdict type or a memory-safety audit.
