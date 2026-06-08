@@ -38,6 +38,30 @@ def harvest(traces_dir) -> dict:
     }
 
 
+def correction_records(rows) -> list[dict]:
+    """Normalize kind=='correction' trace rows into {scene, wrong, correct} records.
+
+    si-10 borrowing #4 (COLLEAGUE map #4): an inspectable "what fired wrong + the fix" triple,
+    the ground-truth the keep-or-revert ratchet mines. Append-only, deterministic, no LLM.
+
+    Mapping (from the capture-hook row shape, `capture_hooks.py:48-57` — a correction row carries
+    `tool`, `target`, `session`, `correction`):
+        scene   <- `target`     (the redacted command / file_path the correction is about)
+        wrong   <- `tool`       (the tool/action that fired and was corrected)
+        correct <- `correction` (the user's natural-language correction — the fix)
+    Each field falls back to "" when absent (never None, never KeyError).
+    """
+    return [
+        {
+            "scene": r.get("target") or "",
+            "wrong": r.get("tool") or "",
+            "correct": r.get("correction") or "",
+        }
+        for r in rows
+        if r.get("kind") == "correction"
+    ]
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     if not argv:
