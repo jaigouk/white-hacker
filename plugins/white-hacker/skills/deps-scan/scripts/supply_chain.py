@@ -779,6 +779,147 @@ def score(hits: list[dict]) -> tuple[bool, str]:
 
 
 # --------------------------------------------------------------------------- #
+# wh-7rk — out-of-tree kernel-module / DKMS pin-and-verify check (ADR-006).
+#
+# The DETECTION of kernel-module/DKMS PRESENCE is done elsewhere (sec-detect:
+# detect_kernel_adjacency flags Kbuild/obj-m/*.ko/dkms.conf). This is the residual
+# supply-chain pin-and-verify FLOOR: when a `dkms.conf` exists OR a `Makefile`
+# contains `obj-m` (an out-of-tree module build), read it + any build scripts it
+# references and flag UNPINNED source fetches as a supply-chain candidate. A pinned
+# source (immutable ref / digest-verified) is clean. NEVER raises; NEVER blocks.
+# Pure, stdlib, tool_assisted:false — capped via dg.cap_floor_confidence (Rule 5).
+# --------------------------------------------------------------------------- #
+_ADR006_REC = (
+    "Pin the out-of-tree module / DKMS source by digest or an immutable ref and "
+    "verify before build (ADR-006)."
+)
+_KERNEL_KB_REF = "AISEC-SUPPLY-CHAIN-001"
+
+# An UNPINNED tarball/blob fetch: curl/wget of an http(s):// URL on one command line.
+_UNPINNED_HTTP_FETCH_RE = re.compile(r"\b(?:curl|wget)\b[^\n;|&]*\bhttps?://", re.IGNORECASE)
+# A `git clone` of an http(s)/git URL. Pinning is decided separately (a clone line is a
+# candidate UNLESS it carries an immutable ref on the SAME line).
+_GIT_CLONE_RE = re.compile(r"\bgit\s+clone\b[^\n;|&]*", re.IGNORECASE)
+# Immutable-ref markers that make a `git clone` line PINNED: a `--branch <tag>` /
+# `--branch=<tag>` (release tag), a `#<sha>` commit fragment (attached to the URL — a
+# 7–40 hex run, distinguishing it from a spaced `# comment`), or `--revision`/`-b <tag>`.
+_GIT_PINNED_RE = re.compile(
+    r"--branch[=\s]\S+|--revision[=\s]\S+|#[0-9a-fA-F]{7,40}\b|\B-b\s+\S+",
+)
+# A digest/checksum verification on the SAME fetch line makes an http(s) fetch PINNED.
+_DIGEST_VERIFY_RE = re.compile(r"sha256sum|sha512sum|sha1sum|sha256:|sha512:|\bgpg\b", re.IGNORECASE)
+
+
+def _line_is_pinned(line: str) -> bool:
+    """A build line that fetches a source is PINNED when it carries an immutable ref
+    (`git clone --branch <tag>` / `#<sha>`) or a same-line digest/checksum verify."""
+    return bool(_GIT_PINNED_RE.search(line) or _DIGEST_VERIFY_RE.search(line))
+
+
+def _unpinned_fetch_lines(text: str) -> list[str]:
+    """Return the source-fetch lines in `text` that are UNPINNED.
+
+    An UNPINNED line is a `curl`/`wget` of an http(s) URL, or a `git clone`, that does
+    NOT carry an immutable ref / same-line digest verification. Pinned fetches are
+    excluded. Pure string scan over INERT on-disk text — never executes anything."""
+    unpinned: list[str] = []
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+        is_fetch = bool(_UNPINNED_HTTP_FETCH_RE.search(line) or _GIT_CLONE_RE.search(line))
+        if is_fetch and not _line_is_pinned(line):
+            unpinned.append(line)
+    return unpinned
+
+
+def _kernel_build_files(root: Path) -> list[Path]:
+    """The kernel-module/DKMS build files to read: `dkms.conf` + an `obj-m` `Makefile`,
+    plus any in-repo build script (`*.sh`) those files reference. Empty when neither a
+    `dkms.conf` nor an `obj-m` Makefile is present (so the check is out of scope)."""
+    dkms = root / "dkms.conf"
+    makefile = root / "Makefile"
+    has_dkms = dkms.is_file()
+    makefile_text = _read_text(str(makefile)) if makefile.is_file() else ""
+    has_objm = "obj-m" in makefile_text
+    if not has_dkms and not has_objm:
+        return []  # no kernel-module / DKMS artifact → out of scope
+
+    files: list[Path] = []
+    if has_dkms:
+        files.append(dkms)
+    if has_objm:
+        files.append(makefile)
+
+    # Resolve referenced in-repo build scripts (e.g. `sh build.sh`) from the build text.
+    combined = (_read_text(str(dkms)) if has_dkms else "") + "\n" + makefile_text
+    for token in re.split(r"\s+|&&|\|\||;|\"|'", combined):
+        token = token.strip()
+        if not token or not token.endswith(".sh"):
+            continue
+        cand = root / token
+        if cand.is_file() and cand not in files:
+            files.append(cand)
+
+    seen: set[Path] = set()
+    return [p for p in files if not (p in seen or seen.add(p))]
+
+
+def scan_kernel_module_sources(project_dir: str) -> list[dict]:
+    """Flag UNPINNED out-of-tree kernel-module / DKMS source fetches (ADR-006).
+
+    Triggered when a `dkms.conf` exists OR a `Makefile` contains `obj-m`. Reads those
+    files + any build scripts they reference and emits an advisory supply-chain
+    candidate per file that fetches an unpinned source (curl/wget of http(s), or a
+    `git clone` without an immutable ref). Returns [] when no kernel-module/DKMS files
+    exist OR every source is already pinned. NEVER raises; NEVER blocks; pure stdlib."""
+    root = Path(project_dir)
+    findings: list[dict] = []
+    for path in _kernel_build_files(root):
+        text = _read_text(str(path))
+        if not text:
+            continue
+        unpinned = _unpinned_fetch_lines(text)
+        if not unpinned:
+            continue  # every source in this file is pinned → clean
+        findings.append(_make_kernel_finding(str(path), unpinned))
+    return findings
+
+
+def _make_kernel_finding(build_file: str, unpinned_lines: list[str]) -> dict:
+    """Advisory supply-chain finding for an unpinned kernel-module / DKMS source fetch.
+
+    LOW severity (advisory floor): a single static heuristic, not a confirmed exploit.
+    `tool_assisted:false` → confidence capped by dg.cap_floor_confidence."""
+    n = len(unpinned_lines)
+    scenario = (
+        f"out-of-tree kernel-module / DKMS build {build_file} fetches "
+        f"{n} UNPINNED source{'s' if n != 1 else ''} (curl/wget of an http(s) URL, or "
+        f"`git clone` without an immutable ref) — a tampered or hijacked source builds "
+        f"into the kernel at install time; static_review_only, triage decides (ADR-006)."
+    )
+    finding = {
+        "id": "F-000",  # renumbered by scan() when merged into the document
+        "canonical_of": None,
+        "file": build_file,
+        "line": 0,
+        "severity": "LOW",
+        "category": _CATEGORY,
+        "owasp": list(_OWASP),
+        "preconditions": [],
+        "access_required": "unknown",
+        "verified": "static_review_only",
+        "confidence": _CONFIDENCE["LOW"],
+        "exploit_scenario": scenario,
+        "recommendation": _ADR006_REC,
+        "first_link": build_file,
+        "tool_assisted": False,  # this is the floor — never tool-backed
+        "kb_refs": [_KERNEL_KB_REF],
+    }
+    return dg.cap_floor_confidence(finding)
+
+
+# --------------------------------------------------------------------------- #
 # scan — build a finding-schema.json-valid document
 # --------------------------------------------------------------------------- #
 def _dominant_signal(hits: list[dict]) -> str:
@@ -806,10 +947,18 @@ def scan(project_dir: str, scan_plan: dict | None = None,
     `malware_db` None → S8 degrades; `summary.tools_unavailable` records `malware-db`.
     `allowlist` overrides the curated `reference/ai-sdk-allowlist.json` (S4/S5) — used to
     pass an ecosystem-specific allowlist (e.g. a module path / `groupId:artifactId`)."""
+    # wh-7rk: the kernel-module / DKMS pin-and-verify pass is ECOSYSTEM-INDEPENDENT — a
+    # bare out-of-tree module repo carries no package.json, so run it regardless of (and
+    # before) the ecosystem dispatch. Findings are merged + renumbered into the document.
+    kernel_findings = scan_kernel_module_sources(project_dir)
+
     detected = detect_ecosystem(project_dir)
     if detected is None:
-        # no recognized manifest → empty-but-valid result (floor degrade), no lang.
-        return _build_doc([], _empty_norm(), scan_plan, malware_db, scoring_standard, "")
+        # no recognized manifest → only the kernel-module pass can contribute (floor
+        # degrade, no lang). Renumber any kernel findings into a valid document.
+        merged = _renumber(kernel_findings, start=1)
+        return _build_doc(merged, _empty_norm(), scan_plan, malware_db,
+                          scoring_standard, "")
     adapter, lang, manifest_name = detected
     norm = adapter(project_dir)  # type: ignore[operator]
     allowlist = load_allowlist() if allowlist is None else list(allowlist)
@@ -874,7 +1023,25 @@ def scan(project_dir: str, scan_plan: dict | None = None,
         findings.append(_make_script_finding(idx, spath, pats, manifest_path))
         idx += 1
 
+    # 3) wh-7rk: out-of-tree kernel-module / DKMS unpinned-source candidates (ADR-006),
+    # appended after the ecosystem candidates and renumbered into the same id sequence.
+    for kf in kernel_findings:
+        kf = dict(kf)
+        kf["id"] = f"F-{idx:03d}"
+        findings.append(kf)
+        idx += 1
+
     return _build_doc(findings, norm, scan_plan, malware_db, scoring_standard, lang)
+
+
+def _renumber(findings: list[dict], start: int = 1) -> list[dict]:
+    """Re-stamp `id` as a contiguous `F-NNN` sequence from `start` (copies each dict)."""
+    out: list[dict] = []
+    for offset, fnd in enumerate(findings):
+        f = dict(fnd)
+        f["id"] = f"F-{start + offset:03d}"
+        out.append(f)
+    return out
 
 
 def _make_finding(idx: int, name: str, dep: dict, hits: list[dict], severity: str,

@@ -373,3 +373,181 @@ def test_demo_poc_scans_and_validates():
     doc = sc.scan(str(demo))
     assert vf.validate(doc) == []
     assert _emitted(doc), "the demo's bad package must surface ≥1 candidate"
+
+
+# --------------------------------------------------------------------------- #
+# wh-7rk — out-of-tree kernel-module / DKMS pin-and-verify check (ADR-006).
+#
+# The DETECTION of kernel-module/DKMS PRESENCE is already done (wh-a49:
+# detect_kernel_adjacency). This residual check is the supply-chain pin-and-verify
+# floor: a `dkms.conf` OR an `obj-m` Makefile whose build FETCHES UNPINNED sources
+# (curl/wget of an http(s) URL, or `git clone` without a pinned ref) is a
+# supply-chain candidate; a PINNED source (immutable ref / digest-verified) is clean.
+#
+# The curl/wget/git strings below are INERT detection data — same discipline as the
+# eval corpus's neutralized filenames. They are NEVER executed.
+# --------------------------------------------------------------------------- #
+_ADR006_REC = (
+    "Pin the out-of-tree module / DKMS source by digest or an immutable ref and "
+    "verify before build (ADR-006)."
+)
+
+
+def test_dkms_conf_unpinned_tarball_emits_supply_chain_candidate(tmp_path):
+    # A dkms.conf whose POST_BUILD fetches an UNPINNED tarball over https → candidate.
+    proj = tmp_path / "mod"
+    proj.mkdir()
+    (proj / "dkms.conf").write_text(
+        'PACKAGE_NAME="acme-drv"\n'
+        'PACKAGE_VERSION="1.0"\n'
+        "# inert detection data — never executed:\n"
+        "MAKE[0]=\"curl https://example.test/blob/acme-drv.tar.gz -o src.tgz && make\"\n"
+    )
+    doc = sc.scan(str(proj))
+    f = _emitted(doc)
+    assert len(f) >= 1, "an unpinned DKMS source fetch must surface a candidate"
+    cand = next(x for x in f if "dkms.conf" in x["file"])
+    assert cand["category"] == "supply-chain"
+    assert cand["category"] != "injection"          # the wrong category
+    assert cand["recommendation"] == _ADR006_REC
+    assert "ADR-006" in cand["recommendation"]
+    assert cand["severity"] in {"LOW", "MEDIUM"}
+    assert cand["severity"] != "HIGH"               # advisory, not HIGH
+    assert cand["access_required"] == "unknown"
+    assert cand["verified"] == "static_review_only"
+    assert cand["tool_assisted"] is False
+    assert cand["tool_assisted"] is not True        # the wrong value
+    assert cand["confidence"] <= 0.8                # floor cap
+    assert vf.validate(doc) == []
+
+
+def test_objm_makefile_unpinned_wget_emits_candidate(tmp_path):
+    # An out-of-tree module Makefile (`obj-m`) whose recipe wgets an unpinned URL.
+    proj = tmp_path / "mod"
+    proj.mkdir()
+    (proj / "Makefile").write_text(
+        "obj-m += acme.o\n"
+        "fetch:\n"
+        "\t# inert detection data — never executed:\n"
+        "\twget http://example.test/vendor/firmware.bin\n"
+    )
+    doc = sc.scan(str(proj))
+    f = _emitted(doc)
+    assert len(f) >= 1
+    cand = next(x for x in f if x["file"].endswith("Makefile"))
+    assert cand["category"] == "supply-chain"
+    assert cand["recommendation"] == _ADR006_REC
+    assert cand["severity"] != "HIGH"
+    assert vf.validate(doc) == []
+
+
+def test_objm_makefile_referenced_build_script_unpinned_git_clone(tmp_path):
+    # The Makefile references a build script that does an UNPINNED `git clone`
+    # (no `#<sha>` / `--branch <tag>` / immutable ref) → candidate against the script.
+    proj = tmp_path / "mod"
+    proj.mkdir()
+    (proj / "Makefile").write_text(
+        "obj-m += acme.o\n"
+        "prepare:\n"
+        "\tsh build.sh\n"
+    )
+    (proj / "build.sh").write_text(
+        "#!/bin/sh\n"
+        "# inert detection data — never executed:\n"
+        "git clone https://example.test/acme/driver.git\n"
+    )
+    doc = sc.scan(str(proj))
+    f = _emitted(doc)
+    assert len(f) >= 1
+    cand = next(x for x in f if x["file"].endswith("build.sh"))
+    assert cand["category"] == "supply-chain"
+    assert cand["recommendation"] == _ADR006_REC
+    assert vf.validate(doc) == []
+
+
+def test_dkms_conf_pinned_source_is_clean(tmp_path):
+    # A PINNED source: `git clone --branch v1.2.3` (immutable tag) + a sha256-verified
+    # tarball fetch → NO kernel-module finding (the headline false-positive guard).
+    proj = tmp_path / "mod"
+    proj.mkdir()
+    (proj / "dkms.conf").write_text(
+        'PACKAGE_NAME="acme-drv"\n'
+        'PACKAGE_VERSION="1.0"\n'
+        "# inert detection data — never executed:\n"
+        "PRE_BUILD=\"git clone --branch v1.2.3 https://example.test/acme/driver.git\"\n"
+        "MAKE[0]=\"curl https://example.test/x.tar.gz -o s.tgz && "
+        "echo 'abc123...  s.tgz' | sha256sum -c - && make\"\n"
+    )
+    doc = sc.scan(str(proj))
+    assert not any(x["recommendation"] == _ADR006_REC for x in _emitted(doc))
+    assert vf.validate(doc) == []
+
+
+def test_objm_makefile_pinned_git_clone_is_clean(tmp_path):
+    # `git clone ... #<sha>` style pin (commit pinned) → NO finding.
+    proj = tmp_path / "mod"
+    proj.mkdir()
+    (proj / "Makefile").write_text(
+        "obj-m += acme.o\n"
+        "prepare:\n"
+        "\t# inert detection data — never executed:\n"
+        "\tgit clone --branch v2.0.0 https://example.test/acme/driver.git\n"
+    )
+    doc = sc.scan(str(proj))
+    assert not any(x["recommendation"] == _ADR006_REC for x in _emitted(doc))
+    assert vf.validate(doc) == []
+
+
+def test_no_kernel_or_dkms_files_yields_no_kernel_finding(tmp_path):
+    # A repo with NO kernel-module / dkms files must produce NO kernel-module finding,
+    # even if an ordinary Makefile (without `obj-m`) fetches an unpinned URL.
+    proj = tmp_path / "mod"
+    proj.mkdir()
+    (proj / "Makefile").write_text(
+        "all:\n"
+        "\tcurl https://example.test/x.tar.gz -o s.tgz\n"  # not obj-m → out of scope
+    )
+    doc = sc.scan(str(proj))
+    assert not any(x["recommendation"] == _ADR006_REC for x in _emitted(doc))
+    assert vf.validate(doc) == []
+
+
+def test_scan_kernel_module_sources_pure_fn_returns_list(tmp_path):
+    # The recognizer is a pure function returning a list[findings]; clean repo → [].
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    out = sc.scan_kernel_module_sources(str(empty))
+    assert out == []
+    assert out is not None                          # the wrong value (None)
+    # an unpinned obj-m Makefile → exactly one ADR-006 candidate from the pure fn
+    proj = tmp_path / "mod"
+    proj.mkdir()
+    (proj / "Makefile").write_text(
+        "obj-m += acme.o\n"
+        "fetch:\n"
+        "\twget https://example.test/x.tar.gz\n"
+    )
+    hits = sc.scan_kernel_module_sources(str(proj))
+    assert len(hits) == 1
+    assert hits[0]["recommendation"] == _ADR006_REC
+    assert hits[0]["category"] == "supply-chain"
+
+
+def test_kernel_module_finding_does_not_break_existing_npm_path(tmp_path):
+    # A project that has BOTH a package.json (npm ecosystem) AND an unpinned obj-m
+    # Makefile: the npm path still works AND the kernel-module candidate appears.
+    proj = tmp_path / "mod"
+    proj.mkdir()
+    (proj / "package.json").write_text(json.dumps({"dependencies": {"react": "18.2.0"}}))
+    (proj / "package-lock.json").write_text("{}\n")
+    (proj / "Makefile").write_text(
+        "obj-m += acme.o\n"
+        "fetch:\n"
+        "\tcurl https://example.test/x.tar.gz -o s.tgz\n"
+    )
+    doc = sc.scan(str(proj))
+    f = _emitted(doc)
+    assert any(x["recommendation"] == _ADR006_REC for x in f), "kernel candidate present"
+    # ids are unique across the merged finding set
+    assert vf.duplicate_ids(doc) == []
+    assert vf.validate(doc) == []
