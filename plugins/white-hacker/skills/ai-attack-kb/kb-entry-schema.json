@@ -18,8 +18,8 @@
     },
     "title": { "type": "string", "minLength": 1 },
     "technique_class": {
-      "description": "Controlled vocabulary = the five on-disk file stems (ADR-012).",
-      "enum": ["prompt-injection", "tool-poisoning", "rag-poisoning", "excessive-agency", "data-exfil"]
+      "description": "Controlled vocabulary = the six on-disk file stems (ADR-012; ADR-019 added supply-chain).",
+      "enum": ["prompt-injection", "tool-poisoning", "rag-poisoning", "excessive-agency", "data-exfil", "supply-chain"]
     },
     "severity": { "enum": ["high", "medium", "low"] },
     "confidence": { "type": "number", "minimum": 0, "maximum": 1 },

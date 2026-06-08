@@ -15,7 +15,7 @@ the epic's "Execution Waves" section is updated to reflect the addition.
 ## Why This Exists
 
 Tickets created from rough descriptions miss things that depend on type:
-- **task / infra**: existing patterns to copy, storage/port conflicts
+- **task**: existing patterns to copy, package/skill scope conflicts
 - **spike**: clear exit criteria, time-boxed scope, what "done" looks like
   even when the answer is "we shouldn't do this"
 - **bug**: reproduction steps, root-cause hypothesis, regression risk
@@ -29,16 +29,16 @@ pass.
 
 ```bash
 # Standalone task
-/design-ticket Deploy Grafana for cluster monitoring
+/design-ticket Add a sec-iac skill that scans Terraform for public S3 buckets
 
 # Standalone spike (researches a question; output is a decision)
-/design-ticket --type=spike Evaluate OpenShell vs hermes-agent shell tool
+/design-ticket --type=spike Evaluate Opengrep vs Semgrep as the SAST capability
 
 # Standalone bug (with repro context)
-/design-ticket --type=bug pi01 NotReady after weekly system updates
+/design-ticket --type=bug sec-detect misses gitleaks output after tool-registry update
 
 # Child of an existing epic — places it in the right wave
-/design-ticket --epic=k3s-setup-tzv --type=task Add cron entry that runs /morning-status at 07:00
+/design-ticket --epic=wh-pxn --type=task Wire the sec-iac skill into the artifact chain after sec-detect
 ```
 
 If `--type` is omitted, default is `task`. If `--epic` is given, the
@@ -55,9 +55,9 @@ right template.
 
 | Type | Subagent | Reads | Produces (per template) |
 |---|---|---|---|
-| `task` | `feature-dev:code-architect` | README, CLAUDE.md, similar deployments under `apps/base/` or `gpu-services/`, kustomization roots, existing patterns | Goal, Prerequisites, Steps, Files to Create/Modify, Verification, Acceptance Criteria, Rollback, Notes, References (`beads-ticket-template.md`) |
+| `task` | `tech-lead` | README, CLAUDE.md, similar skills under `plugins/white-hacker/skills/`, the artifact-chain schemas, existing patterns | Goal, Prerequisites, Steps, Files to Create/Modify, Verification, Acceptance Criteria, Rollback, Notes, References (`beads-ticket-template.md`) |
 | `spike` | `researcher` | Related docs, prior research under `docs/research/`, upstream docs via WebFetch | Problem statement, Research questions, Investigation plan, Exit criteria ("we will know we're done when…"), Time box, Likely outcomes (`beads-spike-template.md`) |
-| `bug` | `feature-dev:code-explorer` + `feature-dev:code-reviewer` | git log around suspected files, recent commits, related tests, logs/metrics references | Reproduction (commands), Expected vs Actual, Suspected root cause, Files in scope, Acceptance Criteria (regression test), Rollback (`beads-ticket-template.md`) |
+| `bug` | `developer` + `qa-engineer` | git log around suspected files, recent commits, related tests, logs/metrics references | Reproduction (commands), Expected vs Actual, Suspected root cause, Files in scope, Acceptance Criteria (regression test), Rollback (`beads-ticket-template.md`) |
 
 Each agent must populate at least: **Goal**, **Steps** (or Reproduction
 for bugs), **Verification**, **Acceptance Criteria**, **Rollback**,
@@ -67,17 +67,23 @@ drop a template section.
 
 ### Phase 2 — Validate the Design
 
-Launch a `tech-lead` agent (or `feature-dev:code-reviewer` for bugs) with
-the right checklist per type:
+Launch a `tech-lead` agent (or `qa-engineer` for bugs; route
+security-relevant validation to `white-hacker`) with the right checklist
+per type:
 
-**task** (mostly infra + scripts + docs)
-1. Existing patterns — does a similar deployment / script already exist?
-2. Storage / port / RAM math — fits within current host or cluster capacity?
-3. Naming conventions — namespace / unit / file names follow patterns?
+**task** (mostly skills + scripts + docs)
+1. Existing patterns — does a similar skill / script already exist under
+   `plugins/white-hacker/skills/`?
+2. Package scope — does it fit the package shape
+   (`scripts/{<mod>.py,pyproject.toml,conftest.py,tests/}`) and stay
+   stdlib-first (ADR-015 floor) rather than hard-depending on a tool?
+3. Naming conventions — skill / module / artifact names follow patterns?
 4. Scope — is this one ticket or should it be split? (>8 new files, >3 dirs,
-   >1 namespace → consider split)
-5. Security — secrets via Vault, no hardcoded values, no `ANTHROPIC_API_KEY`
-   leaks in Hermes/Claude work?
+   spans >1 skill package → consider split)
+5. Budget caps (ADR-005) — `SKILL.md` <500 lines, `description`+`when_to_use`
+   ≤1,536, `reference/` one level deep?
+6. Security — no secrets in code/logs/KB, capability behind an interface
+   (ADR-015), no `ANTHROPIC_API_KEY` leaks in agent/Claude work?
 
 **spike**
 1. Is there a sharp question? ("Should we…" with a Yes/No answer at end)
@@ -93,8 +99,8 @@ the right checklist per type:
 2. Suspected root-cause hypothesis is concrete (file:line or specific
    behavior), not "something with X"?
 3. Acceptance includes a regression test or assertion?
-4. Severity matches priority? (Cluster-down = P0, blocks one user = P2,
-   cosmetic = P3.)
+4. Severity matches priority? (Review pipeline broken / missed vuln = P0,
+   blocks one flow = P2, cosmetic = P3.)
 
 Output one of: **APPROVED**, **APPROVED WITH FIXES** (list them),
 **NEEDS REDESIGN** (explain).

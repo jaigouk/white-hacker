@@ -103,6 +103,27 @@ def test_bad_technique_class_fails(tmp_path: Path):
     assert vk.validate_file(_write(tmp_path, "x.md", front))[1] != []
 
 
+def test_supply_chain_technique_class_validates(tmp_path: Path):
+    """`supply-chain` is in the closed enum (ADR-019: 5->6 stems). Rule 9: pin BOTH
+    sides — a real `supply-chain` entry validates, AND a made-up class still fails."""
+    front = (
+        VALID_FRONT.replace("AISEC-PROMPT-INJECTION-001", "AISEC-SUPPLY-CHAIN-001")
+        .replace("technique_class: prompt-injection", "technique_class: supply-chain")
+        .replace('"LLM01:2025"', '"LLM03:2025"')
+    )
+    assert vk.validate_file(_write(tmp_path, "supply-chain.md", front))[1] == []
+    # the controlled enum is still closed: an out-of-vocab class must fail.
+    bad = front.replace("technique_class: supply-chain", "technique_class: made-up-class")
+    assert vk.validate_file(_write(tmp_path, "bad.md", bad))[1] != []
+
+
+def test_supply_chain_in_schema_enum():
+    schema = vk.load_schema()
+    enum = schema["properties"]["technique_class"]["enum"]
+    assert "supply-chain" in enum
+    assert "made-up-class" not in enum  # still a closed vocabulary
+
+
 def test_bad_status_fails(tmp_path: Path):
     front = VALID_FRONT.replace("status: active", "status: retired")
     assert vk.validate_file(_write(tmp_path, "x.md", front))[1] != []

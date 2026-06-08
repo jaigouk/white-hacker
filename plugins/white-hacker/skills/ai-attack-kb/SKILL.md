@@ -24,8 +24,8 @@ and is loaded only when a class is in play, so a review never pays for knowledge
 
 ## Technique classes (the controlled vocabulary)
 
-`technique_class` is a **closed enum = these five file stems** (one entry per file today;
-a class that grows splits to `reference/<class>-<n>.md`, still one level deep — ADR-012):
+`technique_class` is a **closed enum = these six file stems** (one entry per file today;
+a class that grows splits to `reference/<class>-<n>.md`, still one level deep — ADR-012, ADR-019):
 
 | Class | File | Covers | Primary xrefs |
 |-------|------|--------|---------------|
@@ -34,6 +34,7 @@ a class that grows splits to `reference/<class>-<n>.md`, still one level deep �
 | **rag-poisoning** | [`reference/rag-poisoning.md`](reference/rag-poisoning.md) | Knowledge-base/vector poisoning, embedding inversion, cross-tenant retrieval leakage, memory poisoning. | `LLM08:2025`, `ASI06` |
 | **excessive-agency** | [`reference/excessive-agency.md`](reference/excessive-agency.md) | Over-broad tool scope/autonomy; missing human-in-the-loop on high-impact actions; least-agency violations. | `LLM06:2025`, `ASI03` |
 | **data-exfil** | [`reference/data-exfil.md`](reference/data-exfil.md) | The exfiltration leg of the trifecta; sensitive-info disclosure via outputs/tool results; MCP context over-sharing. | `LLM02:2025`, MITRE ATLAS exfiltration |
+| **supply-chain** | [`reference/supply-chain.md`](reference/supply-chain.md) | Slopsquatting (LLM-hallucinated package names) + AI-SDK typosquatting; cross-ecosystem (npm/PyPI/RubyGems/Go/crates/Maven). Detection lives in the deps-scan supply-chain floor. | `LLM03:2025` |
 
 `reference/ai-llm.md` does **not** live here — the inner-loop **checklist** is a stable
 `_shared/reference/ai-llm.md` (yearly cadence); this `ai-attack-kb/reference/` tier is the
@@ -51,7 +52,7 @@ One entry per file: YAML front-matter (the schema) then a body
 ---
 id: AISEC-PROMPT-INJECTION-001     # typed, NEVER reused (ADR-012)
 title: <short technique title>
-technique_class: prompt-injection  # enum = the five stems above
+technique_class: prompt-injection  # enum = the six stems above
 severity: high                     # high | medium | low
 confidence: 0.8                    # 0..1
 status: active                     # active | archived | deprecated
