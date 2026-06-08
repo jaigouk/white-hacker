@@ -1,0 +1,31 @@
+{
+  "_comment": "Curated allowlist of known-good AI-SDK + popular npm package names, used by the supply-chain-malware floor's S4 (typosquat / Damerau-Levenshtein distance 1-2) and S5 (homoglyph / separator collision) signals. Distance 0 (exact match) = SAFE. This list is INTENTIONALLY small and high-signal — it is NOT a full registry. /sec-kb-refresh extends it over time exactly as it extends the attack KB (ADR-015, spike-09 F2/S4 + the Risk note on allowlist staleness). The OSSF/GHSA malware DB (S8) is the authoritative backstop. Keep entries lowercase, exact npm names.",
+  "_source": "docs/research/spike-09-npm-ai-supply-chain-2026-06.md (S4 allowlist examples + AI/LLM SDK emphasis)",
+  "_kb_ref": "AISEC-SUPPLY-CHAIN-001",
+  "names": [
+    "@anthropic-ai/sdk",
+    "openai",
+    "langchain",
+    "@langchain/core",
+    "@langchain/community",
+    "llamaindex",
+    "@huggingface/inference",
+    "@modelcontextprotocol/sdk",
+    "ollama",
+    "ai",
+    "react",
+    "react-dom",
+    "axios",
+    "next",
+    "express",
+    "lodash",
+    "vue",
+    "@angular/core",
+    "typescript",
+    "vite",
+    "webpack",
+    "eslint",
+    "jest",
+    "zod"
+  ]
+}

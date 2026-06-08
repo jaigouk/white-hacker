@@ -46,6 +46,61 @@ uv run --with jsonschema python scripts/normalize_deps.py deps.json > DEPS.json
 uv run --with jsonschema python ../_shared/scripts/validate_findings.py DEPS.json
 ```
 
+## Supply-chain-malware floor (S1–S8, offline, behind the SCA capability)
+CVE-based SCA (`npm audit` / OSV-by-CVE) has a structural **blind spot**: novel *malicious*
+packages (typosquats, slopsquats, install-script malware, self-propagating worms) have a valid
+version, install without error, and are not in any CVE DB yet — so the native gate **approves**
+them (spike-09 §F2). `scripts/supply_chain.py` is the floor that covers that gap. It is **offline**
+(zero network), **static** (reads only on-disk `package.json` + lockfile + referenced install
+scripts), emits **low/medium-confidence `tool_assisted:false`** candidates, and — like the rest of
+this stage — **NEVER blocks** (SKILL.md:27–29). Triage + a human decide.
+
+It is an **ecosystem-agnostic signal core + a per-ecosystem adapter** (spike-09 §F5): `parse_npm`
+is the npm adapter (normalizes `package.json` + `package-lock.json`/`pnpm-lock.yaml`/`yarn.lock`
+into `{deps:[{name,spec,source_type}], lifecycle_scripts, lockfile_present, script_files}`);
+PyPI/RubyGems/Go/Cargo/Maven are follow-on adapters behind the same struct (wh-w30). Signals:
+
+- **S1** install-lifecycle hook present (`pre/post/install`) — necessary-not-sufficient, LOW alone.
+- **S2** non-registry source dep (git/http/tarball); `workspace:`/`file:` in-repo = benign.
+- **S3** unpinned range AND no lockfile committed — LOW alone.
+- **S4** typosquat: Damerau-Levenshtein distance 1–2 to the `reference/ai-sdk-allowlist.json`
+  allowlist (distance 0 = exact = SAFE) — MEDIUM.
+- **S5** homoglyph / separator-collision (ASCII-fold + separator-normalize collides with an
+  allowlist entry while the raw string differs) — **HIGH**.
+- **S6** dangerous-API strings in a *referenced* install script (`child_process`/`eval(`/
+  `new Function(`/`require('net'|'http'|…)`/`fetch(`/`Buffer.from(…,'base64')`/`~/.ssh|.aws|.npmrc|
+  .claude`) — **HIGH** when ≥2 hit. Reported once, **project-level** (keyed to the script).
+- **S7** obfuscation (single line >50 KB, `_0x[0-9a-f]{4,}` density).
+- **S8** known-bad vs an **OPTIONAL** offline OSSF/GHSA snapshot — a HOOK that **degrades**: no
+  snapshot → record `malware-db` in `summary.tools_unavailable` and skip (wh-0o7 wires the snapshot).
+
+**Scoring** (spike-09 §F2): emit on **any HIGH** (S5/S6/S8) **OR ≥2 corroborating** signals; a
+lone S1/S3 is **informational only** (never a finding — the canonical FP guard is a benign native
+build, `postinstall:"node-gyp rebuild"` + a pinned registry dep → no finding). Findings reuse the
+`normalize_deps.py` shape (`category:"supply-chain"`, `owasp:["A06:2021"]`, `access_required:
+"unknown"`, `verified:"static_review_only"`, confidence capped via `degradation.cap_floor_confidence`,
+`kb_refs:["AISEC-SUPPLY-CHAIN-001"]`). The allowlist lives in `reference/` so `/sec-kb-refresh`
+extends it (ADR-015). `scan()` **never raises** on a missing/odd manifest — it degrades to an
+empty-but-valid result.
+
+### F4 remediation ladder (spike-09 §F4) — the agent proposes, never executes
+Each finding's `recommendation` maps to a rung: **0** do not build yet — `npm ci --ignore-scripts`
+during triage · **1** confirm intended vs actual name char-by-char (S4/S5) · **2** check the offline
+malware DB (S8) · **3** verify provenance/attestation (`npm audit signatures`, network, optional) ·
+**4** pin + commit the lockfile, add `min-release-age`/`minimumReleaseAge` cooldown · **5** remove or
+replace by exact name, reinstall `--ignore-scripts` · **6** rotate exposed credentials if the script
+ran · **7** report upstream (OSSF `malicious-packages` / a GHSA malware advisory). The agent does
+**not** auto-remove, auto-rotate, or push (capability removed — security posture).
+
+```bash
+# run the floor on a project (offline) and validate the candidates
+cd plugins/white-hacker/skills/deps-scan/scripts
+uv run --with jsonschema python -c "import sys; sys.path[:0]=['.','../../_shared/scripts']; \
+  import json, supply_chain as sc, validate_findings as vf; \
+  d=sc.scan('../../../../../docs/research/poc-supply-chain'); \
+  print(vf.validate(d)); print(json.dumps(d['summary'], indent=2))"
+```
+
 ## Supply-chain hygiene (ADR-006)
 Pin tools; never auto-install from unpinned sources (see
 [`_shared/reference/tool-registry.md`](../_shared/reference/tool-registry.md) for the safe Trivy
@@ -59,3 +114,22 @@ versions and the `--skip-db-update` offline mode). Also check lifecycle-script a
   (`tests/test_normalize_deps.py`).
 - [x] No SCA tool on PATH → a degraded, schema-valid result with `sca` in `tools_unavailable` (never blocks).
 - [x] Stub banner removed (de-stubbed); no secret values written.
+
+### Supply-chain-malware floor (wh-07w)
+- [x] `scripts/supply_chain.py` implements the npm adapter (`parse_npm`) + the ecosystem-agnostic
+  S1–S8 signal core + `score()` + `scan()` (stdlib only, no new runtime dep, Rule 5 pure functions).
+- [x] Typosquat → MEDIUM; homoglyph/separator scope → HIGH; ≥2-dangerous-API install script →
+  HIGH; **benign native build (`node-gyp rebuild` + pinned registry dep) → NO finding**; lone
+  missing-lockfile → informational only. (`tests/test_supply_chain.py`.)
+- [x] Degraded (no `malware-db` snapshot) lists `malware-db` in `tools_unavailable` and never raises.
+- [x] Every emitted document validates: `validate_findings.validate(doc) == []`.
+
+Gate commands:
+```bash
+uv run --with jsonschema --with pytest pytest plugins/white-hacker/skills/deps-scan/scripts/tests -q
+uv run python packaging/validate_manifest.py .
+# demo: scan the neutralized POC and assert validate(...) == []
+cd plugins/white-hacker/skills/deps-scan/scripts && uv run --with jsonschema python -c \
+  "import sys; sys.path[:0]=['.','../../_shared/scripts']; import supply_chain as sc, \
+   validate_findings as vf; assert vf.validate(sc.scan('../../../../../docs/research/poc-supply-chain'))==[]; print('OK')"
+```

@@ -1,0 +1,576 @@
+"""Supply-chain-malware floor (S1–S8) — OFFLINE, static, behind the SCA capability.
+
+CVE-based SCA (`npm audit` / OSV-by-CVE) has a structural blind spot: NOVEL malicious
+packages (typosquats, slopsquats, install-script malware, self-propagating worms) have a
+valid version, install without error, and are not in any CVE DB yet — so the native gate
+APPROVES them (spike-09 F2). This module is the floor that covers that gap: it reads only
+on-disk files (manifest + lockfile + the referenced install scripts), emits low/medium-
+confidence `tool_assisted:false` candidates, and NEVER blocks. Triage + a human decide.
+
+Design (spike-09 §F5):
+  * an ecosystem-AGNOSTIC signal core (S1–S8 + scoring) over a normalized struct, plus
+  * a per-ecosystem ADAPTER that produces that struct. Shipped here: the npm adapter.
+    PyPI / RubyGems / Go / Cargo / Maven are follow-on adapters behind the same interface.
+
+Rule 5 (model only for judgment): every function here is a deterministic pure function —
+no LLM, no network, no RNG. Stdlib only (json, re, pathlib, unicodedata) — no new runtime
+dep. Reuses `normalize_deps.py`'s finding shape + `degradation.py`'s floor-confidence cap.
+
+Scoring (spike-09 F2): emit a candidate on ANY HIGH signal (S5/S6/S8) OR when ≥2 lower
+signals corroborate; a lone S1/S3 is informational only (never a finding). Each finding's
+`recommendation` maps to an F4 remediation-ladder rung (spike-09 §F4).
+"""
+from __future__ import annotations
+
+import json
+import re
+import unicodedata
+from pathlib import Path
+
+import degradation as dg
+
+KB_REF = "AISEC-SUPPLY-CHAIN-001"
+_OWASP = ["A06:2021"]  # Vulnerable and Outdated Components
+_CATEGORY = "supply-chain"
+
+# Floor confidence per emitted severity (then capped by degradation.cap_floor_confidence).
+_CONFIDENCE = {"HIGH": 0.7, "MEDIUM": 0.6, "LOW": 0.5}
+
+# Install-time lifecycle hooks (S1). `test`/`build`/etc. are NOT install hooks.
+_LIFECYCLE_HOOKS = ("preinstall", "install", "postinstall")
+
+# S6 dangerous-API string patterns searched inside a referenced install script.
+# These are recognition patterns quoted from public vendor advisories (spike-09 §F2/S6);
+# this module RECOGNIZES them, it never authors any. Each is a literal substring or regex.
+_DANGEROUS_API_PATTERNS = (
+    r"eval\s*\(",
+    r"new\s+Function\s*\(",
+    r"child_process",
+    r"\bexec\s*\(",
+    r"\bspawn\s*\(",
+    r"require\(\s*['\"](?:net|http|https|dns)['\"]\s*\)",
+    r"\bfetch\s*\(",
+    r"Buffer\.from\([^)]*,\s*['\"]base64['\"]\)",
+    r"~/\.ssh",
+    r"~/\.aws",
+    r"~/\.npmrc",
+    r"~/\.claude",
+)
+_DANGEROUS_API_RE = [re.compile(p) for p in _DANGEROUS_API_PATTERNS]
+
+# S7 obfuscation markers.
+_HEX_IDENT_RE = re.compile(r"_0x[0-9a-f]{4,}")
+_OBFUSCATION_SINGLE_LINE_BYTES = 50_000  # >50 KB single line
+_OBFUSCATION_HEX_DENSITY = 5  # ≥5 hex-identifier occurrences
+
+# F4 remediation-ladder rungs (spike-09 §F4), keyed by the dominant signal.
+_F4 = {
+    "S5": ("Confirm intended vs actual name char-by-char against the official SDK docs / "
+           "the allowlist; a separator/homoglyph mismatch (F4 rung 1) is treated as "
+           "malicious — do not install, run `npm ci --ignore-scripts` during triage "
+           "(F4 rung 0), then remove or replace by exact name (F4 rung 5)."),
+    "S6": ("Do not install/build yet — run `npm ci --ignore-scripts` so lifecycle hooks "
+           "cannot execute during triage (F4 rung 0); inspect the install script, then "
+           "remove or replace the package (F4 rung 5) and rotate any exposed credentials "
+           "if it already ran (F4 rung 6)."),
+    "S8": ("Confirmed by the offline malware DB (F4 rung 2): escalate to removal "
+           "immediately — delete the package, install the correct one by exact name, clear "
+           "node_modules + the lockfile entry and reinstall with `--ignore-scripts` "
+           "(F4 rung 5); rotate exposed credentials (F4 rung 6); report upstream "
+           "(F4 rung 7)."),
+    "S4": ("Confirm intended vs actual name against the allowlist / official docs "
+           "(F4 rung 1); do not install — run `npm ci --ignore-scripts` during triage "
+           "(F4 rung 0); if mistyped, remove and install the correct package by exact "
+           "name (F4 rung 5)."),
+    "S2": ("Verify the non-registry source (git/url/tarball) is the intended upstream; "
+           "do not install — `npm ci --ignore-scripts` during triage (F4 rung 0); pin + "
+           "commit the lockfile and prefer the registry package by exact version "
+           "(F4 rung 4)."),
+    "_default": ("Do not install/build yet — `npm ci --ignore-scripts` during triage "
+                 "(F4 rung 0); pin + commit the lockfile and add a release-age cooldown "
+                 "(F4 rung 4); remove or replace if unintended (F4 rung 5)."),
+}
+
+# Embedded fallback allowlist (so tests don't depend on the reference/ path resolving).
+_FALLBACK_ALLOWLIST = (
+    "@anthropic-ai/sdk", "openai", "langchain", "@langchain/core", "llamaindex",
+    "@huggingface/inference", "@modelcontextprotocol/sdk", "react", "axios", "next",
+    "express", "lodash", "vue", "typescript",
+)
+
+_ALLOWLIST_PATH = Path(__file__).resolve().parent.parent / "reference" / "ai-sdk-allowlist.json"
+
+
+# --------------------------------------------------------------------------- #
+# allowlist loading
+# --------------------------------------------------------------------------- #
+def load_allowlist(path: Path = _ALLOWLIST_PATH) -> list[str]:
+    """The curated AI-SDK + popular names (S4/S5). Falls back to a small embedded list
+    when `reference/ai-sdk-allowlist.json` is unreadable, so the floor still works.
+    `/sec-kb-refresh` extends the on-disk list over time (ADR-015)."""
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        names = data.get("names")
+        if isinstance(names, list) and names:
+            return [str(n) for n in names]
+    except (OSError, ValueError):
+        pass
+    return list(_FALLBACK_ALLOWLIST)
+
+
+# --------------------------------------------------------------------------- #
+# S4 primitive — Damerau-Levenshtein (optimal string alignment)
+# --------------------------------------------------------------------------- #
+def damerau_levenshtein(a: str, b: str) -> int:
+    """Optimal-string-alignment edit distance (insert/delete/substitute + adjacent
+    transposition). Distance 0 = identical = SAFE; 1–2 = typosquat candidate (S4)."""
+    if a == b:
+        return 0
+    la, lb = len(a), len(b)
+    if la == 0:
+        return lb
+    if lb == 0:
+        return la
+    prev2: list[int] = []
+    prev = list(range(lb + 1))
+    for i in range(1, la + 1):
+        cur = [i] + [0] * lb
+        for j in range(1, lb + 1):
+            cost = 0 if a[i - 1] == b[j - 1] else 1
+            cur[j] = min(
+                cur[j - 1] + 1,          # insertion
+                prev[j] + 1,             # deletion
+                prev[j - 1] + cost,      # substitution
+            )
+            if (i > 1 and j > 1
+                    and a[i - 1] == b[j - 2] and a[i - 2] == b[j - 1]):
+                cur[j] = min(cur[j], prev2[j - 2] + 1)  # transposition
+        prev2, prev = prev, cur
+    return prev[lb]
+
+
+# --------------------------------------------------------------------------- #
+# name folding (S5) — ASCII-fold homoglyphs + normalize separators
+# --------------------------------------------------------------------------- #
+def fold_name(name: str) -> str:
+    """ASCII-fold non-ASCII homoglyphs (NFKD + strip combining) and normalize
+    separators (`_`→`-`, collapse repeats) for S5 collision detection."""
+    decomposed = unicodedata.normalize("NFKD", name)
+    ascii_only = decomposed.encode("ascii", "ignore").decode("ascii").lower()
+    # separator normalization: underscore -> hyphen, collapse doubled chars
+    sep_norm = ascii_only.replace("_", "-")
+    sep_norm = re.sub(r"-{2,}", "-", sep_norm)
+    sep_norm = re.sub(r"(.)\1+", r"\1", sep_norm)  # collapse doubled chars
+    return sep_norm
+
+
+# --------------------------------------------------------------------------- #
+# the npm ADAPTER — package.json + lockfile -> normalized struct
+# --------------------------------------------------------------------------- #
+_GIT_PREFIXES = ("git+", "git:", "github:", "gitlab:", "bitbucket:")
+_URL_PREFIXES = ("http://", "https:", "http:")
+_LOCKFILES = ("package-lock.json", "pnpm-lock.yaml", "yarn.lock", "npm-shrinkwrap.json")
+
+
+def _classify_source(spec: str) -> str:
+    """Map an npm dep spec string to a source_type ∈ {registry, git, url, file, workspace}."""
+    s = (spec or "").strip()
+    low = s.lower()
+    if low.startswith("workspace:"):
+        return "workspace"
+    if low.startswith("file:"):
+        return "file"
+    if low.startswith("npm:"):
+        return "registry"  # explicit registry alias
+    if any(low.startswith(p) for p in _GIT_PREFIXES):
+        return "git"
+    if any(low.startswith(p) for p in _URL_PREFIXES):
+        # tarball over http(s) or a plain http(s) source
+        return "url"
+    return "registry"
+
+
+def _read_json(path: Path) -> dict:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def parse_npm(project_dir: str) -> dict:
+    """npm ADAPTER: read package.json + any lockfile into the normalized struct.
+
+    Returns `{deps:[{name,spec,source_type}], lifecycle_scripts:{...},
+    lockfile_present:bool, script_files:[paths]}`. NEVER raises on a missing or odd
+    manifest — degrades to an empty-but-well-formed struct (spike-09 floor semantics)."""
+    root = Path(project_dir)
+    pkg = _read_json(root / "package.json")
+
+    deps: list[dict] = []
+    for field in ("dependencies", "devDependencies", "optionalDependencies",
+                  "peerDependencies"):
+        block = pkg.get(field)
+        if isinstance(block, dict):
+            for name, spec in block.items():
+                deps.append({
+                    "name": str(name),
+                    "spec": str(spec),
+                    "source_type": _classify_source(str(spec)),
+                })
+
+    scripts = pkg.get("scripts") if isinstance(pkg.get("scripts"), dict) else {}
+    lifecycle = {h: str(scripts[h]) for h in _LIFECYCLE_HOOKS if h in scripts}
+
+    lockfile_present = any((root / lf).exists() for lf in _LOCKFILES)
+
+    # Resolve install-script file paths referenced by the lifecycle hooks (e.g.
+    # `node scripts/postinstall.js`). Only files that exist on disk are scanned (S6/S7).
+    script_files: list[str] = []
+    for cmd in lifecycle.values():
+        for token in re.split(r"\s+|&&|\|\||;", cmd):
+            token = token.strip().strip("'\"")
+            if not token or not re.search(r"\.(js|cjs|mjs|ts|sh)$", token):
+                continue
+            cand = (root / token)
+            if cand.is_file():
+                script_files.append(str(cand))
+    # de-dup, preserve order
+    seen: set[str] = set()
+    script_files = [p for p in script_files if not (p in seen or seen.add(p))]
+
+    return {
+        "deps": deps,
+        "lifecycle_scripts": lifecycle,
+        "lockfile_present": lockfile_present,
+        "script_files": script_files,
+    }
+
+
+# --------------------------------------------------------------------------- #
+# the GENERIC signal core (S1–S8) over the normalized struct
+# --------------------------------------------------------------------------- #
+def _unpinned(spec: str) -> bool:
+    """A semver range that can silently pull a freshly-published version (S3)."""
+    s = (spec or "").strip()
+    return bool(re.search(r"[\^~*]|latest|x", s)) and _classify_source(s) == "registry"
+
+
+def signal_s1(norm: dict) -> bool:
+    """S1 — an install-time lifecycle hook is present (necessary-not-sufficient)."""
+    return bool(norm.get("lifecycle_scripts"))
+
+
+def signal_s2(norm: dict) -> list[str]:
+    """S2 — deps specified as a remote git/http/tarball source (NOT registry).
+    `workspace:`/`file:` (in-repo) are benign and excluded."""
+    return [d["name"] for d in norm.get("deps", []) if d["source_type"] in {"git", "url"}]
+
+
+def signal_s3(norm: dict) -> bool:
+    """S3 — unpinned ranges AND no lockfile committed."""
+    if norm.get("lockfile_present"):
+        return False
+    return any(_unpinned(d["spec"]) for d in norm.get("deps", []))
+
+
+def signal_s4(norm: dict, allowlist: list[str]) -> list[tuple[str, str]]:
+    """S4 — typosquat: Damerau-Levenshtein distance 1–2 to an allowlist entry
+    (distance 0 = exact = SAFE). Returns (dep_name, nearest_allowlist_name)."""
+    hits: list[tuple[str, str]] = []
+    allow_set = set(allowlist)
+    for d in norm.get("deps", []):
+        name = d["name"]
+        if name in allow_set:
+            continue  # distance 0 = SAFE
+        if d["source_type"] not in {"registry"}:
+            continue
+        for good in allowlist:
+            dist = damerau_levenshtein(name, good)
+            if 1 <= dist <= 2:
+                hits.append((name, good))
+                break
+    return hits
+
+
+def signal_s5(norm: dict, allowlist: list[str]) -> list[tuple[str, str]]:
+    """S5 — homoglyph/separator collision: a dep whose ASCII-folded, separator-
+    normalized form COLLIDES with an allowlist entry while the raw string DIFFERS (HIGH)."""
+    folded_allow = {fold_name(g): g for g in allowlist}
+    hits: list[tuple[str, str]] = []
+    for d in norm.get("deps", []):
+        name = d["name"]
+        if name in allowlist:
+            continue  # exact = safe
+        folded = fold_name(name)
+        good = folded_allow.get(folded)
+        if good is not None and name != good:
+            hits.append((name, good))
+    return hits
+
+
+def _read_text(path: str) -> str:
+    try:
+        return Path(path).read_text(encoding="utf-8", errors="ignore")
+    except OSError:
+        return ""
+
+
+def signal_s6(norm: dict) -> dict:
+    """S6 — dangerous-API strings inside a referenced install script. HIGH when ≥2
+    distinct patterns hit in the same file. Returns {script_path: [matched_patterns]}."""
+    out: dict[str, list[str]] = {}
+    for path in norm.get("script_files", []):
+        text = _read_text(path)
+        if not text:
+            continue
+        matched = [pat.pattern for pat in _DANGEROUS_API_RE if pat.search(text)]
+        if matched:
+            out[path] = matched
+    return out
+
+
+def signal_s7(norm: dict) -> list[str]:
+    """S7 — obfuscation markers in an install script: a single line >50 KB, or a high
+    density of `_0x[0-9a-f]{4,}` identifiers. Returns the offending script paths."""
+    hits: list[str] = []
+    for path in norm.get("script_files", []):
+        text = _read_text(path)
+        if not text:
+            continue
+        longest_line = max((len(line) for line in text.splitlines()), default=0)
+        hex_density = len(_HEX_IDENT_RE.findall(text))
+        if longest_line > _OBFUSCATION_SINGLE_LINE_BYTES or hex_density >= _OBFUSCATION_HEX_DENSITY:
+            hits.append(path)
+    return hits
+
+
+def signal_s8(norm: dict, malware_db: dict | None) -> list[str]:
+    """S8 — known-bad match against an OPTIONAL offline OSSF/GHSA snapshot.
+
+    A HOOK that DEGRADES: `malware_db` is None (no snapshot on disk) → return [] and the
+    caller records `malware-db` unavailable. When present, `malware_db` is a mapping of
+    `{package_name: set/list of bad versions or '*'}`; we match by name (offline, exact)."""
+    if not malware_db:
+        return []
+    hits: list[str] = []
+    for d in norm.get("deps", []):
+        if d["name"] in malware_db:
+            hits.append(d["name"])
+    return hits
+
+
+# --------------------------------------------------------------------------- #
+# scoring (spike-09 F2)
+# --------------------------------------------------------------------------- #
+_HIGH_SIGNALS = {"S5", "S6", "S8"}
+
+
+def score(hits: list[dict]) -> tuple[bool, str]:
+    """Decide emit + severity for one dep's accumulated signal hits.
+
+    `hits` = list of `{"signal": "Sn", "severity": "HIGH|MEDIUM|LOW"}`.
+    Emit on ANY HIGH signal (S5/S6/S8) OR ≥2 corroborating signals; a lone S1/S3 is
+    informational only (no emit). Severity = HIGH if any HIGH fired, else MEDIUM."""
+    if not hits:
+        return (False, "LOW")
+    has_high = any(h["signal"] in _HIGH_SIGNALS or h.get("severity") == "HIGH" for h in hits)
+    if has_high:
+        return (True, "HIGH")
+    if len(hits) >= 2:
+        return (True, "MEDIUM")
+    return (False, "LOW")
+
+
+# --------------------------------------------------------------------------- #
+# scan — build a finding-schema.json-valid document
+# --------------------------------------------------------------------------- #
+def _dominant_signal(hits: list[dict]) -> str:
+    """Pick the F4-ladder key: the highest-priority signal that fired."""
+    for sig in ("S8", "S6", "S5", "S4", "S2"):
+        if any(h["signal"] == sig for h in hits):
+            return sig
+    return "_default"
+
+
+def _evidence(hits: list[dict]) -> str:
+    return ", ".join(sorted({h["signal"] for h in hits}))
+
+
+def scan(project_dir: str, scan_plan: dict | None = None,
+         malware_db: dict | None = None, scoring_standard: str = "CVSS4.0") -> dict:
+    """Run the npm adapter + S1–S8 core over `project_dir` and emit a schema-valid
+    findings document. NEVER raises on a missing/odd manifest — degrades to an empty
+    valid result. Always `tool_assisted:false` (this is the floor), capped confidence.
+
+    `malware_db` None → S8 degrades; `summary.tools_unavailable` records `malware-db`."""
+    norm = parse_npm(project_dir)
+    allowlist = load_allowlist()
+    manifest_path = str(Path(project_dir) / "package.json")
+
+    # collect per-dep signal hits
+    s1 = signal_s1(norm)
+    s2_names = set(signal_s2(norm))
+    s3 = signal_s3(norm)
+    s4_hits = {name: good for name, good in signal_s4(norm, allowlist)}
+    s5_hits = {name: good for name, good in signal_s5(norm, allowlist)}
+    s6_map = signal_s6(norm)
+    s7_paths = signal_s7(norm)
+    s8_names = set(signal_s8(norm, malware_db))
+
+    # Install-script-level findings (S6/S7) are PROJECT-level: a dangerous postinstall
+    # belongs to the project's own manifest, not to any one dep, so it is reported once
+    # against the manifest (HIGH iff ≥2 distinct dangerous APIs in one script — spike-09
+    # §S6) — NOT fanned out to every dep. It also CORROBORATES a name/source-suspicious
+    # dep (S6/S7 as a LOW corroborator), so e.g. a typosquat + a dangerous script → HIGH.
+    script_high_files = {p: pats for p, pats in s6_map.items() if len(pats) >= 2}
+    script_corroborates = bool(s6_map) or bool(s7_paths)
+    script_corr_sig = "S6" if s6_map else ("S7" if s7_paths else None)
+
+    findings: list[dict] = []
+    idx = 1
+
+    # 1) per-dep findings from each dep's OWN name/source signals (+ corroboration).
+    for d in norm.get("deps", []):
+        name = d["name"]
+        if d["source_type"] in {"workspace", "file"}:
+            continue  # in-repo deps are benign (S2 exclusion)
+        hits: list[dict] = []
+        if name in s8_names:
+            hits.append({"signal": "S8", "severity": "HIGH"})
+        if name in s5_hits:
+            hits.append({"signal": "S5", "severity": "HIGH"})
+        if name in s2_names:
+            hits.append({"signal": "S2", "severity": "MEDIUM"})
+        if name in s4_hits:
+            hits.append({"signal": "S4", "severity": "MEDIUM"})
+        # corroborators (only attach when the dep already has a name/source signal so a
+        # benign dep with a lone S1/S3 stays informational):
+        has_name_signal = bool(hits)
+        if has_name_signal and script_corroborates and script_corr_sig:
+            hits.append({"signal": script_corr_sig, "severity": "LOW"})
+        if has_name_signal and s1:
+            hits.append({"signal": "S1", "severity": "LOW"})
+        if has_name_signal and s3 and _unpinned(d["spec"]):
+            hits.append({"signal": "S3", "severity": "LOW"})
+
+        emit, severity = score(hits)
+        if not emit:
+            continue
+        findings.append(_make_finding(idx, name, d, hits, severity, manifest_path,
+                                      s4_hits.get(name), s5_hits.get(name)))
+        idx += 1
+
+    # 2) project-level dangerous-install-script finding (reported once, keyed to the
+    # script path), independent of any dep — a HIGH script is a candidate on its own.
+    for spath, pats in script_high_files.items():
+        findings.append(_make_script_finding(idx, spath, pats, manifest_path))
+        idx += 1
+
+    return _build_doc(findings, norm, scan_plan, malware_db, scoring_standard)
+
+
+def _make_finding(idx: int, name: str, dep: dict, hits: list[dict], severity: str,
+                  manifest_path: str, s4_target: str | None,
+                  s5_target: str | None) -> dict:
+    sig = _dominant_signal(hits)
+    rec = _F4.get(sig, _F4["_default"])
+    target = s5_target or s4_target
+    detail = f" (looks like '{target}')" if target else ""
+    scenario = (
+        f"{name} @ {dep['spec']}{detail}: supply-chain-malware candidate "
+        f"(signals: {_evidence(hits)}) — novel malware that CVE-based SCA misses; "
+        f"static_review_only, triage decides."
+    )
+    finding = {
+        "id": f"F-{idx:03d}",
+        "canonical_of": None,
+        "file": manifest_path,
+        "line": 0,
+        "severity": severity,
+        "category": _CATEGORY,
+        "owasp": list(_OWASP),
+        "preconditions": [],
+        "access_required": "unknown",
+        "verified": "static_review_only",
+        "confidence": _CONFIDENCE[severity],
+        "exploit_scenario": scenario,
+        "recommendation": rec,
+        "first_link": manifest_path,
+        "tool_assisted": False,  # this is the floor — never tool-backed
+        "kb_refs": [KB_REF],
+    }
+    # cap floor confidence (degradation.py) — idempotent, lowers weak evidence.
+    return dg.cap_floor_confidence(finding)
+
+
+def _make_script_finding(idx: int, script_path: str, patterns: list[str],
+                         manifest_path: str) -> dict:
+    """Project-level S6 finding: a dangerous install script (≥2 dangerous APIs)."""
+    scenario = (
+        f"install script {script_path} contains ≥2 dangerous APIs "
+        f"({', '.join(sorted(patterns))}): supply-chain-malware candidate (signal: S6) "
+        f"— runs at `npm install` time before any test; static_review_only, triage decides."
+    )
+    finding = {
+        "id": f"F-{idx:03d}",
+        "canonical_of": None,
+        "file": script_path,
+        "line": 0,
+        "severity": "HIGH",
+        "category": _CATEGORY,
+        "owasp": list(_OWASP),
+        "preconditions": [],
+        "access_required": "unknown",
+        "verified": "static_review_only",
+        "confidence": _CONFIDENCE["HIGH"],
+        "exploit_scenario": scenario,
+        "recommendation": _F4["S6"],
+        "first_link": manifest_path,
+        "tool_assisted": False,
+        "kb_refs": [KB_REF],
+    }
+    return dg.cap_floor_confidence(finding)
+
+
+def _counts(findings: list[dict]) -> dict:
+    c = {"high": 0, "medium": 0, "low": 0}
+    for f in findings:
+        c[f["severity"].lower()] += 1
+    return c
+
+
+def _build_doc(findings: list[dict], norm: dict, scan_plan: dict | None,
+               malware_db: dict | None, scoring_standard: str) -> dict:
+    # tools_unavailable: the floor is never tool-backed; the S8 snapshot is `malware-db`
+    # and is recorded as unavailable whenever it's absent. Merge with any SCAN-PLAN-
+    # derived degraded capabilities so a degraded run is fully recorded.
+    unavailable: set[str] = set()
+    if not malware_db:
+        unavailable.add("malware-db")
+    if scan_plan is not None:
+        plan_tools = dg.summary_tools(scan_plan)
+        tools_used = plan_tools["tools_used"]
+        unavailable.update(plan_tools["tools_unavailable"])
+    else:
+        tools_used = []
+
+    scanned_langs = ["javascript"] if norm.get("deps") or norm.get("lifecycle_scripts") else []
+
+    return {
+        "summary": {
+            "scanned_langs": scanned_langs,
+            "tools_used": sorted(tools_used),
+            "tools_unavailable": sorted(unavailable),
+            "scoring_standard": scoring_standard,
+            "counts": _counts(findings),
+        },
+        "findings": findings,
+    }
+
+
+if __name__ == "__main__":  # pragma: no cover
+    import sys
+
+    target = sys.argv[1] if len(sys.argv) > 1 else "."
+    print(json.dumps(scan(target), indent=2))
