@@ -26,6 +26,15 @@
     "webpack",
     "eslint",
     "jest",
-    "zod"
+    "zod",
+    "requests",
+    "numpy",
+    "pandas",
+    "flask",
+    "django",
+    "pydantic",
+    "rails",
+    "serde",
+    "tokio"
   ]
 }

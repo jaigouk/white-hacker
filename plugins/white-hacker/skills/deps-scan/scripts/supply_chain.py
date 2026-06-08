@@ -25,7 +25,18 @@ from __future__ import annotations
 import json
 import re
 import unicodedata
+import xml.etree.ElementTree as ET
 from pathlib import Path
+
+# `tomllib` is stdlib only on Python 3.11+. The package floor is `>=3.10` (matching the
+# repo's other 13 packages — Rule 11, no convention fork), so import it defensively: on
+# 3.10 it's absent and the TOML adapters degrade gracefully (ADR-003) rather than crash
+# at import. CI runs 3.13 (tomllib present), so TOML deps parse there; on a 3.10 floor a
+# `pyproject.toml`/`Cargo.toml` yields a partial/empty struct and `scan()` never raises.
+try:
+    import tomllib
+except ModuleNotFoundError:  # Python 3.10 — no stdlib tomllib
+    tomllib = None  # type: ignore[assignment]
 
 import degradation as dg
 
@@ -248,6 +259,391 @@ def parse_npm(project_dir: str) -> dict:
 
 
 # --------------------------------------------------------------------------- #
+# per-ecosystem ADAPTERS (spike-09 §F5) — same normalized struct as parse_npm.
+# Each follows parse_npm's contract: NEVER raises on a missing/odd manifest, degrades
+# to the empty-but-well-formed struct; classifies source_type per that ecosystem's
+# conventions; resolves on-disk install/build-hook files into `script_files` (S6/S7).
+# Stdlib only: tomllib (TOML), xml.etree (pom.xml), regex/line parsing otherwise.
+# --------------------------------------------------------------------------- #
+def _empty_norm() -> dict:
+    """A fresh empty-but-well-formed normalized struct (floor degrade)."""
+    return {"deps": [], "lifecycle_scripts": {}, "lockfile_present": False,
+            "script_files": []}
+
+
+def _read_toml(path: Path) -> dict:
+    """Parse a TOML manifest, or `{}` when tomllib is unavailable (Python 3.10) / the
+    file is missing or malformed. NEVER raises — the TOML adapters degrade to a partial
+    or empty struct on a 3.10 floor (ADR-003), exactly like a missing manifest."""
+    if tomllib is None:  # Python 3.10 — no stdlib TOML parser; degrade, don't crash.
+        return {}
+    try:
+        with path.open("rb") as fh:
+            data = tomllib.load(fh)
+        return data if isinstance(data, dict) else {}
+    except (OSError, tomllib.TOMLDecodeError, ValueError):
+        return {}
+
+
+def _dedup(paths: list[str]) -> list[str]:
+    seen: set[str] = set()
+    return [p for p in paths if not (p in seen or seen.add(p))]
+
+
+# ----------------------------- PyPI / Python ------------------------------- #
+_PYPI_LOCKFILES = ("poetry.lock", "uv.lock")
+# PEP 508 / requirement line: leading name token, before any version/marker/url.
+_PEP508_NAME_RE = re.compile(r"^([A-Za-z0-9._-]+)")
+# `name @ <url>` direct reference (PEP 508 url spec).
+_PEP508_URL_AT_RE = re.compile(r"^([A-Za-z0-9._-]+)\s*@\s*(.+)$")
+# `#egg=<name>` fragment on a VCS/URL requirement.
+_EGG_RE = re.compile(r"[#&]egg=([A-Za-z0-9._-]+)")
+
+
+def _classify_pypi(spec: str) -> str:
+    """Map a PyPI requirement spec to a source_type. `git+…`/url = remote; a local
+    `file://` / `{path=…}` = file; otherwise the PyPI registry."""
+    s = (spec or "").strip().lower()
+    if s.startswith(("git+", "hg+", "bzr+", "svn+")):
+        return "git"
+    if s.startswith("file:") or s.startswith("file://"):
+        return "file"
+    if s.startswith(("http://", "https://")):
+        return "url"
+    return "registry"
+
+
+def _pypi_dep(name: str, spec: str, source: str | None = None) -> dict:
+    return {"name": str(name), "spec": str(spec),
+            "source_type": source or _classify_pypi(spec)}
+
+
+_VCS_URL_PREFIXES = ("git+", "hg+", "bzr+", "svn+", "http://", "https://", "file:")
+
+
+def _parse_requirement_line(line: str) -> dict | None:
+    """One requirements.txt / PEP 508 dependency line → a dep dict (None = skip)."""
+    stripped = line.strip()
+    if not stripped or stripped.startswith("#") or stripped.startswith("-"):
+        return None  # blank, comment, or a pip option (-r / -e / --hash)
+    low = stripped.lower()
+    # A bare VCS/URL requirement keeps its `#egg=` fragment (NOT a line comment).
+    if low.startswith(_VCS_URL_PREFIXES):
+        egg = _EGG_RE.search(stripped)
+        name = egg.group(1) if egg else stripped
+        return _pypi_dep(name, stripped)
+    # Otherwise an inline `# comment` is stripped before parsing.
+    s = stripped.split("#", 1)[0].strip()
+    if not s:
+        return None
+    # `name @ url` direct reference (PEP 508 url spec)
+    m = _PEP508_URL_AT_RE.match(s)
+    if m:
+        return _pypi_dep(m.group(1), m.group(2).strip())
+    # ordinary `name[extras]<op>version ; marker`
+    nm = _PEP508_NAME_RE.match(s)
+    if not nm:
+        return None
+    return _pypi_dep(nm.group(1), s)
+
+
+def parse_pypi(project_dir: str) -> dict:
+    """PyPI ADAPTER: pyproject.toml (`[project].dependencies` PEP 508 list AND/OR
+    `[tool.poetry.dependencies]` table) and/or requirements.txt → normalized struct.
+
+    Lockfile: poetry.lock / uv.lock. `setup.py` present → arbitrary code runs at
+    build/install time (S1 hook) — recorded in `lifecycle_scripts` + scanned (S6/S7)."""
+    root = Path(project_dir)
+    deps: list[dict] = []
+    seen_names: set[str] = set()
+
+    py = _read_toml(root / "pyproject.toml")
+    project = py.get("project") if isinstance(py.get("project"), dict) else {}
+    for req in project.get("dependencies", []) or []:
+        if not isinstance(req, str):
+            continue
+        d = _parse_requirement_line(req)
+        if d and d["name"] not in seen_names:
+            deps.append(d)
+            seen_names.add(d["name"])
+
+    poetry = (py.get("tool", {}) or {}).get("poetry", {}) if isinstance(
+        py.get("tool"), dict) else {}
+    poetry_deps = poetry.get("dependencies") if isinstance(
+        poetry.get("dependencies"), dict) else {}
+    for name, val in poetry_deps.items():
+        if name.lower() == "python":  # the interpreter constraint, not a dependency
+            continue
+        if isinstance(val, dict):
+            if "git" in val:
+                d = _pypi_dep(name, str(val.get("git", "")), "git")
+            elif "url" in val:
+                d = _pypi_dep(name, str(val.get("url", "")), "url")
+            elif "path" in val:
+                d = _pypi_dep(name, str(val.get("path", "")), "file")
+            else:
+                d = _pypi_dep(name, str(val.get("version", "*")), "registry")
+        else:
+            d = _pypi_dep(name, str(val), "registry")
+        if d["name"] not in seen_names:
+            deps.append(d)
+            seen_names.add(d["name"])
+
+    reqs = root / "requirements.txt"
+    if reqs.is_file():
+        for line in _read_text(str(reqs)).splitlines():
+            d = _parse_requirement_line(line)
+            if d and d["name"] not in seen_names:
+                deps.append(d)
+                seen_names.add(d["name"])
+
+    lifecycle: dict[str, str] = {}
+    script_files: list[str] = []
+    setup_py = root / "setup.py"
+    if setup_py.is_file():
+        lifecycle["setup.py"] = "python setup.py (build/install hook)"
+        script_files.append(str(setup_py))
+
+    lockfile_present = any((root / lf).exists() for lf in _PYPI_LOCKFILES)
+    return {
+        "deps": deps,
+        "lifecycle_scripts": lifecycle,
+        "lockfile_present": lockfile_present,
+        "script_files": _dedup(script_files),
+    }
+
+
+# ------------------------------- RubyGems ---------------------------------- #
+# `gem 'name', ...` line; capture the quoted gem name + the remainder (for git:/path:).
+_GEM_RE = re.compile(r"""^\s*gem\s+['"]([^'"]+)['"]\s*(.*)$""")
+
+
+def parse_gem(project_dir: str) -> dict:
+    """RubyGems ADAPTER: Gemfile (`gem '...'` lines, incl. `git:`/`path:` sources) +
+    Gemfile.lock. A native C extension (`extconf.rb` / an `ext/` dir) builds arbitrary
+    code at install (S1 hook) — its `extconf.rb` files are scanned (S6/S7)."""
+    root = Path(project_dir)
+    deps: list[dict] = []
+    for line in _read_text(str(root / "Gemfile")).splitlines():
+        m = _GEM_RE.match(line)
+        if not m:
+            continue
+        name = m.group(1)
+        rest = m.group(2)
+        low = rest.lower()
+        if "git:" in low or "github:" in low:
+            source = "git"
+        elif "path:" in low:
+            source = "file"
+        else:
+            source = "registry"
+        # spec = the version constraint if one is quoted right after the name, else rest.
+        ver = re.search(r"""['"]([~^<>=!\d][^'"]*)['"]""", rest)
+        spec = ver.group(1) if ver else (rest.strip() or "*")
+        deps.append({"name": str(name), "spec": str(spec), "source_type": source})
+
+    lifecycle: dict[str, str] = {}
+    script_files: list[str] = []
+    extconfs = sorted(root.glob("**/extconf.rb"))
+    if extconfs:
+        lifecycle["extconf.rb"] = "ruby extconf.rb (native extension build hook)"
+        script_files.extend(str(p) for p in extconfs)
+
+    lockfile_present = (root / "Gemfile.lock").exists()
+    return {
+        "deps": deps,
+        "lifecycle_scripts": lifecycle,
+        "lockfile_present": lockfile_present,
+        "script_files": _dedup(script_files),
+    }
+
+
+# ---------------------------------- Go ------------------------------------- #
+# `require module/path vX.Y.Z` (single or inside a `require ( ... )` block).
+_GO_REQUIRE_RE = re.compile(r"^\s*([^\s()]+\.[^\s()/]+/\S+)\s+(v\S+)")
+# `replace old => new [version]` — a local path or a fork makes it non-registry.
+_GO_REPLACE_RE = re.compile(r"^\s*replace\s+(\S+)(?:\s+\S+)?\s+=>\s+(\S+)(?:\s+(\S+))?")
+
+
+def _classify_go_replace(target: str) -> str:
+    """A go.mod `replace` target: a relative/absolute path = file; a fork module = git."""
+    t = target.strip()
+    if t.startswith((".", "/")):  # ./  ../  /abs  — a local path
+        return "file"
+    return "git"  # replaced to a different (fork) module path — non-registry source
+
+
+def parse_go(project_dir: str) -> dict:
+    """Go ADAPTER: go.mod (`require` + `replace`) + go.sum (the lockfile). A `replace`
+    to a local path or a fork module makes that dependency a non-registry source (S2).
+    Go has NO install/build hook → empty `lifecycle_scripts` + `script_files`."""
+    root = Path(project_dir)
+    text = _read_text(str(root / "go.mod"))
+    deps: dict[str, dict] = {}
+    in_require = False
+    for raw in text.splitlines():
+        line = raw.split("//", 1)[0]  # strip a line comment
+        stripped = line.strip()
+        if stripped.startswith("require") and stripped.endswith("("):
+            in_require = True
+            continue
+        if in_require and stripped == ")":
+            in_require = False
+            continue
+        if in_require:
+            m = _GO_REQUIRE_RE.match("    " + stripped)
+            if m:
+                deps[m.group(1)] = {"name": m.group(1), "spec": m.group(2),
+                                    "source_type": "registry"}
+            continue
+        # single-line `require mod vX`
+        if stripped.startswith("require "):
+            m = _GO_REQUIRE_RE.match(line.replace("require ", "    ", 1))
+            if m:
+                deps[m.group(1)] = {"name": m.group(1), "spec": m.group(2),
+                                    "source_type": "registry"}
+    # apply replaces: re-classify the module's source (a known require, or add it).
+    for raw in text.splitlines():
+        m = _GO_REPLACE_RE.match(raw.split("//", 1)[0])
+        if not m:
+            continue
+        old, target = m.group(1), m.group(2)
+        ver = m.group(3) or ""
+        source = _classify_go_replace(target)
+        if old in deps:
+            deps[old]["source_type"] = source
+            deps[old]["spec"] = f"=> {target} {ver}".strip()
+        else:
+            deps[old] = {"name": old, "spec": f"=> {target} {ver}".strip(),
+                         "source_type": source}
+
+    lockfile_present = (root / "go.sum").exists()
+    return {
+        "deps": list(deps.values()),
+        "lifecycle_scripts": {},   # Go has no install hook
+        "lockfile_present": lockfile_present,
+        "script_files": [],
+    }
+
+
+# --------------------------------- Cargo ----------------------------------- #
+def _classify_cargo(val: object) -> tuple[str, str]:
+    """A Cargo dependency value → (spec, source_type). A table with `git`/`path` is a
+    non-registry source; a bare string or `version` table is the crates.io registry."""
+    if isinstance(val, dict):
+        if "git" in val:
+            return (str(val.get("git", "")), "git")
+        if "path" in val:
+            return (str(val.get("path", "")), "file")
+        return (str(val.get("version", "*")), "registry")
+    return (str(val), "registry")
+
+
+def parse_cargo(project_dir: str) -> dict:
+    """Cargo ADAPTER: Cargo.toml (`[dependencies]`, incl. `git`/`path` tables) +
+    Cargo.lock. `build.rs` runs arbitrary code at build time (S1 hook) — scanned
+    for S6/S7."""
+    root = Path(project_dir)
+    cargo = _read_toml(root / "Cargo.toml")
+    deps: list[dict] = []
+    block = cargo.get("dependencies") if isinstance(
+        cargo.get("dependencies"), dict) else {}
+    for name, val in block.items():
+        spec, source = _classify_cargo(val)
+        deps.append({"name": str(name), "spec": spec, "source_type": source})
+
+    lifecycle: dict[str, str] = {}
+    script_files: list[str] = []
+    build_rs = root / "build.rs"
+    if build_rs.is_file():
+        lifecycle["build.rs"] = "cargo build.rs (build script hook)"
+        script_files.append(str(build_rs))
+
+    lockfile_present = (root / "Cargo.lock").exists()
+    return {
+        "deps": deps,
+        "lifecycle_scripts": lifecycle,
+        "lockfile_present": lockfile_present,
+        "script_files": _dedup(script_files),
+    }
+
+
+# --------------------------------- Maven ----------------------------------- #
+def _strip_ns(tag: str) -> str:
+    """Drop an `{namespace}` prefix from an ElementTree tag."""
+    return tag.split("}", 1)[1] if "}" in tag else tag
+
+
+def _mvn_child_text(dep: ET.Element, name: str) -> str:
+    for child in dep:
+        if _strip_ns(child.tag) == name:
+            return (child.text or "").strip()
+    return ""
+
+
+def parse_maven(project_dir: str) -> dict:
+    """Maven ADAPTER: pom.xml `<dependencies><dependency>` (groupId/artifactId/version)
+    via xml.etree. The dep `name` is the `groupId:artifactId` coordinate. A `system`
+    scope (a local jar via `systemPath`) is a non-registry (file) source. Maven has no
+    standard committed lockfile (lockfile_present=False) and no install hook."""
+    root = Path(project_dir)
+    pom = root / "pom.xml"
+    deps: list[dict] = []
+    try:
+        tree = ET.parse(pom)
+        xroot = tree.getroot()
+    except (OSError, ET.ParseError):
+        return _empty_norm()
+
+    for dep in xroot.iter():
+        if _strip_ns(dep.tag) != "dependency":
+            continue
+        gid = _mvn_child_text(dep, "groupId")
+        aid = _mvn_child_text(dep, "artifactId")
+        if not aid:
+            continue
+        ver = _mvn_child_text(dep, "version")
+        scope = _mvn_child_text(dep, "scope").lower()
+        name = f"{gid}:{aid}" if gid else aid
+        source = "file" if scope == "system" else "registry"
+        deps.append({"name": name, "spec": ver or "*", "source_type": source})
+
+    return {
+        "deps": deps,
+        "lifecycle_scripts": {},   # no standard install hook surfaced from pom.xml
+        "lockfile_present": False,  # Maven has no standard committed resolved lockfile
+        "script_files": [],
+    }
+
+
+# --------------------------------------------------------------------------- #
+# ecosystem dispatch — marker manifest -> (adapter, lang, manifest filename)
+# --------------------------------------------------------------------------- #
+# Order matters: the FIRST marker found wins. npm stays first (the lead path).
+_DISPATCH: tuple[tuple[str, object, str, str], ...] = (
+    ("package.json", parse_npm, "javascript", "package.json"),
+    ("pyproject.toml", parse_pypi, "python", "pyproject.toml"),
+    ("requirements.txt", parse_pypi, "python", "requirements.txt"),
+    ("Gemfile", parse_gem, "ruby", "Gemfile"),
+    ("go.mod", parse_go, "go", "go.mod"),
+    ("Cargo.toml", parse_cargo, "rust", "Cargo.toml"),
+    ("pom.xml", parse_maven, "java", "pom.xml"),
+)
+
+
+def detect_ecosystem(project_dir: str) -> tuple[object, str, str] | None:
+    """Detect the ecosystem by the first marker manifest present on disk.
+
+    Returns `(adapter_fn, lang, manifest_filename)` or None when no known manifest
+    exists (the caller degrades to an empty-but-valid result)."""
+    root = Path(project_dir)
+    for marker, adapter, lang, manifest in _DISPATCH:
+        if (root / marker).exists():
+            return (adapter, lang, manifest)
+    return None
+
+
+# --------------------------------------------------------------------------- #
 # the GENERIC signal core (S1–S8) over the normalized struct
 # --------------------------------------------------------------------------- #
 def _unpinned(spec: str) -> bool:
@@ -398,15 +794,26 @@ def _evidence(hits: list[dict]) -> str:
 
 
 def scan(project_dir: str, scan_plan: dict | None = None,
-         malware_db: dict | None = None, scoring_standard: str = "CVSS4.0") -> dict:
-    """Run the npm adapter + S1–S8 core over `project_dir` and emit a schema-valid
-    findings document. NEVER raises on a missing/odd manifest — degrades to an empty
-    valid result. Always `tool_assisted:false` (this is the floor), capped confidence.
+         malware_db: dict | None = None, scoring_standard: str = "CVSS4.0",
+         allowlist: list[str] | None = None) -> dict:
+    """Detect the ecosystem, run its adapter + the shared S1–S8 core over `project_dir`,
+    and emit a schema-valid findings document. NEVER raises on a missing/odd manifest —
+    degrades to an empty valid result. Always `tool_assisted:false` (this is the floor),
+    capped confidence.
 
-    `malware_db` None → S8 degrades; `summary.tools_unavailable` records `malware-db`."""
-    norm = parse_npm(project_dir)
-    allowlist = load_allowlist()
-    manifest_path = str(Path(project_dir) / "package.json")
+    Dispatch (spike-09 §F5): the first marker manifest present picks the adapter + the
+    `scanned_langs` lang + the `manifest_path` (npm leads — package.json is unchanged).
+    `malware_db` None → S8 degrades; `summary.tools_unavailable` records `malware-db`.
+    `allowlist` overrides the curated `reference/ai-sdk-allowlist.json` (S4/S5) — used to
+    pass an ecosystem-specific allowlist (e.g. a module path / `groupId:artifactId`)."""
+    detected = detect_ecosystem(project_dir)
+    if detected is None:
+        # no recognized manifest → empty-but-valid result (floor degrade), no lang.
+        return _build_doc([], _empty_norm(), scan_plan, malware_db, scoring_standard, "")
+    adapter, lang, manifest_name = detected
+    norm = adapter(project_dir)  # type: ignore[operator]
+    allowlist = load_allowlist() if allowlist is None else list(allowlist)
+    manifest_path = str(Path(project_dir) / manifest_name)
 
     # collect per-dep signal hits
     s1 = signal_s1(norm)
@@ -467,7 +874,7 @@ def scan(project_dir: str, scan_plan: dict | None = None,
         findings.append(_make_script_finding(idx, spath, pats, manifest_path))
         idx += 1
 
-    return _build_doc(findings, norm, scan_plan, malware_db, scoring_standard)
+    return _build_doc(findings, norm, scan_plan, malware_db, scoring_standard, lang)
 
 
 def _make_finding(idx: int, name: str, dep: dict, hits: list[dict], severity: str,
@@ -541,7 +948,7 @@ def _counts(findings: list[dict]) -> dict:
 
 
 def _build_doc(findings: list[dict], norm: dict, scan_plan: dict | None,
-               malware_db: dict | None, scoring_standard: str) -> dict:
+               malware_db: dict | None, scoring_standard: str, lang: str = "") -> dict:
     # tools_unavailable: the floor is never tool-backed; the S8 snapshot is `malware-db`
     # and is recorded as unavailable whenever it's absent. Merge with any SCAN-PLAN-
     # derived degraded capabilities so a degraded run is fully recorded.
@@ -555,7 +962,10 @@ def _build_doc(findings: list[dict], norm: dict, scan_plan: dict | None,
     else:
         tools_used = []
 
-    scanned_langs = ["javascript"] if norm.get("deps") or norm.get("lifecycle_scripts") else []
+    # The detected ecosystem's language is reported only when the manifest carried
+    # something to scan (a dep or a lifecycle hook); an empty manifest reports no lang.
+    scanned_langs = [lang] if lang and (norm.get("deps")
+                                        or norm.get("lifecycle_scripts")) else []
 
     return {
         "summary": {

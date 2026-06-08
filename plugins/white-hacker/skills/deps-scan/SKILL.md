@@ -56,9 +56,15 @@ scripts), emits **low/medium-confidence `tool_assisted:false`** candidates, and 
 this stage — **NEVER blocks** (SKILL.md:27–29). Triage + a human decide.
 
 It is an **ecosystem-agnostic signal core + a per-ecosystem adapter** (spike-09 §F5): `parse_npm`
-is the npm adapter (normalizes `package.json` + `package-lock.json`/`pnpm-lock.yaml`/`yarn.lock`
-into `{deps:[{name,spec,source_type}], lifecycle_scripts, lockfile_present, script_files}`);
-PyPI/RubyGems/Go/Cargo/Maven are follow-on adapters behind the same struct (wh-w30). Signals:
+is the **lead** npm adapter (normalizes `package.json` + `package-lock.json`/`pnpm-lock.yaml`/
+`yarn.lock` into `{deps:[{name,spec,source_type}], lifecycle_scripts, lockfile_present,
+script_files}`); PyPI/RubyGems/Go/Cargo/Maven are **follow-on adapters behind the exact same
+struct** (wh-w30) — the S1–S8 core + `score()` are reused UNCHANGED. `scan()` detects the
+ecosystem by the first marker manifest present (`detect_ecosystem`, a `{marker → (adapter, lang,
+manifest)}` dispatch table) and routes to the right adapter, setting `manifest_path` +
+`summary.scanned_langs` per ecosystem. Each adapter NEVER raises on a missing/odd manifest —
+it degrades to the empty-but-well-formed struct (stdlib only: `tomllib` for TOML, `xml.etree`
+for `pom.xml`, targeted regex/line parsing for Gemfile/go.mod; no new runtime dep). Signals:
 
 - **S1** install-lifecycle hook present (`pre/post/install`) — necessary-not-sufficient, LOW alone.
 - **S2** non-registry source dep (git/http/tarball); `workspace:`/`file:` in-repo = benign.
@@ -73,6 +79,25 @@ PyPI/RubyGems/Go/Cargo/Maven are follow-on adapters behind the same struct (wh-w
 - **S7** obfuscation (single line >50 KB, `_0x[0-9a-f]{4,}` density).
 - **S8** known-bad vs an **OPTIONAL** offline OSSF/GHSA snapshot — a HOOK that **degrades**: no
   snapshot → record `malware-db` in `summary.tools_unavailable` and skip (wh-0o7 wires the snapshot).
+
+### Per-ecosystem adapters (npm lead + 5 follow-ons, same interface — wh-w30)
+Every signal is a property of *a manifest + a lockfile + install/build hooks*, present in every
+ecosystem; each adapter just normalizes those files. Source-type + hook handling per ecosystem:
+
+| Ecosystem | Marker / manifest | Lockfile (→ `lockfile_present`) | Non-registry source (S2) | Install/build hook (S1 → `script_files`) |
+|---|---|---|---|---|
+| **npm** (lead) | `package.json` | package-lock / pnpm-lock / yarn.lock | git/http/tarball; `file:`/`workspace:` = in-repo benign | `pre/post/install` scripts |
+| **PyPI** | `pyproject.toml` (`[project].dependencies` / `[tool.poetry.dependencies]`) or `requirements.txt` | `poetry.lock` / `uv.lock` | `git+…`/url = remote; `file://`/`{path=…}` = file | `setup.py` present = arbitrary build code |
+| **RubyGems** | `Gemfile` (`gem '...'`) | `Gemfile.lock` | `git:`/`github:` = git; `path:` = file | `extconf.rb` / `ext/` = native ext build |
+| **Go** | `go.mod` (`require` + `replace`) | `go.sum` | `replace`→fork = git; `replace`→local path = file | **none** (Go has no install hook → empty) |
+| **Cargo** | `Cargo.toml` (`[dependencies]`) | `Cargo.lock` | `{git=…}` = git; `{path=…}` = file | `build.rs` = build script |
+| **Maven** | `pom.xml` (`<dependency>` groupId:artifactId, via `xml.etree`) | **none standard** → always `False` | `system` scope (`systemPath` jar) = file | **none** standard |
+
+The dep `name` is the ecosystem's canonical id (npm/PyPI/gem/crate name; Go module path; Maven
+`groupId:artifactId`), so S4/S5 match against an ecosystem-appropriate `reference/` allowlist. The
+`python` constraint in `[tool.poetry.dependencies]` is the interpreter, not a dep, and is dropped.
+A `file:`/`workspace:`/local-`replace`/`system`-scope source is **in-repo benign** (the S2
+exclusion) — it never fans out as a candidate, exactly like the npm `file:` rule.
 
 **Scoring** (spike-09 §F2): emit on **any HIGH** (S5/S6/S8) **OR ≥2 corroborating** signals; a
 lone S1/S3 is **informational only** (never a finding — the canonical FP guard is a benign native
@@ -124,9 +149,24 @@ versions and the `--skip-db-update` offline mode). Also check lifecycle-script a
 - [x] Degraded (no `malware-db` snapshot) lists `malware-db` in `tools_unavailable` and never raises.
 - [x] Every emitted document validates: `validate_findings.validate(doc) == []`.
 
-Gate commands:
+### Per-ecosystem adapters (wh-w30)
+- [x] `supply_chain.py` adds `parse_pypi` / `parse_gem` / `parse_go` / `parse_cargo` / `parse_maven`,
+  each producing the SAME normalized struct; the S1–S8 core + `score()` are reused UNCHANGED
+  (additive: `parse_npm` + `signal_s8` + every existing signature intact, so wh-0o7's
+  `malware_db.py` still imports `signal_s8`). Stdlib only (`tomllib`, `xml.etree`); no new runtime dep.
+- [x] `scan()` detects the ecosystem (`detect_ecosystem` dispatch table) and sets `manifest_path` +
+  `scanned_langs` per ecosystem; the **npm path is identical** (package.json → `parse_npm` →
+  `javascript`, demo still emits the same 2 HIGH candidates).
+- [x] Each ecosystem fixture trips the right candidate (PyPI/Maven S5 HIGH, gem/Cargo native-hook
+  S6 HIGH + S2 corroboration, Go S5 HIGH) AND a benign control per ecosystem emits NO finding;
+  every emitted doc is schema-valid (`tests/test_adapters.py`, 25 tests).
+- [x] The existing 40 tests (29 npm + 11 malware_db) still pass.
+
+Gate commands (run via `--project` so uv selects the package's pinned ≥3.11 interpreter — `tomllib`
+is 3.11+ stdlib; this matches `.github/workflows/ci.yml:44`):
 ```bash
-uv run --with jsonschema --with pytest pytest plugins/white-hacker/skills/deps-scan/scripts/tests -q
+uv run --project plugins/white-hacker/skills/deps-scan/scripts \
+  --with jsonschema --with pytest pytest plugins/white-hacker/skills/deps-scan/scripts/tests -q
 uv run python packaging/validate_manifest.py .
 # demo: scan the neutralized POC and assert validate(...) == []
 cd plugins/white-hacker/skills/deps-scan/scripts && uv run --with jsonschema python -c \
