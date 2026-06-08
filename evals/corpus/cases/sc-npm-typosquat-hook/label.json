@@ -1,0 +1,23 @@
+{
+  "case_id": "sc-npm-typosquat-hook",
+  "language": "javascript",
+  "category": "supply-chain",
+  "severity": "MEDIUM",
+  "owasp": [
+    "A06:2021"
+  ],
+  "vulnerable": {
+    "file": "vulnerable_variant/package.json",
+    "line": 1
+  },
+  "benign_lookalike": {
+    "file": "benign_lookalike/package.json"
+  },
+  "note": "Typosquat (S4) + install hook (S1): dependency 'langchian' is Damerau-Levenshtein distance 1 from the allowlisted 'langchain'; a postinstall hook corroborates -> floor emits ONE MEDIUM supply-chain finding on package.json (signals S1,S4). FLOOR-SCORED (deterministic), not the agent. Floor line=0; label line=1 is a tolerance-compatible placeholder (tol=3). Benign uses the correct 'langchain' (exact allowlist match, distance 0) and keeps the same hook -> 0 findings (a lone S1 is informational).",
+  "difficulty": "medium",
+  "multifile": true,
+  "support_files": [
+    "vulnerable_variant/package-lock.json",
+    "benign_lookalike/package-lock.json"
+  ]
+}

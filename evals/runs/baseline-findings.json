@@ -3,8 +3,8 @@
     "run": "full-103 + waveB + waveC(llm05+secret+mcp-relabel)",
     "model": "claude-sonnet",
     "date": "2026-06-07",
-    "note": "REAL agent run over all 103 frozen corpus cases (blind, neutralized filenames).",
-    "n_findings": 118
+    "note": "REAL agent run over all 103 frozen corpus cases (blind, neutralized filenames). +3 floor-scored supply-chain anchors appended (wh-qyf): the last 3 of the 121 entries are emitted by the DETERMINISTIC supply_chain.scan floor (line 0, NOT from the agent run); score.py ignores this summary block.",
+    "n_findings": 121
   },
   "findings": [
     {
@@ -714,6 +714,24 @@
       "line": 7,
       "category": "improper-output-handling",
       "confidence": 0.9
+    },
+    {
+      "file": "sc-npm-install-script-exec/vulnerable_variant/scripts/postinstall.js",
+      "line": 0,
+      "category": "supply-chain",
+      "confidence": 0.7
+    },
+    {
+      "file": "sc-npm-typosquat-hook/vulnerable_variant/package.json",
+      "line": 0,
+      "category": "supply-chain",
+      "confidence": 0.6
+    },
+    {
+      "file": "sc-npm-nonregistry-source/vulnerable_variant/package.json",
+      "line": 0,
+      "category": "supply-chain",
+      "confidence": 0.6
     }
   ]
 }

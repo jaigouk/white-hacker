@@ -2,14 +2,14 @@
   "tpr": 1.0,
   "fpr": 0.0,
   "youden_j": 1.0,
-  "tp": 118,
+  "tp": 121,
   "fn": 0,
   "fp": 0,
-  "tn": 118,
-  "n_cases": 118,
-  "date": "2026-06-07",
+  "tn": 121,
+  "n_cases": 121,
+  "date": "2026-06-08",
   "commit": "751f9be",
   "model": "claude-sonnet",
   "findings_snapshot": "evals/runs/baseline-findings.json",
-  "note": "MEASURED baseline (sonnet single-shot, 118 curated paired cases incl. 12 T-12.9 hard + 3 T-12.9b CROSS-FILE cases). J=1.0/FPR0. HONEST: J=1.0 means the corpus is SATURATED, not a perfect agent. T-12.9 (single-file) AND T-12.9b (multi-file/cross-file taint) cases are BOTH aced by the frontier agent \u2014 it correctly traces taint across files and distinguishes sanitized variants. Synthetic cases do not restore measurement headroom; the residual lever is a real-CVE-in-noise corpus (research-scale, uncertain) + the opus re-baseline (wh-aj6/T-12.5). The eval catches REGRESSIONS (incl. cross-file recall now) but cannot MEASURE improvement against this agent."
+  "note": "MEASURED baseline (sonnet single-shot, 118 curated paired cases incl. 12 T-12.9 hard + 3 T-12.9b CROSS-FILE cases). J=1.0/FPR0. HONEST: J=1.0 means the corpus is SATURATED, not a perfect agent. T-12.9 (single-file) AND T-12.9b (multi-file/cross-file taint) cases are BOTH aced by the frontier agent \u2014 it correctly traces taint across files and distinguishes sanitized variants. Synthetic cases do not restore measurement headroom; the residual lever is a real-CVE-in-noise corpus (research-scale, uncertain) + the opus re-baseline (wh-aj6/T-12.5). The eval catches REGRESSIONS (incl. cross-file recall now) but cannot MEASURE improvement against this agent. +3 floor-scored supply-chain anchors (wh-qyf, deterministic supply_chain.scan, NOT agent-scored); J stays 1.0 (anchors, not headroom)."
 }

@@ -1,0 +1,24 @@
+{
+  "case_id": "sc-npm-install-script-exec",
+  "language": "javascript",
+  "category": "supply-chain",
+  "severity": "HIGH",
+  "owasp": [
+    "A06:2021"
+  ],
+  "vulnerable": {
+    "file": "vulnerable_variant/scripts/postinstall.js",
+    "line": 1
+  },
+  "benign_lookalike": {
+    "file": "benign_lookalike/package.json"
+  },
+  "note": "Install-script-exec (S6): a postinstall hook runs node scripts/postinstall.js, which carries >=2 dangerous APIs (child_process + exec()) and reads ~/.npmrc to exfil creds at `npm install` time -- a novel-malware shape CVE-based SCA approves (valid version, not yet in any CVE DB). Floor emits ONE project-level HIGH supply-chain finding on the script. FLOOR-SCORED (deterministic supply_chain.scan), not the agent. Findings are manifest/file-level so floor line=0; label line=1 is a tolerance-compatible placeholder (score.py tol=3), NOT a precise sink line. Benign drops the install hook -> 0 findings.",
+  "difficulty": "medium",
+  "multifile": true,
+  "support_files": [
+    "vulnerable_variant/package.json",
+    "vulnerable_variant/package-lock.json",
+    "benign_lookalike/package-lock.json"
+  ]
+}

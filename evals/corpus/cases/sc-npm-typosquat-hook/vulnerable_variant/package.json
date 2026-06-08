@@ -1,0 +1,14 @@
+{
+  "name": "chat-service",
+  "version": "1.0.0",
+  "description": "Conversational endpoint backed by an LLM SDK.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "postinstall": "node ./setup.js"
+  },
+  "dependencies": {
+    "express": "4.19.2",
+    "langchian": "0.2.1"
+  }
+}

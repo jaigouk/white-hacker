@@ -1,0 +1,23 @@
+{
+  "case_id": "sc-npm-nonregistry-source",
+  "language": "javascript",
+  "category": "supply-chain",
+  "severity": "MEDIUM",
+  "owasp": [
+    "A06:2021"
+  ],
+  "vulnerable": {
+    "file": "vulnerable_variant/package.json",
+    "line": 1
+  },
+  "benign_lookalike": {
+    "file": "benign_lookalike/package.json"
+  },
+  "note": "Non-registry source (S2) + install hook (S1): dependency 'internal-utils' is pulled from a git+https source instead of the registry; a preinstall hook corroborates -> floor emits ONE MEDIUM supply-chain finding on package.json (signals S1,S2). Models dependency-confusion / fork-injection that CVE SCA does not cover. FLOOR-SCORED (deterministic), not the agent. Floor line=0; label line=1 is a tolerance-compatible placeholder (tol=3). Benign pins the same name to a registry version and keeps the hook -> 0 findings.",
+  "difficulty": "medium",
+  "multifile": true,
+  "support_files": [
+    "vulnerable_variant/package-lock.json",
+    "benign_lookalike/package-lock.json"
+  ]
+}

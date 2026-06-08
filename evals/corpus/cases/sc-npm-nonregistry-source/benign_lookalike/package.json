@@ -1,0 +1,14 @@
+{
+  "name": "auth-gateway",
+  "version": "0.9.0",
+  "description": "Edge auth + token exchange service.",
+  "main": "index.js",
+  "scripts": {
+    "preinstall": "node ./prep.js",
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "express": "4.19.2",
+    "internal-utils": "1.2.3"
+  }
+}

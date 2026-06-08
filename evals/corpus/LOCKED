@@ -104,3 +104,6 @@ py-weakhash-04
 py-xxe
 py-yaml
 ts-jwt-none
+sc-npm-install-script-exec
+sc-npm-typosquat-hook
+sc-npm-nonregistry-source
