@@ -1,0 +1,21 @@
+# BuildKit reads this co-located <Dockerfile>.dockerignore (the build context is the repo
+# root, so a plain .dockerignore here would be ignored). It trims the context the daemon
+# sees — secrets, scratch, git history, and the eval corpus never enter the build. The
+# Dockerfile COPYs only the 3 floor dirs under plugins/, which are NOT excluded here.
+.git
+.github
+.beads
+.claude
+.claude-plugin
+.notes
+PATCHES
+docs
+evals
+ci
+packaging
+**/__pycache__
+**/.pytest_cache
+**/.venv*
+**/venv
+**/node_modules
+**/*.pyc
