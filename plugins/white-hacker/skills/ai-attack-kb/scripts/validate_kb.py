@@ -28,6 +28,11 @@ SCHEMA_PATH = Path(__file__).resolve().parent.parent / "kb-entry-schema.json"
 
 MAX_SUMMARY_WORDS = 120
 MAX_FILE_LINES = 400
+# Data-minimization (si-10): a KB entry stores paraphrased notes + provenance, not a
+# verbatim third-party source dump. A long single fenced ``` block or `>` blockquote run
+# is the heuristic for a likely pasted source. Tunable; the 5 shipped reference/*.md
+# entries have no fenced block / blockquote run at all (max 0 lines), so this has headroom.
+MAX_VERBATIM_BLOCK_LINES = 20
 
 
 def load_schema(path: Path = SCHEMA_PATH) -> dict:
@@ -84,6 +89,48 @@ def validate_entry(meta: dict, schema: dict | None = None) -> list[str]:
     ]
 
 
+def verbatim_block_error(body: str) -> str | None:
+    """Heuristic data-minimization check (si-10): flag a likely pasted third-party body.
+
+    Returns an error string if the body holds either a single fenced ``` code block OR a
+    contiguous `>` blockquote run with more than MAX_VERBATIM_BLOCK_LINES content lines;
+    otherwise None. Counts only the lines *inside* a block, not the ``` fences themselves.
+    """
+    in_fence = False
+    fence_lines = 0
+    blockquote_lines = 0
+    for raw in body.splitlines():
+        stripped = raw.strip()
+        if stripped.startswith("```"):
+            if in_fence:
+                if fence_lines > MAX_VERBATIM_BLOCK_LINES:
+                    return (
+                        f"possible verbatim third-party body ({fence_lines}-line "
+                        "code-block) — store paraphrased notes + cite via metadata.url "
+                        "(data-minimization)"
+                    )
+                in_fence = False
+                fence_lines = 0
+            else:
+                in_fence = True
+                fence_lines = 0
+            continue
+        if in_fence:
+            fence_lines += 1
+            continue
+        if raw.lstrip().startswith(">"):
+            blockquote_lines += 1
+            if blockquote_lines > MAX_VERBATIM_BLOCK_LINES:
+                return (
+                    f"possible verbatim third-party body ({blockquote_lines}-line "
+                    "blockquote) — store paraphrased notes + cite via metadata.url "
+                    "(data-minimization)"
+                )
+        else:
+            blockquote_lines = 0
+    return None
+
+
 def validate_file(path: Path, schema: dict | None = None) -> tuple[str | None, list[str]]:
     """Validate one entry file. Returns (entry_id_or_None, errors)."""
     schema = schema if schema is not None else load_schema()
@@ -112,6 +159,10 @@ def validate_file(path: Path, schema: dict | None = None) -> tuple[str | None, l
     words = summary_word_count(body)
     if words > MAX_SUMMARY_WORDS:
         errors.append(f"summary is {words} words (>{MAX_SUMMARY_WORDS}-word cap)")
+
+    verbatim = verbatim_block_error(body)
+    if verbatim is not None:
+        errors.append(verbatim)
 
     return meta.get("id"), errors
 

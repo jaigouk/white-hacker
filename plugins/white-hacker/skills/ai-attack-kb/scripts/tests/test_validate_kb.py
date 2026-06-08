@@ -187,6 +187,80 @@ def test_oversize_file_fails(tmp_path: Path):
     assert any("400" in e or "line" in e.lower() for e in errs), errs
 
 
+# --- data-minimization (Rule 9: no verbatim third-party body) -------------
+
+def _msg_is_datamin(errs: list[str]) -> bool:
+    return any("data-minimization" in e and "verbatim" in e for e in errs)
+
+
+def test_oversize_fenced_code_block_fails(tmp_path: Path):
+    """A 25-line fenced ``` block (>MAX_VERBATIM_BLOCK_LINES) reads like a pasted
+    source dump -> INVALID with the data-minimization message."""
+    code = "\n".join(f"line {i}" for i in range(25))  # 25 content lines
+    body = VALID_BODY + f"\n```\n{code}\n```\n"
+    p = _write(tmp_path, "x.md", VALID_FRONT, body=body)
+    errs = vk.validate_file(p)[1]
+    assert _msg_is_datamin(errs), errs
+    assert any("code-block" in e for e in errs), errs
+    assert vk.main([str(tmp_path)]) == 1
+
+
+def test_short_code_block_passes(tmp_path: Path):
+    """A few-line detection grep snippet is legit paraphrased note -> VALID
+    (no data-min error). Pins the `!=` side: a short block must NOT trip."""
+    body = VALID_BODY + "\n```\ngrep -rn 'eval(' .\ngrep -rn 'pickle.loads' .\n```\n"
+    p = _write(tmp_path, "x.md", VALID_FRONT, body=body)
+    errs = vk.validate_file(p)[1]
+    assert errs == [], errs
+    assert not _msg_is_datamin(errs)
+
+
+def test_code_block_at_threshold_passes(tmp_path: Path):
+    """Exactly MAX_VERBATIM_BLOCK_LINES content lines is at the cap, not over -> VALID."""
+    n = vk.MAX_VERBATIM_BLOCK_LINES
+    code = "\n".join(f"line {i}" for i in range(n))
+    body = VALID_BODY + f"\n```\n{code}\n```\n"
+    p = _write(tmp_path, "x.md", VALID_FRONT, body=body)
+    assert vk.validate_file(p)[1] == []
+
+
+def test_oversize_blockquote_run_fails(tmp_path: Path):
+    """A 25-line contiguous `>` blockquote run reads like a pasted source quote
+    -> INVALID with the data-minimization message."""
+    quote = "\n".join(f"> quoted line {i}" for i in range(25))  # 25 contiguous `>` lines
+    body = VALID_BODY + f"\n{quote}\n"
+    p = _write(tmp_path, "x.md", VALID_FRONT, body=body)
+    errs = vk.validate_file(p)[1]
+    assert _msg_is_datamin(errs), errs
+    assert any("blockquote" in e for e in errs), errs
+    assert vk.main([str(tmp_path)]) == 1
+
+
+def test_short_blockquote_passes(tmp_path: Path):
+    """A 2-line `>` callout is fine -> VALID (the `!=` side for blockquotes)."""
+    body = VALID_BODY + "\n> note: this is an architectural design risk.\n> see ai-llm.md LLM01.\n"
+    p = _write(tmp_path, "x.md", VALID_FRONT, body=body)
+    errs = vk.validate_file(p)[1]
+    assert errs == [], errs
+    assert not _msg_is_datamin(errs)
+
+
+def test_max_verbatim_block_lines_constant():
+    """The threshold is a tunable module constant (DESIGN: tunable default)."""
+    assert vk.MAX_VERBATIM_BLOCK_LINES == 20
+    assert vk.MAX_VERBATIM_BLOCK_LINES != 0  # a real positive cap, not disabled
+
+
+def test_real_reference_entries_still_validate():
+    """The shipped reference/*.md entries must NOT trip the data-min lint
+    (else the threshold is too low). Pins the `!=` side against false positives."""
+    ref = Path(__file__).resolve().parents[2] / "reference"
+    assert ref.is_dir(), ref
+    errs = vk.validate_dir(ref)
+    assert errs == [], errs
+    assert vk.main([str(ref)]) == 0
+
+
 # --- malformed ------------------------------------------------------------
 
 def test_missing_front_matter_fails(tmp_path: Path):
