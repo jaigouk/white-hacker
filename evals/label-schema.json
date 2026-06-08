@@ -5,29 +5,94 @@
   "description": "Ground truth for one paired corpus case: where the vulnerable variant's finding should be, and the benign look-alike that must NOT fire (the false-positive term). Validated by evals/tests/test_labels.py.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["case_id", "language", "category", "severity", "vulnerable", "benign_lookalike"],
+  "required": [
+    "case_id",
+    "language",
+    "category",
+    "severity",
+    "vulnerable",
+    "benign_lookalike"
+  ],
   "properties": {
-    "case_id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]+$" },
-    "language": { "enum": ["python", "javascript", "typescript", "go", "java"] },
-    "category": { "type": "string", "minLength": 1 },
-    "severity": { "enum": ["HIGH", "MEDIUM", "LOW"] },
-    "owasp": { "type": "array", "items": { "type": "string" } },
+    "case_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]+$"
+    },
+    "language": {
+      "enum": [
+        "python",
+        "javascript",
+        "typescript",
+        "go",
+        "java"
+      ]
+    },
+    "category": {
+      "type": "string",
+      "minLength": 1
+    },
+    "severity": {
+      "enum": [
+        "HIGH",
+        "MEDIUM",
+        "LOW"
+      ]
+    },
+    "owasp": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
     "vulnerable": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["file", "line"],
+      "required": [
+        "file",
+        "line"
+      ],
       "properties": {
-        "file": { "type": "string", "minLength": 1 },
-        "line": { "type": "integer", "minimum": 1 }
+        "file": {
+          "type": "string",
+          "minLength": 1
+        },
+        "line": {
+          "type": "integer",
+          "minimum": 1
+        }
       }
     },
     "benign_lookalike": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["file"],
-      "properties": { "file": { "type": "string", "minLength": 1 } }
+      "required": [
+        "file"
+      ],
+      "properties": {
+        "file": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
     },
-    "note": { "type": "string" },
-    "difficulty": { "enum": ["easy", "medium", "hard"] }
+    "note": {
+      "type": "string"
+    },
+    "difficulty": {
+      "enum": [
+        "easy",
+        "medium",
+        "hard"
+      ]
+    },
+    "multifile": {
+      "type": "boolean"
+    },
+    "support_files": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
   }
 }

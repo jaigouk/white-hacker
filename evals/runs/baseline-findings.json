@@ -4,7 +4,7 @@
     "model": "claude-sonnet",
     "date": "2026-06-07",
     "note": "REAL agent run over all 103 frozen corpus cases (blind, neutralized filenames).",
-    "n_findings": 115
+    "n_findings": 118
   },
   "findings": [
     {
@@ -696,6 +696,24 @@
       "line": 5,
       "category": "deserialization",
       "confidence": 0.95
+    },
+    {
+      "file": "mf-pathtrav-crossfile/vulnerable_variant.py",
+      "line": 8,
+      "category": "injection",
+      "confidence": 0.9
+    },
+    {
+      "file": "mf-sqli-crossfile/vulnerable_variant.py",
+      "line": 6,
+      "category": "injection",
+      "confidence": 0.9
+    },
+    {
+      "file": "mf-llm05-crossfile/vulnerable_variant.py",
+      "line": 7,
+      "category": "improper-output-handling",
+      "confidence": 0.9
     }
   ]
 }

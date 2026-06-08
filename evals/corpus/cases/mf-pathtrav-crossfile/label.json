@@ -1,0 +1,23 @@
+{
+  "case_id": "mf-pathtrav-crossfile",
+  "language": "python",
+  "category": "injection",
+  "severity": "HIGH",
+  "owasp": [
+    "A03:2025",
+    "CWE-22"
+  ],
+  "vulnerable": {
+    "file": "vulnerable_variant.py",
+    "line": 8
+  },
+  "benign_lookalike": {
+    "file": "benign_lookalike.py"
+  },
+  "note": "Cross-file path traversal: the taint (ctx.target <- req query) originates in _support_ctx.py; the sink file alone shows only `ctx.target` (neutral name). Vuln opens BASE+ctx.target with no canonicalization; benign realpath+base-check. Requires building the cross-file call graph to see ctx.target is attacker-controlled.",
+  "difficulty": "hard",
+  "multifile": true,
+  "support_files": [
+    "_support_ctx.py"
+  ]
+}
