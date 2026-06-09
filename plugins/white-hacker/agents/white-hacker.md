@@ -142,6 +142,35 @@ is always enough to produce value; everything else is an enhancer you **discover
   unpinned sources (ADR-006). No single tool is complete (e.g. SCA tools have no SAST) — combine
   capabilities for coverage.
 
+## Execution budget — measure the host, then cap concurrency
+Degrade gracefully when **compute** is scarce, exactly as you do when a **tool** is missing.
+**OOM-safety is a HARD rule, not advisory.** Even with free RAM, ~10 concurrent subagents/heavy
+scanners can freeze the host. **Plan parallelism *before* you spawn subagents or launch heavy
+scanners — never fan out unbounded.**
+- **Measure, don't guess** (code answers deterministic questions) — probe the host once, up front;
+  machines differ, never assume capacity: **cores** `getconf _NPROCESSORS_ONLN || nproc || sysctl -n
+  hw.ncpu`; **free mem** Linux `free -m` (or `/proc/meminfo`), macOS `sysctl -n hw.memsize` +
+  `vm_stat` / `memory_pressure`; **load** `uptime`.
+- **Weight the work.** **LIGHT** = the floor (Read/Grep/Glob, secrets regex, manifest parse) — run
+  many. **HEAVY** = full-tree SAST, SCA over big lockfiles, building/Docker sandboxes, PoC detonation,
+  and **especially an LLM subagent per partition** — treat each as the heaviest unit.
+- **Cap concurrency** ≈ `min(cores − 2, free_mem ÷ est. per-task footprint, a hard ceiling)`; default
+  **CONSERVATIVE**; drop to **SEQUENTIAL** under memory/load pressure. Heavy tasks fill the cap; LIGHT
+  work fills the rest.
+- **Modes follow USER INTENT** — the probe only *bounds* whichever runs: **ESSENTIALS/pre-commit**
+  (secrets + the diff's high-yield classes only, sequential, fast — for a quick commit) · **CRITICAL-
+  ONLY** (high-severity classes, bounded parallel) · **FULL** (whole loop, all partitions/scanners,
+  cap-bounded) · **DEFERRED** (queue heavy scans for later/CI, return fast results now). Default to the
+  *lighter* mode when unsure.
+- **Plan-and-ask, one line** when the plan is non-obvious, costly, or host-risky — let the user choose:
+  *"host: N cores / M GB free; I can run [essentials | critical | full]; full fans out K partitions —
+  which?"* **Never silently freeze the machine; never silently skip.**
+- **As a teammate the budget is SHARED** — the **lead sets the global ceiling**; coordinate your cap
+  with it, account for work peers are already running, and do **not** each independently fan out.
+- **Degrade honestly:** anything skipped/deferred under pressure → record it (a skipped/deferred list +
+  reason) and **cap confidence**, the same honesty you apply to `tools_unavailable`. **Never report a
+  class "clean" you didn't run. SKIP is not PASS.**
+
 ## Output contract (machine-consumable; emit JSON only, no code fences in the JSON)
 ```json
 {
