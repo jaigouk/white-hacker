@@ -39,6 +39,11 @@ except ModuleNotFoundError:  # Python 3.10 — no stdlib tomllib
     tomllib = None  # type: ignore[assignment]
 
 import degradation as dg
+# `is_known_bad(name, version, db)` (malware_db.py:47) is the version-aware predicate the
+# S8 matcher delegates to (sibling module, same package — imported via the conftest path
+# like the tests' `import malware_db as mdb`; no defensive guard needed, it has no
+# optional-stdlib dependency unlike tomllib above).
+from malware_db import is_known_bad
 
 KB_REF = "AISEC-SUPPLY-CHAIN-001"
 _OWASP = ["A06:2021"]  # Vulnerable and Outdated Components
@@ -209,14 +214,55 @@ def _read_json(path: Path) -> dict:
         return {}
 
 
+def _resolved_npm(root: Path) -> dict[str, str]:
+    """Extract `{name: resolved_version}` from a `package-lock.json` (wh-4k9).
+
+    Supports lockfileVersion 2/3 (the `packages` map, keyed by node_modules path —
+    strip everything up to the LAST `node_modules/` so nested deps resolve to their bare
+    name) AND falls back to the legacy v1 `dependencies` map. pnpm-lock.yaml / yarn.lock
+    are SKIPPED — stdlib has no YAML parser, so those stay presence-only (degrade, not
+    crash). On a name collision across depths the SHALLOWEST path wins deterministically
+    (the top-level install the manifest pins; fewest `node_modules/` segments — on a tie
+    the first seen) so a nested copy listed first in a hand-ordered / tampered lockfile
+    cannot shadow it (TL finding 2). NEVER raises: a missing/odd lockfile yields `{}`."""
+    lock = _read_json(root / "package-lock.json")
+    out: dict[str, str] = {}
+    best_depth: dict[str, int] = {}
+    packages = lock.get("packages")
+    if isinstance(packages, dict):  # lockfileVersion 2/3
+        for path, meta in packages.items():
+            if not path or not isinstance(meta, dict):
+                continue  # "" is the root project itself
+            name = path.rsplit("node_modules/", 1)[-1]
+            version = meta.get("version")
+            if not name or not isinstance(version, str):
+                continue
+            depth = path.count("node_modules/")  # 1 = top-level, >1 = nested
+            if name not in best_depth or depth < best_depth[name]:
+                out[name] = version
+                best_depth[name] = depth
+    deps_map = lock.get("dependencies")
+    if isinstance(deps_map, dict):  # legacy lockfileVersion 1 (or v2 back-compat block)
+        for name, meta in deps_map.items():
+            if name in out or not isinstance(meta, dict):
+                continue
+            version = meta.get("version")
+            if isinstance(version, str):
+                out[name] = version
+    return out
+
+
 def parse_npm(project_dir: str) -> dict:
     """npm ADAPTER: read package.json + any lockfile into the normalized struct.
 
-    Returns `{deps:[{name,spec,source_type}], lifecycle_scripts:{...},
+    Returns `{deps:[{name,spec,source_type[,resolved]}], lifecycle_scripts:{...},
     lockfile_present:bool, script_files:[paths]}`. NEVER raises on a missing or odd
-    manifest — degrades to an empty-but-well-formed struct (spike-09 floor semantics)."""
+    manifest — degrades to an empty-but-well-formed struct (spike-09 floor semantics).
+    The OPTIONAL `resolved` key (wh-4k9) carries the lockfile-resolved version when
+    `package-lock.json` lists the dep — additive, never replaces name/spec/source_type."""
     root = Path(project_dir)
     pkg = _read_json(root / "package.json")
+    resolved = _resolved_npm(root)
 
     deps: list[dict] = []
     for field in ("dependencies", "devDependencies", "optionalDependencies",
@@ -224,11 +270,14 @@ def parse_npm(project_dir: str) -> dict:
         block = pkg.get(field)
         if isinstance(block, dict):
             for name, spec in block.items():
-                deps.append({
+                dep = {
                     "name": str(name),
                     "spec": str(spec),
                     "source_type": _classify_source(str(spec)),
-                })
+                }
+                if str(name) in resolved:  # additive optional key, only when known
+                    dep["resolved"] = resolved[str(name)]
+                deps.append(dep)
 
     scripts = pkg.get("scripts") if isinstance(pkg.get("scripts"), dict) else {}
     lifecycle = {h: str(scripts[h]) for h in _LIFECYCLE_HOOKS if h in scripts}
@@ -347,13 +396,39 @@ def _parse_requirement_line(line: str) -> dict | None:
     return _pypi_dep(nm.group(1), s)
 
 
+def _resolved_pypi(root: Path) -> dict[str, str]:
+    """Extract `{name: version}` from a poetry.lock / uv.lock (wh-4k9).
+
+    Both are TOML with a `[[package]]` array of `{name, version}` tables — parsed via the
+    package's EXISTING defensive tomllib import (supply_chain.py:32-34), so on a Python
+    3.10 floor (no stdlib tomllib) this degrades to `{}` rather than crashing. NEVER
+    raises. poetry.lock entries WIN over uv.lock on a name clash (poetry is read first)."""
+    out: dict[str, str] = {}
+    for lockname in _PYPI_LOCKFILES:  # ("poetry.lock", "uv.lock")
+        data = _read_toml(root / lockname)
+        packages = data.get("package")
+        if not isinstance(packages, list):
+            continue
+        for entry in packages:
+            if not isinstance(entry, dict):
+                continue
+            name = entry.get("name")
+            version = entry.get("version")
+            if isinstance(name, str) and isinstance(version, str):
+                out.setdefault(name, version)
+    return out
+
+
 def parse_pypi(project_dir: str) -> dict:
     """PyPI ADAPTER: pyproject.toml (`[project].dependencies` PEP 508 list AND/OR
     `[tool.poetry.dependencies]` table) and/or requirements.txt → normalized struct.
 
     Lockfile: poetry.lock / uv.lock. `setup.py` present → arbitrary code runs at
-    build/install time (S1 hook) — recorded in `lifecycle_scripts` + scanned (S6/S7)."""
+    build/install time (S1 hook) — recorded in `lifecycle_scripts` + scanned (S6/S7).
+    The OPTIONAL `resolved` key (wh-4k9) carries the lockfile-resolved version when a
+    poetry.lock / uv.lock lists the dep — additive, never replaces name/spec/source_type."""
     root = Path(project_dir)
+    resolved = _resolved_pypi(root)
     deps: list[dict] = []
     seen_names: set[str] = set()
 
@@ -396,6 +471,12 @@ def parse_pypi(project_dir: str) -> dict:
             if d and d["name"] not in seen_names:
                 deps.append(d)
                 seen_names.add(d["name"])
+
+    # wh-4k9: attach the OPTIONAL lockfile-resolved version once, additively. Done after
+    # collection (rather than per append-site) so all three dep sources are covered.
+    for d in deps:
+        if d["name"] in resolved:
+            d["resolved"] = resolved[d["name"]]
 
     lifecycle: dict[str, str] = {}
     script_files: list[str] = []
@@ -652,6 +733,34 @@ def _unpinned(spec: str) -> bool:
     return bool(re.search(r"[\^~*]|latest|x", s)) and _classify_source(s) == "registry"
 
 
+# A PLAIN version literal: a numeric core with an OPTIONAL pre-release AND an OPTIONAL
+# build-metadata segment (semver order: `core(-prerelease)?(+build)?`), e.g. `1.0.0`,
+# `2.5.0-rc.1`, `1.0.0+build.7`, `1.0.0-beta+meta`. The two segments are matched SEPARATELY
+# (a single `[-+]…` class wrongly accepted only one and excluded `+` — TL finding 1).
+# Anything with a range operator (`^ ~ >= < =`), a wildcard (`* x`), a tag (`latest`), a
+# hyphen RANGE, or a vcs/url/file spec is NOT this.
+_EXACT_VERSION_RE = re.compile(
+    r"^\d+(?:\.\d+){0,2}(?:-[0-9A-Za-z.\-]+)?(?:\+[0-9A-Za-z.\-]+)?$"
+)
+
+
+def _exact_pin(spec: str) -> str | None:
+    """The settled EXACT-PIN rule (wh-4k9): a manifest spec that is a plain version
+    literal counts as a resolved version when no lockfile entry exists — npm `1.0.0`,
+    pypi `==1.0.0` / bare `1.0.0`. Returns the bare version, or None for any RANGE
+    (`^`/`~`/`>=`/`*`/`latest`/hyphen ranges) or git/url/file spec. Conservative: when in
+    doubt it returns None so an unresolved range NEVER matches a specific-version DB entry
+    (that name-only match is exactly the false positive wh-4k9 removes)."""
+    s = (spec or "").strip()
+    if not s:
+        return None
+    if s.startswith("=="):  # pypi exact pin: `==1.0.0` / `== 1.0.0`
+        s = s[2:].strip()
+    if _EXACT_VERSION_RE.match(s):
+        return s
+    return None
+
+
 def signal_s1(norm: dict) -> bool:
     """S1 — an install-time lifecycle hook is present (necessary-not-sufficient)."""
     return bool(norm.get("lifecycle_scripts"))
@@ -742,17 +851,37 @@ def signal_s7(norm: dict) -> list[str]:
 
 
 def signal_s8(norm: dict, malware_db: dict | None) -> list[str]:
-    """S8 — known-bad match against an OPTIONAL offline OSSF/GHSA snapshot.
+    """S8 — VERSION-AWARE known-bad match against an OPTIONAL offline OSSF/GHSA snapshot.
 
-    A HOOK that DEGRADES: `malware_db` is None (no snapshot on disk) → return [] and the
-    caller records `malware-db` unavailable. When present, `malware_db` is a mapping of
-    `{package_name: set/list of bad versions or '*'}`; we match by name (offline, exact)."""
+    A HOOK that DEGRADES: `malware_db` is None/empty (no snapshot on disk) → return [] and
+    the caller records `malware-db` unavailable. When present, `malware_db` is a mapping
+    `{package_name: set/str of bad versions or '*'}` (e.g. from `load_malware_db`).
+
+    wh-4k9 — match by name AND version (NOT name only, which flagged EVERY user of a
+    popular compromised package, not just the bad versions):
+      * the dep's version = `resolved` (lockfile) or `_exact_pin(spec)` (an exact manifest
+        pin with no lockfile). Known → `is_known_bad(name, version, db)` (malware_db.py:47).
+      * NO version known (a range with no lockfile) → flag ONLY when the DB entry is the
+        wildcard `"*"` (the whole package is bad). NEVER flag a specific-version entry on
+        an unresolved range — that name-only match is the false positive this removes.
+
+    Accepted residual (wh-4k9): `resolved` comes from the target's OWN lockfile — the same
+    trust domain as the manifest (attacker-controlled), so a tampered lockfile can suppress
+    a specific-version hit; S8 stays a human-triaged candidate (never a block) and a `"*"`
+    wildcard DB entry still fires regardless of the resolved version."""
     if not malware_db:
         return []
     hits: list[str] = []
     for d in norm.get("deps", []):
-        if d["name"] in malware_db:
-            hits.append(d["name"])
+        name = d["name"]
+        if name not in malware_db:
+            continue
+        version = d.get("resolved") or _exact_pin(d.get("spec", ""))
+        if version is not None:
+            if is_known_bad(name, version, malware_db):
+                hits.append(name)
+        elif "*" in malware_db[name]:  # unresolved range → only a wildcard entry flags
+            hits.append(name)
     return hits
 
 

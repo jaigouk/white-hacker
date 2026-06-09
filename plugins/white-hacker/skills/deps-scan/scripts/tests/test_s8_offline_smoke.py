@@ -120,20 +120,26 @@ def test_s8_fires_end_to_end_from_on_disk_snapshot(tmp_path):
 
 
 # --------------------------------------------------------------------------- #
-# 3) S8 is a conservative NAME match — fires regardless of the installed version
+# 3) S8 is VERSION-AWARE (wh-4k9) — a specific-version watchlist entry must NOT
+#    flag a user pinned to a DIFFERENT, safe version (the name-only FP fix). A
+#    wildcard "*" entry in the SAME project still flags (the != pair).
 # --------------------------------------------------------------------------- #
-def test_s8_name_match_fires_regardless_of_version(tmp_path):
+def test_s8_version_mismatch_does_not_flag(tmp_path):
     osv_dir = _write_ossf_snapshot(tmp_path / "malicious-packages")
     db = mdb.load_malware_db(osv_dir)
-    # depend on the explicit-versions bad pkg at a version NOT in its {"1.2.3"} set
-    proj = _write_project(tmp_path / "app", {_BAD_EXPLICIT: "9.9.9"})
+    # _BAD_EXPLICIT is bad ONLY at {"1.2.3"}; _BAD_WILDCARD is bad at any version ("*").
+    # Pin _BAD_EXPLICIT to 9.9.9 (a SAFE version not in its set) — under version-aware
+    # matching it must NOT flag — while _BAD_WILDCARD in the same project still flags.
+    proj = _write_project(
+        tmp_path / "app", {_BAD_EXPLICIT: "9.9.9", _BAD_WILDCARD: "0.0.1"}
+    )
 
     doc = sc.scan(str(proj), malware_db=db)
     scens = _scenarios(doc)
-    # == expected: name match still flags (any version of a known-bad-named pkg is suspect)
-    assert any(f"{_BAD_EXPLICIT} @" in s and "S8" in s for s in scens)
-    # != wrong: it is NOT silently dropped just because 9.9.9 wasn't the listed version
-    assert scens != []
+    # == expected: the safe-version pin of a specific-version entry does NOT flag
+    assert not any(f"{_BAD_EXPLICIT} @" in s for s in scens)
+    # != wrong pair: the wildcard entry in the SAME project DOES still flag
+    assert any(f"{_BAD_WILDCARD} @" in s and "S8" in s for s in scens)
 
 
 # --------------------------------------------------------------------------- #
