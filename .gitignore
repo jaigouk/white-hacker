@@ -3,6 +3,8 @@
 
 # Local, machine-specific Claude Code settings (personal permissions)
 .claude/settings.local.json
+# Per-agent runtime memory (MEMORY.md-style scratch) — fragments across machines; use `bd remember`
+.claude/agent-memory/
 # Scheduler/wakeup runtime lock (session id + pid + timestamps) — ephemeral local state
 .claude/scheduled_tasks.lock
 

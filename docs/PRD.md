@@ -1,7 +1,7 @@
 # PRD — white-hacker: a generic, self-improving white-hat security agent
 
 > Living document. Maintained, not write-once. Today: 2026-06-09. Owner: ping@jaigouk.kim.
-> Companions: `docs/ARD.md` (the *why* — ADR-001..022), `docs/plan/PLAN.md` (the build plan),
+> Companions: `docs/ARD.md` (the *why* — ADR-001..023), `docs/plan/PLAN.md` (the build plan),
 > `.claude/agents/white-hacker.md` (behavior source of truth). This PRD does not contradict them;
 > where it restates a decision, ADR-NNN is cited.
 
