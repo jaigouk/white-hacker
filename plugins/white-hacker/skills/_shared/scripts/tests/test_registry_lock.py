@@ -3,7 +3,7 @@
 The registry is the human-facing twin of the executable capability→tool map. If a capability is
 added/renamed in the code but not the doc (or vice-versa), this fails — preventing drift.
 
-Run: `uv run --with pytest pytest .claude/skills/_shared/scripts/tests/test_registry_lock.py`
+Run: `uv run --with pytest pytest plugins/white-hacker/skills/_shared/scripts/tests/test_registry_lock.py`
 """
 from __future__ import annotations
 
