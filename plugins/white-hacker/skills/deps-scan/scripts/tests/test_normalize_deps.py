@@ -11,6 +11,8 @@ from __future__ import annotations
 import json
 import pathlib
 
+import pytest
+
 import detect_tools as dt
 import normalize_deps as nd
 import validate_findings as vf
@@ -26,6 +28,14 @@ def _repo_root(start: pathlib.Path) -> pathlib.Path:
 
 
 _FIXTURE = _repo_root(pathlib.Path(__file__)) / "docs" / "research" / "poc-trivy-sca" / "trivy-output.json"
+
+# wh-8lx: this whole module drives a repo fixture (docs/research/poc-trivy-sca) found via a `.git`
+# repo-root walk. In a minimal package checkout / the Docker sandbox the repo isn't present, so SKIP
+# (not fail) when the fixture is absent — the suite stays portable. Present → runs as before.
+pytestmark = pytest.mark.skipif(
+    not _FIXTURE.exists(),
+    reason=f"repo fixture absent ({_FIXTURE}) — e.g. the minimal deps-scan sandbox image",
+)
 
 
 def _trivy_doc() -> dict:

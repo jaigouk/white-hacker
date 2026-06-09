@@ -22,6 +22,8 @@ from __future__ import annotations
 import json
 import pathlib
 
+import pytest
+
 import supply_chain as sc
 import validate_findings as vf
 
@@ -370,6 +372,10 @@ def test_demo_poc_scans_and_validates():
     else:
         repo_root = pathlib.Path(__file__).resolve().parents[-1]
     demo = repo_root / "docs" / "research" / "poc-supply-chain"
+    # wh-8lx: the committed demo lives in the repo (found via a `.git` walk); a minimal package
+    # checkout / the Docker sandbox lacks it, so SKIP (not fail) when absent — keeps the suite portable.
+    if not demo.exists():
+        pytest.skip(f"repo demo fixture absent ({demo}) — e.g. the minimal deps-scan sandbox image")
     doc = sc.scan(str(demo))
     assert vf.validate(doc) == []
     assert _emitted(doc), "the demo's bad package must surface ≥1 candidate"

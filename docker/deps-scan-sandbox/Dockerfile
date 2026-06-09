@@ -44,15 +44,11 @@ ENV PYTHONPATH=/work/skills/_shared/scripts:/work/skills/sec-detect/scripts:/wor
 
 USER 10001:10001
 
-# Default: the OFFLINE supply-chain-floor + S8 test suite (incl. the S8 smoke test, wh-2v5).
-# Two REPO-FIXTURE-bound tests are excluded — they scan committed demo projects under docs/research/
-# via a `.git` repo-root walk, which the minimal sandbox image deliberately does not contain (they
-# are gate regressions, not untrusted-input isolation; run them natively with `uv run … pytest`):
-#   --ignore  test_normalize_deps.py  (the trusted-Trivy-report normalizer; docs/research/poc-trivy-sca)
-#   --deselect test_demo_poc_scans_and_validates  (docs/research/poc-supply-chain)
+# Default: the OFFLINE deps-scan test suite (incl. the S8 smoke test, wh-2v5). The two
+# repo-fixture-bound tests (docs/research/poc-trivy-sca, poc-supply-chain) now self-skip when the
+# fixture is absent (wh-8lx), so the FULL suite runs here with no per-test exclusions — those two
+# report `skipped` in-container and `passed` natively.
 ENTRYPOINT ["python", "-m", "pytest"]
 # -p no:cacheprovider: the rootfs is --read-only (no writable cache dir) and the container is
 # ephemeral (--rm), so disable pytest's cache to keep the run warning-free.
-CMD ["/work/skills/deps-scan/scripts/tests", "-q", "-p", "no:cacheprovider", \
-     "--ignore=/work/skills/deps-scan/scripts/tests/test_normalize_deps.py", \
-     "-k", "not test_demo_poc_scans_and_validates"]
+CMD ["/work/skills/deps-scan/scripts/tests", "-q", "-p", "no:cacheprovider"]
