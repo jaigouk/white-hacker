@@ -212,10 +212,23 @@ The first line registers this GitHub repo as a marketplace; the second installs 
 /white-hacker:sec-init                   # per-project onboarding (below)
 ```
 
-> Fallback (legacy, no marketplace): copy `plugins/white-hacker/{agents,skills,commands,hooks}/`
-> into your **user scope** (`~/.claude/`) for cross-project reuse. This is the pre-ADR-017
-> model and is no longer the primary path — prefer marketplace install so updates flow through
-> `/plugin`.
+**One-command install (`install.sh`, ADR-021).** A pinned, `curl|bash`-safe installer you run *inside*
+a target project — defaults to the **latest release tag**, dogfoods ADR-006 (pins + GPG-verifies, fetches
+nothing unpinned, function-wrapped against truncated downloads):
+
+```
+# vendor into ./.claude/ (self-contained, committed, CI-runnable) — the default lane
+curl -fsSL https://raw.githubusercontent.com/jaigouk/white-hacker/HEAD/install.sh | bash
+# or the marketplace plugin (auto-updates):
+curl -fsSL https://raw.githubusercontent.com/jaigouk/white-hacker/HEAD/install.sh | bash -s -- --plugin
+```
+
+Pin/override with `--ref <tag>`; preview with `--dry-run`; CI with `--unattended`. The skills are
+**stdlib-only** and run isolated via `uv run --project` — **nothing is installed into your project's
+Python env** (only `uv` is required; it also provisions Python). Review-before-run: download, read, run.
+
+> (Pre-ADR-021 manual fallback: hand-copying `plugins/white-hacker/{agents,skills,commands,hooks}/`
+> into `~/.claude/` is unpinned and drifts — use `install.sh` or the marketplace instead.)
 
 ### 2 — Dev / dogfood loop (no install)
 
