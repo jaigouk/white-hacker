@@ -51,6 +51,8 @@ USER 10001:10001
 #   --ignore  test_normalize_deps.py  (the trusted-Trivy-report normalizer; docs/research/poc-trivy-sca)
 #   --deselect test_demo_poc_scans_and_validates  (docs/research/poc-supply-chain)
 ENTRYPOINT ["python", "-m", "pytest"]
-CMD ["/work/skills/deps-scan/scripts/tests", "-q", \
+# -p no:cacheprovider: the rootfs is --read-only (no writable cache dir) and the container is
+# ephemeral (--rm), so disable pytest's cache to keep the run warning-free.
+CMD ["/work/skills/deps-scan/scripts/tests", "-q", "-p", "no:cacheprovider", \
      "--ignore=/work/skills/deps-scan/scripts/tests/test_normalize_deps.py", \
      "-k", "not test_demo_poc_scans_and_validates"]
