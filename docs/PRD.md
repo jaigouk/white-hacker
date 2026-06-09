@@ -1,7 +1,7 @@
 # PRD — white-hacker: a generic, self-improving white-hat security agent
 
-> Living document. Maintained, not write-once. Today: 2026-06-06. Owner: ping@jaigouk.kim.
-> Companions: `docs/ARD.md` (the *why* — ADR-001..015), `docs/plan/PLAN.md` (the build plan),
+> Living document. Maintained, not write-once. Today: 2026-06-09. Owner: ping@jaigouk.kim.
+> Companions: `docs/ARD.md` (the *why* — ADR-001..022), `docs/plan/PLAN.md` (the build plan),
 > `.claude/agents/white-hacker.md` (behavior source of truth). This PRD does not contradict them;
 > where it restates a decision, ADR-NNN is cited.
 
@@ -122,6 +122,15 @@ its requirements (gates, provenance, identity preservation) are as load-bearing 
   to the tool registry the same way I propose a new attack technique.
 - US-10: As a reviewer of the agent's PRs, I see evidence (session ids, motivating FP/miss, before/
   after score table) and an Apply/Edit/Skip choice, with the decision journaled.
+
+**Execution & resources (P1/P2)**
+- US-11: As a dev on a modest laptop, when I ask for a full review the agent measures my machine and
+  runs within a safe concurrency cap (or proposes a lighter plan) — it never spawns enough parallel
+  work to OOM-freeze my host, even when RAM looks free.
+- US-12: As a dev about to commit, I ask for "just the essentials" and get a fast, **sequential**
+  secrets + high-yield-diff scan in seconds, with the heavy SCA/SAST deferred to CI.
+- US-13: As a TL running white-hacker alongside other subagents, the review respects a **shared**
+  concurrency ceiling I set, instead of each agent independently fanning out and oversubscribing the host.
 
 ---
 
@@ -269,6 +278,42 @@ Each FR carries a one-line **Verification criterion (VC)** — checkable accepta
   *VC:* in team mode the agent loads `SendMessage` before routing and addresses the tech-lead; without
   `SendMessage` it degrades to a clean refusal rather than erroring.
 
+### 5.7 Resource-aware execution (concurrency planning)
+Run tasks in parallel only when the host can take it; under pressure go sequential, skip/defer the heavy
+ones, or ask — never blindly fan out into an OOM-freeze. Source of truth: `.claude/agents/white-hacker.md`
+§ "Execution budget"; continuous with the tool-degradation posture (ADR-003, FR-13).
+- **FR-22 — Measure the host, don't guess.** Before any fan-out, probe the host *deterministically* —
+  CPU count, free memory, load average — cross-platform (`getconf`/`nproc`/`sysctl`, `free`/`vm_stat`,
+  `uptime`); never assume capacity (Policy 5: code answers a deterministic question).
+  *VC:* the agent obtains measured cores/free-mem/load before spawning subagents or heavy scanners; its
+  plan references those measured values, not assumptions.
+- **FR-23 — Bounded concurrency + OOM-safety.** Cap parallelism at `min(cores − headroom, free_mem ÷
+  per-task footprint, a hard ceiling)`; treat **each LLM subagent as the heaviest unit**; drop to
+  **sequential** under memory/load pressure; never fan out unbounded even when RAM looks free.
+  *VC:* a full review on a constrained or already-loaded host runs within the computed cap (or
+  sequentially) and never spawns concurrent heavy units beyond it; the host does not OOM-freeze.
+- **FR-24 — Execution modes by user intent.** Support **ESSENTIALS/pre-commit** (critical + cheap,
+  sequential, fast — for a quick commit), **CRITICAL-ONLY** (high-severity classes, bounded parallel),
+  **FULL** (whole loop, all partitions/scanners, cap-bounded), **DEFERRED** (queue heavy scans for
+  CI/later, return fast results now).
+  *VC:* "essentials" runs only secrets + the diff's high-yield classes, sequentially, in seconds;
+  "deferred" returns fast results and lists the queued heavy scans.
+- **FR-25 — Plan-and-ask interaction.** When the plan is non-obvious, costly, or host-risky, surface a
+  **one-line plan** (measured host capacity + mode options + fan-out width) and let the user choose;
+  never silently freeze the host, never silently skip.
+  *VC:* on a large scope or constrained host the agent emits a one-line plan with measured capacity +
+  mode options before launching, and proceeds on the user's choice or a safe lighter default.
+- **FR-26 — Shared budget in team/multi-agent mode.** As a teammate or when spawning helpers, treat the
+  resource budget as **shared**: the lead sets the global concurrency ceiling; coordinate, account for
+  peers' running work, do not independently fan out.
+  *VC:* in team mode the agent's concurrency respects a lead-set ceiling and does not launch heavy units
+  that, combined with peers, exceed it.
+- **FR-27 — Honest degradation under resource limits.** Any check skipped/deferred under pressure is
+  recorded (a skipped/deferred list + reason) with confidence capped; never report a class "clean" that
+  was not run — **SKIP ≠ PASS** (continuous with FR-13 / NFR-03 tool-degradation).
+  *VC:* a resource-constrained run lists every skipped/deferred check with a reason and caps confidence;
+  no skipped class appears as "clean" in the report.
+
 ---
 
 ## 6. Non-functional requirements (NFR)
@@ -323,6 +368,12 @@ Each NFR carries a one-line **Verification criterion (VC)**.
   touch the fast tier only.
   *VC:* an entry past `review_by` is flagged stale by CI; the weekly re-score runs against the same
   asymmetric thresholds.
+- **NFR-11 — Resource safety (OOM avoidance).** The agent must never oversubscribe the host into an
+  OOM/freeze; concurrency is bounded by a *measured* cap (FR-22/23) and degrades to sequential/deferred
+  under pressure rather than failing the host. Complements NFR-08 — the cap governs the per-partition
+  fan-out NFR-08 describes.
+  *VC:* on a memory-constrained or already-loaded host, a full review completes without OOM-killing or
+  freezing the machine, and observed concurrency never exceeds the computed cap.
 
 ---
 
@@ -337,6 +388,7 @@ Each NFR carries a one-line **Verification criterion (VC)**.
 | **M5 — Floor value** | Zero-tool run still surfaces true positives on a labeled fixture | Run FR-13 path against the corpus; count caught labeled cases |
 | **M6 — Safety** | 0 secret values leaked to any artifact; 0 successful injection-driven behavior changes | Injection-payload fixtures + secret-leak grep over all emitted artifacts |
 | **M7 — Self-edit acceptance fidelity** | Human Apply/Edit/Skip decisions agree with the gate's verdict (track toward graduated autonomy) | Audit log review across PRs |
+| **M8 — Resource safety** | 0 host OOM-freezes across review runs; observed concurrency ≤ the computed cap | Full reviews on a constrained host / under synthetic load; assert no OOM-kill + cap adherence |
 
 ---
 
@@ -350,6 +402,9 @@ Each NFR carries a one-line **Verification criterion (VC)**.
 - Compliance certification, SBOM attestation signing, and ticketing-system integration beyond the
   post-triage P1 ticket hand-off.
 - Cross-machine sync of auto-memory (machine-local by design; durable learnings go to the git-tracked KB).
+- OS-level resource *enforcement* (cgroups / `ulimit` / `nice`): the concurrency budget is planned from a
+  *measured* probe and honored by the agent, not kernel-enforced (v1). A deterministic `resource_probe`
+  helper (prints cores/free-mem/load + a suggested cap) is a candidate enhancer for FR-22, not a v1 requirement.
 
 ---
 
@@ -358,7 +413,7 @@ Each NFR carries a one-line **Verification criterion (VC)**.
 | Source of truth | Anchored requirements |
 |---|---|
 | `docs/ARD.md` ADR-001 (two nested loops) | G1, G2, FR-01..07, FR-16..18 |
-| ADR-003 (graceful degradation) | FR-13, NFR-03 |
+| ADR-003 (graceful degradation → extended to compute) | FR-13, FR-27, NFR-03, NFR-11 |
 | ADR-004 (self-improvement, human-in-loop) | FR-17, FR-18, NFR-06, §8 |
 | ADR-005 (size caps) | FR-19, NFR-06 |
 | ADR-006 (tool pinning) | NFR-07 |
@@ -368,7 +423,7 @@ Each NFR carries a one-line **Verification criterion (VC)**.
 | ADR-010 (patch by capability-removal) | FR-06, NFR-05 |
 | ADR-012 (living KB, dated/sourced) | FR-16, NFR-09, NFR-10 |
 | ADR-015 (capability layer, self-updating registry) | NG1, FR-12, FR-14, NFR-02 |
-| `.claude/agents/white-hacker.md` | FR-01..21, NFR-04, NFR-05 |
+| `.claude/agents/white-hacker.md` (incl. § "Execution budget") | FR-01..27, NFR-04, NFR-05, NFR-11 |
 | `docs/research/si-07-threat-feeds.md` | FR-16, M3 |
 
 > Maintenance note: when an ADR changes or a skill is added/renamed, update the matching FR/NFR and
