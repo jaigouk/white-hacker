@@ -30,7 +30,7 @@ WH_PLUGIN="white-hacker"
 
 LANE="vendor"; DRYRUN=0; UNATTENDED="${WH_UNATTENDED:-0}"; WH_REF="${WH_REF:-}"; TARGET="$PWD"
 UV_VERSION="${UV_VERSION:-0.11.2}"   # pinned uv to install if absent (ADR-006); override via env
-OS=""; ARCH=""
+OS=""; ARCH=""; CLONE=""             # CLONE is global so the EXIT trap can clean it up
 
 c() { printf '\033[%sm%s\033[0m' "$1" "$2"; }
 log()  { printf '%s %s\n' "$(c '1;36' '==>')" "$*" >&2; }   # stderr: never pollute $(clone_pinned)
@@ -151,10 +151,10 @@ main() {
   WH_REF="$(resolve_ref)"; log "white-hacker @ $(c '1;32' "$WH_REF")  lane=$LANE  target=$TARGET${DRYRUN:+}"
   [ "$DRYRUN" = 1 ] && log "(dry-run — nothing will change)"
   ensure_uv
-  local clone; clone="$(clone_pinned "$WH_REF")"; trap 'rm -rf "$clone"' EXIT
+  CLONE="$(clone_pinned "$WH_REF")"; trap 'rm -rf "${CLONE:-}"' EXIT
   case "$LANE" in
-    vendor) vendor "$clone" "$TARGET";;
-    plugin) plugin "$clone";;
+    vendor) vendor "$CLONE" "$TARGET";;
+    plugin) plugin "$CLONE";;
   esac
   cat <<EOF
 
