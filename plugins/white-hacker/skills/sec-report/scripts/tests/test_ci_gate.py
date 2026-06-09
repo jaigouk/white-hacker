@@ -103,6 +103,12 @@ def test_main_no_args_is_usage_error():
 
 
 def test_real_deduped_fixture_fails_gate():
-    # the Phase-1 fixture has 3 HIGH findings -> the gate must fail it.
-    assert FIXTURE.exists(), FIXTURE
+    # the Phase-1 fixture has 3 HIGH findings -> the gate must fail it. It lives under docs/research/
+    # (dev/sandbox only) and is NOT vendored into a target project, where _repo_root resolves to the
+    # target's own .git — so SKIP (not error) when absent, mirroring deps-scan test_supply_chain.py:378.
+    # Keeps the vendored suite portable (wh-7gh).
+    if not FIXTURE.exists():
+        import pytest
+
+        pytest.skip(f"dev/sandbox-only fixture absent ({FIXTURE}) — e.g. a vendored target copy")
     assert cg.main([str(FIXTURE)]) == 1

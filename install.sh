@@ -27,6 +27,11 @@ WH_REPO="${WH_REPO:-https://github.com/jaigouk/white-hacker}"
 WH_SLUG="${WH_SLUG:-jaigouk/white-hacker}"
 WH_MARKETPLACE="white-hacker-marketplace"
 WH_PLUGIN="white-hacker"
+# Fail-CLOSED vendor manifest: the consumer/inner-loop skills shipped into a target (ADR-021). A new
+# skill is excluded by default until added here. EXCLUDED: sec-learn, sec-kb-refresh (outer-loop
+# producers — they edit the KB behind the eval keep-or-revert gate, dev-repo only). Keep this list in
+# sync with CONSUMER_SKILLS in install/scrub_vendored.py.
+WH_VENDOR_SKILLS="_shared ai-attack-kb ai-llm-review deps-scan sec-detect sec-init sec-patch sec-policy sec-report sec-threat-model sec-triage sec-vuln-scan secrets-scan"
 
 LANE="vendor"; DRYRUN=0; UNATTENDED="${WH_UNATTENDED:-0}"; WH_REF="${WH_REF:-}"; TARGET="$PWD"
 UV_VERSION="${UV_VERSION:-0.11.2}"   # pinned uv to install if absent (ADR-006); override via env
@@ -126,13 +131,16 @@ vendor() {  # $1 = pinned clone, $2 = target
     warn "your existing white-hacker.md was backed up (.bak.*) — it may be project-customized; diff/restore it if you meant to keep yours (or adopt the generic agent + a /white-hacker:sec-init companion)."
   fi
   run "cp '$src/agents/white-hacker.md' '$dst/agents/white-hacker.md'"   # only OUR agent; leaves your others
-  # skills: copy each, excluding venvs/caches (stdlib-only; uv recreates venvs on first run)
-  for s in "$src"/skills/*/; do
-    [ -d "$s" ] || continue; local name; name="$(basename "$s")"
+  # skills: copy ONLY the consumer/inner-loop manifest (fail-closed), excluding venvs/caches
+  # (stdlib-only; uv recreates venvs on first run). Producers stay in the source repo (ADR-021).
+  local name s
+  for name in $WH_VENDOR_SKILLS; do
+    s="$src/skills/$name"
+    [ -d "$s" ] || { warn "manifest skill not in payload: $name (skipped)"; continue; }
     if [ -e "$dst/skills/$name" ] && [ "$DRYRUN" != 1 ]; then
       run "mv '$dst/skills/$name' '$dst/skills/$name.bak.$(date +%s 2>/dev/null || echo old)'"   # idempotent backup
     fi
-    run "rsync -a --exclude '.venv' --exclude '__pycache__' --exclude '.pytest_cache' '$s' '$dst/skills/$name/' 2>/dev/null || cp -R '$s' '$dst/skills/$name'"
+    run "rsync -a --exclude '.venv' --exclude '__pycache__' --exclude '.pytest_cache' '$s/' '$dst/skills/$name/' 2>/dev/null || cp -R '$s' '$dst/skills/$name'"
   done
   # Deliberately DO NOT vendor plugins/.../commands/ — they are PLUGIN-lane entry points:
   #  (1) Claude Code only scans .claude/commands/ (a commands-white-hacker/ dir is never loaded);
@@ -142,7 +150,19 @@ vendor() {  # $1 = pinned clone, $2 = target
   # auto-load from .claude/skills/. (The --plugin lane is where /white-hacker:* commands belong.)
   # keep recreated skill venvs out of the repo
   if [ "$DRYRUN" != 1 ] && ! grep -qxF '.venv/' "$2/.gitignore" 2>/dev/null; then echo '.venv/' >> "$2/.gitignore"; fi
-  warn "confinement hooks (plugins/${WH_PLUGIN}/hooks) are NOT auto-wired in the vendor lane — register them in $2/.claude/settings.json if you want the self-improvement guards (or use --plugin)."
+  # Scrub dev/outer-loop content from the vendored copy: deterministic marker-based section-strip +
+  # neuter, then a leakage assertion (install/scrub_vendored.py; ADR-021). Source tree is untouched.
+  local scrubber="$1/install/scrub_vendored.py"
+  if [ "$DRYRUN" = 1 ]; then
+    log "[dry-run] would scrub the vendored payload ($scrubber)"
+  elif [ -f "$scrubber" ] && have uv; then
+    log "scrub: strip dev/outer-loop references from the vendored copy"
+    uv run --no-project python "$scrubber" "$dst" >&2 \
+      || warn "scrub reported surviving dev-repo references (above) — review $dst before committing."
+  else
+    warn "scrubber not found in clone (install/scrub_vendored.py) or uv absent — vendored payload NOT scrubbed; it may carry dev-repo references."
+  fi
+  warn "confinement hooks are plugin-lane-only (they resolve \${CLAUDE_PLUGIN_ROOT}) and are intentionally omitted here — with the outer-loop skills excluded there is nothing for them to confine. Use --plugin if you want them."
 }
 
 plugin() {  # $1 = pinned clone (used as a LOCAL pinned marketplace)
