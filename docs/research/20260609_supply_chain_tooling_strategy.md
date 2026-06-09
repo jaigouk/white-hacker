@@ -20,7 +20,66 @@ brand** (ADR-015). The tools behind each capability are a **living, governed, se
 — the outer self-improving loop (ADR-001) applied to *tooling*, exactly as it keeps the attack-KB
 current. Tool churn is the steady state, not the exception.
 
-## The lifecycle — 5 stages, each a control
+## CONTAIN — the PRIMARY control (assume-breach / zero-trust execution)
+
+**Selection is not security.** The 5-stage lifecycle below is all *selection + verification* — it asks
+"is this tool trustworthy?" But **you cannot verify a tool/dependency is uncompromised**, and 2026 proved
+verification-by-reputation is defeatable:
+
+- **Provenance proves ORIGIN, not BEHAVIOR.** Mini Shai-Hulud (May 2026; TanStack/Mistral/OpenSearch)
+  victims had valid **SLSA Build L3** provenance + OIDC trusted-publishing + 2FA and were STILL
+  compromised — the worm hijacked the *legitimate* pipeline (stole the ambient OIDC token from
+  `/proc/<pid>/mem`, signed via real Sigstore). StepSecurity: *"SLSA provenance confirms WHICH pipeline
+  produced the artifact, not WHETHER the pipeline was behaving as intended."* The only control that
+  stopped it **in flight** was an **egress allowlist** killing the C2. Tool *diversity* is the cited fix
+  in **zero** 2026 postmortems.
+- **Tag pins are force-pushable** (trivy-action 76/77; tj-actions Mar-2025) — only a **full commit-SHA** holds.
+
+So the durable control is NOT "pick a better tool" — it is **assume the tool IS backdoored and make the
+backdoor INERT** by denying the three things it needs. This is the 2026 consensus (NIST SSDF SP 800-218 /
+SP 800-204D; CISA-NSA *Defending CI/CD*; OpenSSF S2C2F; SLSA L3 hermetic). The **Agents Rule of Two**
+already in `agents/white-hacker.md:39-41` is the seed — elevate it from a posture line to a CONTAIN stage
+that **wraps the whole lifecycle**.
+
+### The CONTAIN invariant (the minimum bar)
+Run **every** tool — Grype, Checkov, OSV-Scanner, gitleaks, and any future tool — so a compromise cannot
+steal secrets or exfiltrate. **At least two of these three must be ABSENT at execution:
+{ network/egress · credentials in the tool's env · host write access }.**
+
+| Control | Mechanism (we already have the template) | Defeats |
+|---|---|---|
+| **Offline / no egress** | `--network none`; offline DB (fetch and analyze are separate, network-off) | exfil / C2 / malicious "DB update" |
+| **No creds in the tool env** | no tokens/keys in scanner processes (Agents Rule of Two) | credential theft (LiteLLM/Telnyx import-time exfil) |
+| **Sandboxed least-privilege** | `docker/deps-scan-sandbox/run.sh` LOCKDOWN (`--read-only`+tmpfs, `--cap-drop ALL`, `no-new-privileges`, non-root, pid/mem caps, `:ro` mounts); escalate to gVisor/microVM | host compromise / persistence |
+| **Pinned + provenance-VERIFIED** | full commit-SHA / image-digest (never a tag) + checksum/cosign/SLSA **verified at admission** | tag force-push / swapped binary |
+| **Ephemeral** | container torn down per run (`--rm`) | implant persistence |
+
+**First deliverable:** lift the proven `docker/deps-scan-sandbox/` LOCKDOWN from one skill to a **shared
+tool-execution lane** so the WHOLE tool set runs inside it — then a backdoored Grype/Checkov is inert.
+
+### The 5 stages are now DEFENSE-IN-DEPTH under CONTAIN
+None survives an *undetected* compromise; **CONTAIN does** (it doesn't depend on knowing what's bad):
+
+| Stage | Reframed as | Honest limit |
+|---|---|---|
+| ADMIT | lower the *probability* of a bad tool | can't detect a not-yet-known compromise |
+| PIN+VERIFY | prove origin + immutability (SHA) | provenance ≠ behavior (Mini Shai-Hulud) |
+| DIVERSIFY | survive one vendor's *known* failure | a backdoor you can't see hits all sources; raises surface count |
+| MONITOR | shorten MTTR *after* disclosure | reactive — the zero-day window is uncovered |
+| RETIRE | clean removal once known-bad | only fires after detection |
+
+### CI hardening (the TeamPCP / Shai-Hulud / tj-actions vector)
+Pin Actions to **full commit-SHA** (not tags); minimal `GITHUB_TOKEN` (`contents: read`, per-job); OIDC
+short-lived creds scope-pinned to an immutable workflow + protected branch; **egress allowlist**
+(Harden-Runner block mode — the control that stopped Mini Shai-Hulud); `--ignore-scripts`; ephemeral
+runners; atomic secret rotation. EU CRA: reporting obligations **2026-09-11**, SBOM mandatory — Syft/VEX feed it.
+
+### Sources (2026, primary)
+StepSecurity *Mini Shai-Hulud* postmortem (valid provenance still passed; egress-block stopped it) ·
+SLSA L3 hermetic (oneuptime 2026-02-09) · NIST SP 800-218 + SP 800-204D · CISA-NSA *Defending CI/CD* ·
+OpenSSF S2C2F · GitHub SHA-pin policy (2025-08-15) · EU CRA (reporting 2026-09-11).
+
+## The lifecycle — 5 stages of defense-in-depth (under CONTAIN, the primary layer)
 
 1. **ADMIT** — a tool enters the registry only through four entry gates:
    (a) **License** = MIT/Apache-2.0 only (reject BSD/copyleft/proprietary);
@@ -49,17 +108,24 @@ current. Tool churn is the steady state, not the exception.
    (re-run ADMIT) → **record** the decision (ADR) → **retire**. Trivy is the *first run* of this process;
    the next tool failure must be **routine**, not a fresh investigation.
 
-## How the existing work maps to the lifecycle
+## How the work maps — CONTAIN (primary) + the lifecycle (defense-in-depth)
 
-| Stage | Owning ticket | What it delivers |
+| Layer / Stage | Owning ticket | What it delivers |
 |---|---|---|
+| **CONTAIN (PRIMARY)** | **wh-hxt.3** | the assume-breach ADR + lift the deps-scan-sandbox LOCKDOWN to a shared tool-exec lane (offline/no-creds/sandboxed) + the hardened-CI checklist + live-verify one real tool |
 | ADMIT (license + data-egress) | **wh-xn0** | the MIT/Apache + local/no-telemetry gates + registry re-audit |
-| PIN+VERIFY + compromise-MONITOR | **wh-562** | SHA/digest pin + checksum/cosign-verify + the compromised-tool watchlist + the threat-watch feed |
+| PIN+VERIFY (provenance arm of CONTAIN) | **wh-562** | SHA/digest pin + checksum/cosign-verify + the compromised-tool watchlist + the threat-watch feed |
 | MONITOR (continuous, target + env) | **wh-5es** | the shared watchlist + deps/IDE-extension checks, install + periodic |
-| DIVERSIFY (current instantiation) | **wh-nvk** | the Trivy→{Grype/Syft, Checkov, OSV-Scanner, gitleaks, kube-linter/actionlint} set |
+| DIVERSIFY (blast-radius, NOT prevention) | **wh-nvk** | the Trivy→{Grype/Syft, Checkov, OSV-Scanner, gitleaks, kube-linter/actionlint} set |
 
 ## The gaps this strategy adds (the genuinely-new pieces)
 
+- **CONTAIN — the assume-breach execution layer (THE load-bearing gap; wh-hxt.3).** Everything else asks
+  "is this tool trustworthy?" — but you cannot know, and 2026 proved verification-by-reputation is
+  defeatable (Mini Shai-Hulud passed valid SLSA L3 + OIDC + 2FA). The durable control is to run *every* tool
+  so a compromise is INERT: offline / no-creds-in-env / sandboxed / pinned-and-verified. We already have the
+  template (`docker/deps-scan-sandbox/` LOCKDOWN + the Agents Rule of Two) — the gap is *generalizing* it
+  from one skill to a shared tool-exec lane that wraps the whole set, plus the hardened-CI checklist.
 - **A MAINTENANCE/STALENESS gate + monitor** — the current threat-watch covers *compromise*; staleness
   is a distinct risk (the trivy-mcp lesson). Add a maintenance-health signal (cadence/last-commit/EOL) to
   the ADMIT gate (wh-xn0) **and** the MONITOR feed (wh-5es).
@@ -71,10 +137,14 @@ current. Tool churn is the steady state, not the exception.
 
 ## Outcome
 
-Tool compromise *and* staleness become **normal, fast, gated** events handled by the lifecycle, not
-emergencies. The capability registry **self-corrects** through the outer loop. white-hacker stays current
-and resilient **without a manual treadmill** — and a TeamPCP-style hit on any one vendor degrades one
-capability gracefully instead of breaking the pipeline.
+**Security comes from CONTAINMENT, not selection.** Because every tool runs offline + no-creds + sandboxed +
+provenance-verified, a compromise of *any* tool — Trivy, its replacement, or one we haven't picked yet — is
+**inert**: it has no secrets to steal and no egress to exfiltrate through, even in the window *before* the
+advisory drops. On top of that primary control, tool compromise *and* staleness become **normal, fast,
+gated** events handled by the lifecycle (the registry **self-corrects** through the outer loop), and
+DIVERSIFY keeps a single-vendor failure from taking out a whole capability. The result: white-hacker stays
+current and resilient **without a manual treadmill** — and crucially, **swapping a tool is never the thing
+that keeps us safe; the containment lane is.**
 
 ## References
 
