@@ -35,7 +35,7 @@
 
 ### IaC / container / CI
 - **Floor:** read Dockerfile / manifests / workflows and apply `reference/infra.md`.
-- Examples: Trivy `config` · Checkov · hadolint (Dockerfile) · zizmor/actionlint (GH Actions).
+- Examples: Checkov · Trivy `config` · hadolint (Dockerfile) · zizmor/actionlint (GH Actions).
 
 ### AI-redteam (behavioral, for running LLM/agent apps)
 - **Floor:** static `reference/ai-llm.md` + KB technique patterns over the code.
@@ -51,6 +51,10 @@ verification.
   v0.69.5–v0.69.6 (malicious set);** v0.69.2/0.69.3 are safe. Run offline with `--skip-db-update`
   against the cached DB (matches the "no network during scanning" posture). Trivy = SCA + IaC +
   secrets + SBOM, **no SAST** — pair with a SAST engine for source coverage.
+  **COMPROMISED (TeamPCP, CVE-2026-33634 / GHSA-69fq-xp46-6x23):** malicious binary v0.69.4,
+  images v0.69.5–v0.69.6, trivy-action tags 76/77 force-pushed. **Quarantined as the interim
+  stopgap (demoted below Checkov for IaC); permanent removal + replacement is wh-nvk — Trivy
+  does not return.**
 - **Actions/CI tools:** pin GitHub Actions to a commit SHA (the official Trivy action was
   compromised twice in March 2026); pin Docker base images by digest.
 - New/updated tools are added **only** as reviewable, dated change-log entries below (ADR-015).
@@ -59,3 +63,4 @@ verification.
 > Append dated entries when a tool/capability is added or retired. Format:
 > `YYYY-MM-DD · +/- · capability · tool · source · rationale`
 - 2026-06-06 · seed · initial registry from research (`docs/research/fnd-tool-matrix.md`).
+- 2026-06-09 · - · iac · trivy demoted below checkov · CVE-2026-33634/GHSA-69fq-xp46-6x23 · TeamPCP compromise — interim quarantine (wh-d5b), permanent removal wh-nvk

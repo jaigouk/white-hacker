@@ -108,6 +108,19 @@ def test_iac_category_only_when_infra_present(tmp_path: Path):
     assert plan_infra.category_tool["iac"] == "trivy"
 
 
+def test_iac_prefers_checkov_over_trivy_when_both_present(tmp_path: Path):
+    # wh-d5b: Trivy is TeamPCP-compromised (CVE-2026-33634 / GHSA-69fq-xp46-6x23).
+    # Interim quarantine demotes it below Checkov in the iac SCANNER_PREFERENCE
+    # (permanent removal is wh-nvk). When BOTH are installed and infra is present,
+    # Checkov must lead — Trivy must NOT be the chosen IaC scanner.
+    (tmp_path / "go.mod").write_text("module x\n")
+    (tmp_path / "Dockerfile").write_text("FROM scratch\n")
+    which = _which_only("checkov", "trivy")
+    plan = dt.build_scan_plan(tmp_path, which)
+    assert plan.category_tool["iac"] == "checkov"  # == expected (demotion took effect)
+    assert plan.category_tool["iac"] != "trivy"     # != the compromised tool
+
+
 # === Phase-2: framework fingerprint =======================================
 def test_fingerprints_next_and_react(tmp_path: Path):
     (tmp_path / "package.json").write_text(

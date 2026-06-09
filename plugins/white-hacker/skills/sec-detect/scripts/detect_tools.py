@@ -113,7 +113,7 @@ SCANNER_PREFERENCE: dict[str, list[tuple[str, str]]] = {
     "sca": [("govulncheck", "go"), ("pip-audit", "python"),
             ("osv-scanner", "*"), ("trivy", "*")],
     "secrets": [("gitleaks", "*"), ("trufflehog", "*")],
-    "iac": [("trivy", "*"), ("checkov", "*"), ("hadolint", "docker")],
+    "iac": [("checkov", "*"), ("trivy", "*"), ("hadolint", "docker")],
     # ai-redteam is only assembled when ai_pass is set (see build_scan_plan).
     "ai-redteam": [("promptfoo", "*"), ("garak", "*")],
 }
