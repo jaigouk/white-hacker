@@ -115,7 +115,7 @@ FORBIDDEN_TOKENS = (
 # archaeology that neither breaks a target nor instructs the agent (rewriting working code comments
 # would be brittle, Policy 5, and non-surgical, Policy 3). The one runtime hazard in code — a test
 # that drives an absent dev fixture — is handled by skip-guards in the tests themselves (wh-7gh,
-# wh-8lx), not here. This scope is deliberate and stated (ADR-021), not a silent omission.
+# wh-8lx), not here. This scope is deliberate and stated (ADR-022), not a silent omission.
 _SCAN_SUFFIXES = (".md",)
 
 

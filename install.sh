@@ -27,7 +27,7 @@ WH_REPO="${WH_REPO:-https://github.com/jaigouk/white-hacker}"
 WH_SLUG="${WH_SLUG:-jaigouk/white-hacker}"
 WH_MARKETPLACE="white-hacker-marketplace"
 WH_PLUGIN="white-hacker"
-# Fail-CLOSED vendor manifest: the consumer/inner-loop skills shipped into a target (ADR-021). A new
+# Fail-CLOSED vendor manifest: the consumer/inner-loop skills shipped into a target (ADR-022). A new
 # skill is excluded by default until added here. EXCLUDED: sec-learn, sec-kb-refresh (outer-loop
 # producers — they edit the KB behind the eval keep-or-revert gate, dev-repo only). Keep this list in
 # sync with CONSUMER_SKILLS in install/scrub_vendored.py.
@@ -132,7 +132,7 @@ vendor() {  # $1 = pinned clone, $2 = target
   fi
   run "cp '$src/agents/white-hacker.md' '$dst/agents/white-hacker.md'"   # only OUR agent; leaves your others
   # skills: copy ONLY the consumer/inner-loop manifest (fail-closed), excluding venvs/caches
-  # (stdlib-only; uv recreates venvs on first run). Producers stay in the source repo (ADR-021).
+  # (stdlib-only; uv recreates venvs on first run). Producers stay in the source repo (ADR-022).
   local name s
   for name in $WH_VENDOR_SKILLS; do
     s="$src/skills/$name"
@@ -151,7 +151,7 @@ vendor() {  # $1 = pinned clone, $2 = target
   # keep recreated skill venvs out of the repo
   if [ "$DRYRUN" != 1 ] && ! grep -qxF '.venv/' "$2/.gitignore" 2>/dev/null; then echo '.venv/' >> "$2/.gitignore"; fi
   # Scrub dev/outer-loop content from the vendored copy: deterministic marker-based section-strip +
-  # neuter, then a leakage assertion (install/scrub_vendored.py; ADR-021). Source tree is untouched.
+  # neuter, then a leakage assertion (install/scrub_vendored.py; ADR-022). Source tree is untouched.
   local scrubber="$1/install/scrub_vendored.py"
   if [ "$DRYRUN" = 1 ]; then
     log "[dry-run] would scrub the vendored payload ($scrubber)"
