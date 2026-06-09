@@ -39,7 +39,7 @@ except ModuleNotFoundError:  # Python 3.10 — no stdlib tomllib
     tomllib = None  # type: ignore[assignment]
 
 import degradation as dg
-# `is_known_bad(name, version, db)` (malware_db.py:47) is the version-aware predicate the
+# `is_known_bad(name, version, db)` (malware_db.py) is the version-aware predicate the
 # S8 matcher delegates to (sibling module, same package — imported via the conftest path
 # like the tests' `import malware_db as mdb`; no defensive guard needed, it has no
 # optional-stdlib dependency unlike tomllib above).
@@ -400,7 +400,7 @@ def _resolved_pypi(root: Path) -> dict[str, str]:
     """Extract `{name: version}` from a poetry.lock / uv.lock (wh-4k9).
 
     Both are TOML with a `[[package]]` array of `{name, version}` tables — parsed via the
-    package's EXISTING defensive tomllib import (supply_chain.py:32-34), so on a Python
+    package's EXISTING defensive tomllib import (at the top of this module), so on a Python
     3.10 floor (no stdlib tomllib) this degrades to `{}` rather than crashing. NEVER
     raises. poetry.lock entries WIN over uv.lock on a name clash (poetry is read first)."""
     out: dict[str, str] = {}
@@ -761,6 +761,29 @@ def _exact_pin(spec: str) -> str | None:
     return None
 
 
+def _constraint(dep: dict) -> str:
+    """The version constraint for `dep`, with any leading PEP 508 name stripped.
+
+    The pypi adapter stores the FULL requirement line as `spec` (e.g. `evil-pkg==1.2.3`);
+    npm/Go/etc. store just the constraint. Strip a leading `name` so `_exact_pin` sees
+    `==1.2.3` rather than the name-prefixed string — otherwise a pip/requirements.txt
+    project (which never carries a poetry/uv lockfile) would never resolve an exact `==`
+    pin and S8 would silently degrade to wildcard-only for the whole ecosystem. Extras /
+    markers (`pkg[x]==1`, `pkg==1; marker`) still conservatively yield None via _exact_pin."""
+    spec = dep.get("spec", "") or ""
+    name = dep.get("name", "") or ""
+    if name and spec.startswith(name):
+        spec = spec[len(name):].lstrip()
+    return spec
+
+
+def _wildcard_entry(bad: object) -> bool:
+    """True iff a malware_db entry is the whole-package wildcard `"*"`. Tolerates a str
+    entry (`"*"`) as well as the set form `{"*"}` from `load_malware_db`, WITHOUT the
+    substring trap — `"*" in "1.0.*"` must be False (that is the FP class wh-4k9 removes)."""
+    return bad == "*" if isinstance(bad, str) else "*" in bad
+
+
 def signal_s1(norm: dict) -> bool:
     """S1 — an install-time lifecycle hook is present (necessary-not-sufficient)."""
     return bool(norm.get("lifecycle_scripts"))
@@ -860,7 +883,7 @@ def signal_s8(norm: dict, malware_db: dict | None) -> list[str]:
     wh-4k9 — match by name AND version (NOT name only, which flagged EVERY user of a
     popular compromised package, not just the bad versions):
       * the dep's version = `resolved` (lockfile) or `_exact_pin(spec)` (an exact manifest
-        pin with no lockfile). Known → `is_known_bad(name, version, db)` (malware_db.py:47).
+        pin with no lockfile). Known → `is_known_bad(name, version, db)` (malware_db.py).
       * NO version known (a range with no lockfile) → flag ONLY when the DB entry is the
         wildcard `"*"` (the whole package is bad). NEVER flag a specific-version entry on
         an unresolved range — that name-only match is the false positive this removes.
@@ -876,11 +899,11 @@ def signal_s8(norm: dict, malware_db: dict | None) -> list[str]:
         name = d["name"]
         if name not in malware_db:
             continue
-        version = d.get("resolved") or _exact_pin(d.get("spec", ""))
+        version = d.get("resolved") or _exact_pin(_constraint(d))
         if version is not None:
             if is_known_bad(name, version, malware_db):
                 hits.append(name)
-        elif "*" in malware_db[name]:  # unresolved range → only a wildcard entry flags
+        elif _wildcard_entry(malware_db[name]):  # unresolved range → only a "*" entry flags
             hits.append(name)
     return hits
 

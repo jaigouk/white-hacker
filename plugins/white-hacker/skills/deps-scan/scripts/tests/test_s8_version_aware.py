@@ -308,3 +308,57 @@ def test_s8_flags_top_level_bad_despite_nested_safe_copy_listed_first(tmp_path):
     doc = sc.scan(str(proj), malware_db={_BAD: {"1.2.3"}})
     # == expected: the tampered ordering cannot suppress the top-level bad-version hit
     assert _fired_s8(doc, _BAD) is True
+
+
+# --------------------------------------------------------------------------- #
+# pypi exact `==` pins THROUGH the real adapter (TL re-review: the pypi adapter stores
+# the FULL PEP 508 line as `spec`, e.g. `evil-pkg==1.2.3`, so the leading name must be
+# stripped before `_exact_pin` — otherwise pip/requirements.txt projects, which never
+# carry a poetry/uv lockfile, silently degrade S8 to wildcard-only for the ecosystem)
+# --------------------------------------------------------------------------- #
+def _write_requirements(project_dir: pathlib.Path, lines: list[str]) -> pathlib.Path:
+    project_dir.mkdir(parents=True, exist_ok=True)
+    (project_dir / "requirements.txt").write_text("\n".join(lines) + "\n")
+    return project_dir
+
+
+def test_pypi_requirements_exact_pin_no_lockfile_flags_matching_version(tmp_path):
+    proj = _write_requirements(tmp_path / "p", [f"{_BAD}==1.2.3"])
+    assert _fired_s8(sc.scan(str(proj), malware_db={_BAD: {"1.2.3"}}), _BAD)        # == expected
+    assert not _fired_s8(sc.scan(str(proj), malware_db={_BAD: {"9.9.9"}}), _BAD)    # != wrong
+
+
+def test_pypi_pyproject_dependencies_exact_pin_no_lockfile_flags(tmp_path):
+    proj = tmp_path / "p"
+    proj.mkdir(parents=True, exist_ok=True)
+    (proj / "pyproject.toml").write_text(
+        f'[project]\nname = "app"\ndependencies = ["{_BAD}==1.2.3"]\n'
+    )
+    assert _fired_s8(sc.scan(str(proj), malware_db={_BAD: {"1.2.3"}}), _BAD)        # == expected
+    assert not _fired_s8(sc.scan(str(proj), malware_db={_BAD: {"9.9.9"}}), _BAD)    # != wrong
+
+
+def test_constraint_strips_leading_pep508_name():
+    # the pypi PEP 508 form: name embedded -> stripped to the bare constraint
+    assert sc._constraint({"name": _BAD, "spec": f"{_BAD}==1.2.3"}) == "==1.2.3"
+    # the poetry-table / bare form: no name embedded -> unchanged
+    assert sc._constraint({"name": _BAD, "spec": "1.2.3"}) == "1.2.3"
+    # npm (name never embedded in spec) -> untouched
+    assert sc._constraint({"name": "react", "spec": "^1.0.0"}) == "^1.0.0"
+
+
+# --------------------------------------------------------------------------- #
+# str-valued db entries match EXACTLY, never as a Python substring (a hand-built
+# `{name: "1.2.3"}` must not flag resolved "2.3" via `"2.3" in "1.2.3"`)
+# --------------------------------------------------------------------------- #
+def test_str_valued_db_entry_matches_exactly_not_by_substring():
+    sub = {"deps": [{"name": _BAD, "spec": "x", "resolved": "2.3"}]}
+    assert sc.signal_s8(sub, {_BAD: "1.2.3"}) == []                 # != wrong: '2.3' not in '1.2.3'
+    exact = {"deps": [{"name": _BAD, "spec": "x", "resolved": "1.2.3"}]}
+    assert sc.signal_s8(exact, {_BAD: "1.2.3"}) == [_BAD]           # == expected: exact str match
+
+
+def test_str_entry_containing_star_is_not_the_wildcard():
+    rng = {"deps": [{"name": _BAD, "spec": "^1.0.0"}]}              # unresolved range
+    assert sc.signal_s8(rng, {_BAD: "1.0.*"}) == []                 # != wrong: not a whole-pkg "*"
+    assert sc.signal_s8(rng, {_BAD: "*"}) == [_BAD]                 # == expected: literal "*" fires
