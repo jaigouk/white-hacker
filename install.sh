@@ -33,7 +33,7 @@ UV_VERSION="${UV_VERSION:-0.11.2}"   # pinned uv to install if absent (ADR-006);
 OS=""; ARCH=""
 
 c() { printf '\033[%sm%s\033[0m' "$1" "$2"; }
-log()  { printf '%s %s\n' "$(c '1;36' '==>')" "$*"; }
+log()  { printf '%s %s\n' "$(c '1;36' '==>')" "$*" >&2; }   # stderr: never pollute $(clone_pinned)
 warn() { printf '%s %s\n' "$(c '1;33' 'warning:')" "$*" >&2; }
 die()  { printf '%s %s\n' "$(c '1;31' 'error:')" "$*" >&2; exit 1; }
 run()  { if [ "$DRYRUN" = 1 ]; then printf '   [dry-run] %s\n' "$*"; else eval "$*"; fi; }
