@@ -58,7 +58,7 @@ URL, version, or document. Follow the tool priority order below strictly.
 
 **Required data points per option:**
 - **Version and release date** — actively maintained? (Context7 / GitHub / official docs)
-- **License** — permissive? (Apache 2.0, MIT, BSD preferred; check GitHub / PyPI)
+- **License** — **MIT or Apache-2.0 ONLY** (no BSD/GPL/LGPL/AGPL/copyleft/proprietary; ADR-023); verify from the upstream LICENSE file / SPDX, not a blog
 - **Community health** — stars (≥1k preferred), last commit, maintainer activity
 - **Integration surface** — Python 3.12 package, CLI, MCP server; dependency graph
 - **Supply-chain security** — signed releases, GPG/digest verification available (ADR-006)

@@ -59,7 +59,7 @@ within one package; surgical, citable changes only; run the per-package quality 
 
 - Python 3.12+, line length 88, double quotes, type annotations on all functions
 - Use `uv run --project <pkg> python` / `uv run --project <pkg> pytest` — never bare python/pytest
-- Permissive licenses only (Apache 2.0, MIT, BSD)
+- **MIT or Apache-2.0 licenses ONLY** — no BSD/GPL/LGPL/AGPL/copyleft/proprietary (ADR-023)
 
 ## Resource discipline (CPU & I/O)
 
