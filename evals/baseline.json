@@ -1,15 +1,15 @@
 {
-  "tpr": 1.0,
+  "tpr": 0.917355,
   "fpr": 0.0,
-  "youden_j": 1.0,
-  "tp": 121,
-  "fn": 0,
+  "youden_j": 0.917355,
+  "tp": 111,
+  "fn": 10,
   "fp": 0,
   "tn": 121,
   "n_cases": 121,
-  "date": "2026-06-08",
-  "commit": "751f9be",
-  "model": "claude-sonnet",
+  "date": "2026-06-09",
+  "commit": "87cb73b",
+  "model": "claude-opus",
   "findings_snapshot": "evals/runs/baseline-findings.json",
-  "note": "MEASURED baseline (sonnet single-shot, 118 curated paired cases incl. 12 T-12.9 hard + 3 T-12.9b CROSS-FILE cases). J=1.0/FPR0. HONEST: J=1.0 means the corpus is SATURATED, not a perfect agent. T-12.9 (single-file) AND T-12.9b (multi-file/cross-file taint) cases are BOTH aced by the frontier agent \u2014 it correctly traces taint across files and distinguishes sanitized variants. Synthetic cases do not restore measurement headroom; the residual lever is a real-CVE-in-noise corpus (research-scale, uncertain) + the opus re-baseline (wh-aj6/T-12.5). The eval catches REGRESSIONS (incl. cross-file recall now) but cannot MEASURE improvement against this agent. +3 floor-scored supply-chain anchors (wh-qyf, deterministic supply_chain.scan, NOT agent-scored); J stays 1.0 (anchors, not headroom)."
+  "note": "MEASURED opus baseline (k=1 blind single-shot, 2026-06-09; SINK markers stripped + neutralized). 118 agent cases + 3 floor anchors = 121. J=0.917 (TPR 0.917, FPR 0.0): tp=111 fn=10 fp=0 tn=121. HONEST: replaces the INFLATED sonnet-J=1.0 (which came from commit 751f9be 'category fixes' + a perfect-by-construction snapshot; the real sonnet run was J=0.835, QA-8 2026-06-07). Of the 10 FN, only 2 are GENUINE misses (py-mcp-tokenpassthrough/data-exfil, py-rag-poisoning); the other 8 are CATEGORY disagreements where opus found the vuln at the exact line but chose a different (often defensible) vocab category (LLM05 improper-output-handling vs LLM06 excessive-agency; JWT crypto vs AuthN/AuthZ; secret crypto vs config). Detection-recall (line-level, category-agnostic) = 116/118 = 0.983; FPR=0 (perfect precision). The 2 genuine misses + the AI-class category ambiguity are outer-loop fuel (sec-learn / a category-lenient scorer per spike-11). k=1 single-shot (non-deterministic); a k>=3 bootstrap hardens the gate. Cost: 30 opus subagents, ~728K tokens."
 }
