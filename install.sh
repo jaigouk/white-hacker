@@ -86,8 +86,8 @@ clone_pinned() {  # echoes the temp clone dir; caller traps cleanup
   # NB: the clone runs even under --dry-run (it's an ephemeral temp dir, trap-cleaned, so it changes
   # nothing the user keeps) — the vendor/plugin steps need the payload to preview what they'd copy.
   local ref="$1" tmp; tmp="$(mktemp -d)"
-  git clone --quiet --depth 1 --branch "$ref" "$WH_REPO" "$tmp" \
-    || die "could not clone $WH_REPO at pinned ref '$ref' (does the tag exist?)"
+  git -c advice.detachedHead=false clone --quiet --depth 1 --branch "$ref" "$WH_REPO" "$tmp" 2>/dev/null \
+    || die "could not clone $WH_REPO at pinned ref '$ref' (does the tag exist? is the repo reachable?)"
   # ADR-006 verify: prefer a GPG-signed tag; warn (don't hard-block) if unsigned / signer key absent.
   if git -C "$tmp" cat-file -t "$ref" 2>/dev/null | grep -q '^tag$'; then
     if git -C "$tmp" verify-tag "$ref" >/dev/null 2>&1; then log "signed tag $ref verified (GPG)"
