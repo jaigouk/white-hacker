@@ -142,7 +142,7 @@ MONITOR, the self-updating registry/watchlist is ADMIT/RETIRE, `/sec-learn` is t
 review FPs or misses a compromised dep, and the INNER loop CONSUMES all of it per review. A file-grounded
 audit (6 readers, adversarially verified — 5/6 claims confirmed, 1 over-claim caught) found the loop
 *machinery* all exists, but the supply-chain arms are wired to the **KB only**. Verdict: **leverage it — YES,
-with wiring.**
+with wiring.** Full audit + file:line evidence + ticket actions: **`docs/research/20260609_supply_chain_loop_leverage.md`**.
 
 ### What each stage rides, and its honest state
 | Stage | Loop arm | State | Note (file-grounded) |
