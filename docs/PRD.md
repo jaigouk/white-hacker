@@ -254,10 +254,13 @@ Each FR carries a one-line **Verification criterion (VC)** — checkable accepta
   *VC:* `/sec-learn` opens a PR (feature branch, not default) containing a diff + evidence (session
   ids, motivating FP/miss) + a before/after eval score table; nothing is written to the live KB
   directly.
-- **FR-18 — Eval keep-or-revert gate.** Every proposed self-edit runs against a frozen, agent-read-only
-  paired corpus (vulnerable + benign look-alike, ≥~100 cases); score = Youden's J; asymmetric
-  thresholds (hard-revert on >2pp recall loss or >1pp FPR gain or any locked-case regression; keep only
-  on non-inferior J + improvement or new sink coverage).
+- **FR-18 — Eval keep-or-revert gate.** Every proposed KB/checklist self-edit runs against a frozen,
+  agent-read-only paired corpus (vulnerable + benign look-alike, ≥~100 cases); score = Youden's J;
+  asymmetric thresholds (hard-revert on >2pp recall loss or >1pp FPR gain or any locked-case regression;
+  keep only on non-inferior J + improvement or new sink coverage). *Scope note:* supply-chain DATA edits
+  (registry/watchlist rows) have no corpus-measurable contribution and are out of this gate's scope —
+  they require the deterministic primary-source + schema Gate-2 (wh-562;
+  `docs/research/20260609_supply_chain_loop_leverage.md` §4.1).
   *VC:* an edit that drops recall >2pp or adds >1pp FPR on the frozen corpus is rejected/reverted and
   logged to `evals/rejected.md`; the agent cannot write to `evals/corpus/**` or the gate script.
 - **FR-19 — Progressive-disclosure procedural memory.** Skills and KB references load on demand (one

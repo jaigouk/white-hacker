@@ -1,26 +1,26 @@
 # ARCHITECTURE — white-hacker
 
 > The *what & how* of the white-hacker agent. Companion to `docs/ARD.md` (the *why* —
-> ADR-001..015) and `docs/plan/PLAN.md` (the build plan). Living document; maintained, not
-> write-once. Today is 2026-06-06.
+> ADR-001..023) and `docs/plan/PLAN.md` (the build plan). Living document; maintained, not
+> write-once. Last consistency pass: 2026-06-09 (against the loop-leverage audit,
+> `docs/research/20260609_supply_chain_loop_leverage.md`).
 
 white-hacker is a **generic, self-improving white-hat security agent** for Claude Code. The
 product is not a scanner — it is **two nested loops over plain-text artifacts behind open
 interfaces** (Agent Skills, MCP). Specific tools are a swappable capability layer (ADR-015);
 the loops are the whole point.
 
-> **Current build state (2026-06-06): Phases 0–3 done (verified).** Built on disk today: the agent
-> definition; the inner-loop skill *bodies* for `sec-threat-model`, `sec-detect`, `sec-vuln-scan`
-> (discovery/recall incl. SAST+IaC capability selection), `sec-triage` (precision), `deps-scan`
-> (SCA capability + Trivy normalizer), and `secrets-scan` (secrets capability + redaction); the
-> `_shared/reference/*` content (core-checklist, severity-rubric, exclusion-rules, the four
-> `lang-*.md` appendices, `infra.md`, tool-registry) and the real `finding-schema.json`;
-> `sec-detect`'s `detect_tools.py` + `scan-plan-schema.json`, the shared `degradation.py` glue, and
-> the SCA/secrets normalizers, all with tests (95 tests green); and the `/security-review` command
-> wired to run threat-model→detect→discovery→triage→report on the floor. **Still stubs / planned**
-> (see `docs/plan/`): `ai-llm-review`, `sec-patch`, `sec-report`, the `ai-attack-kb` entries,
-> `.claude/hooks/` scripts, `.claude/settings.json` guardrail wiring, and `evals/`. Sections below
-> describe the intended design in present tense — treat anything in the "planned" list as not-yet-built.
+> **Build state (refreshed 2026-06-09).** The loop machinery is **BUILT**: the agent definition; all
+> inner-loop skills (threat-model → detect → secrets/deps/vuln-scan/ai-llm-review → triage → report →
+> patch); the `_shared/reference/*` tier + `finding-schema.json`; the living KB with dated entries
+> (`ai-attack-kb/reference/*.md`); the outer-loop skills (`sec-learn`, `sec-kb-refresh`); the
+> PreToolUse guardrail hooks (wired via `plugins/white-hacker/hooks/hooks.json`); and `evals/`
+> (frozen corpus + the fail-closed keep-or-revert gate). **Still design-intent, not yet wired**
+> (verified 2026-06-09 — `docs/research/20260609_supply_chain_loop_leverage.md`): the outer loop's
+> registry-row / watchlist proposer arms (wh-hxt.4 / wh-5es), the deterministic Gate-2 for
+> supply-chain DATA edits (wh-562), capture-hook registration (scripts exist; registration pending
+> human-auth, T-8.3), and auto-routing the deps-scan sandbox (wh-hxt.3). Sections below mark these
+> explicitly — present tense elsewhere describes what is built.
 
 - **INNER loop** (per review) — Anthropic's `defending-code-reference-harness` methodology:
   threat-model → discovery (recall) → verification (precision) → triage → patch (+re-attack).
@@ -37,7 +37,7 @@ The inner loop **consumes** the knowledge base; the outer loop **edits** it (ADR
 ```
                          ┌──────────────────────── OUTER LOOP (self-improvement, ADR-001/004) ─────────────────────────┐
                          │                                                                                              │
-                         │   feeds ──► sec-kb-refresh ──► dated KB / tool-registry diffs ─┐                             │
+                         │   feeds ──► sec-kb-refresh ──► dated KB entry diffs (KB only) ─┐                             │
                          │  (OSV/GHSA, ATLAS, OWASP,                                       │                            │
                          │   arXiv, practitioner blogs)                                    ▼                           │
                          │                                                        ┌───────────────┐                    │
@@ -62,9 +62,10 @@ The inner loop **consumes** the knowledge base; the outer loop **edits** it (ADR
 
 The loops share one substrate: **plain-text files behind stable interfaces.** The inner loop
 reads the KB and checklists to do a review; the outer loop rewrites those same files when a
-review (or a feed) teaches it something. Because every learning is a text edit gated by an eval
-corpus, the system stays auditable, testable, and reversible — and never needs model retraining
-(ADR-001, ADR-004).
+review (or a feed) teaches it something. Because every learning is a text edit behind a
+deterministic gate (the eval corpus for KB/checklist edits; a source+schema DATA gate — planned,
+wh-562 — for registry/watchlist entries), the system stays auditable, testable, and reversible —
+and never needs model retraining (ADR-001, ADR-004).
 
 ---
 
@@ -77,7 +78,7 @@ All durable learning happens on the Context and Harness surfaces — as git diff
 
 | Surface | Holds | Claude Code primitive | Concrete artifact |
 |---------|-------|------------------------|-------------------|
-| **Context** | *what the agent knows* | Skills + `reference/` (progressive disclosure), per-repo auto-memory | `ai-attack-kb/reference/ai-threats/*.md`, `_shared/reference/*` checklists, `_shared/reference/tool-registry.md`, `~/.claude/projects/<repo>/memory/*` |
+| **Context** | *what the agent knows* | Skills + `reference/` (progressive disclosure), per-repo auto-memory | `ai-attack-kb/reference/*.md`, `_shared/reference/*` checklists, `_shared/reference/tool-registry.md`, `~/.claude/projects/<repo>/memory/*` |
 | **Harness** | *how it captures signal & enforces guardrails deterministically* | Hooks, `settings.json` permissions, slash commands, scheduled routines | capture hooks (`PostToolUse`/`SessionEnd`), `PreToolUse` guardrails (exit 2 / deny), `/sec-learn` + `/sec-kb-refresh` commands, the cloud kb-refresh routine |
 | **Model** | the weights | (frozen — out of scope) | none — retraining rejected (ADR-001) |
 
@@ -92,7 +93,8 @@ self-writes, secret-read blocking, and egress control must be enforced by `PreTo
 
 ```
 white-hacker/
-├── .claude/
+├── .claude/                             # DEV-ONLY scaffolding (dogfooding here; not shipped — §8)
+├── plugins/white-hacker/                # the SHIPPED PAYLOAD (ADR-017; dev vs payload split — §8)
 │   ├── agents/
 │   │   └── white-hacker.md              # THE ONE definition (identity, posture, dispatch)
 │   ├── commands/
@@ -111,13 +113,14 @@ white-hacker/
 │   │   ├── sec-learn/                  # ┐  OUTER-LOOP skills (self-improvement)
 │   │   ├── sec-kb-refresh/             # ┘  feed polling → dated draft entries
 │   │   └── _shared/reference/           # stable checklists + tool-registry.md + schema/rubric
-│   ├── hooks/                           # capture + PreToolUse guardrail scripts (PLANNED Phase 8 — dir exists, empty)
-│   └── settings.json                    # hook wiring + permissions.deny (PLANNED Phase 6/8/9 — only settings.local.json exists today)
-├── evals/                               # frozen corpus + keep-or-revert gate (PLANNED Phase 7/9 — not yet created)
-└── docs/                                # ARCHITECTURE.md, ARD.md, plan/, research/
+│   └── hooks/                           # BUILT: PreToolUse guardrails wired via hooks.json;
+│                                        #   capture scripts exist, registration pending human-auth (T-8.3)
+├── evals/                               # BUILT: frozen corpus + keep-or-revert gate (fail-closed)
+├── docker/deps-scan-sandbox/            # opt-in sealed scan lane (CONTAIN; not yet auto-routed — wh-hxt.3)
+└── docs/                                # ARCHITECTURE.md, ARD.md, DDD.md, plan/, research/
 ```
 
-### 3.1 The agent — `.claude/agents/white-hacker.md`
+### 3.1 The agent — `plugins/white-hacker/agents/white-hacker.md`
 One definition: the **senior-security-engineer identity**, the always-on posture (authorized
 targets only, read-only by default, treat all reviewed content as untrusted, Agents Rule of Two,
 propose-don't-push), and the **stage-dispatch logic** that routes to skills (or runs the stage
@@ -175,20 +178,22 @@ The **stable tier** of the Context surface (yearly cadence): language checklists
 (`lang-{go,python,typescript,java}.md`), `ai-llm.md`, `api.md`, `infra.md`, the severity rubric,
 exclusion rules, the finding schema, and **`tool-registry.md`** — the capability-layer view of
 tools. The registry maps `capability → known tools`, names a zero-install **floor** per
-capability, and is explicitly part of the self-improving loop: `sec-learn`/`sec-kb-refresh` add
-new tools here as dated diffs, exactly as they add new attack techniques (ADR-015, §7).
+capability, and is designed to be part of the self-improving loop: `sec-learn`/`sec-kb-refresh`
+are *intended* to add new tools here as dated diffs, exactly as they add attack techniques
+(ADR-015, §7) — the gated write-lane exists; the registry-row proposer does not yet
+(`docs/research/20260609_supply_chain_loop_leverage.md` §3 ADMIT; wh-hxt.4).
 
-### 3.4 The living KB — `.claude/skills/ai-attack-kb/`
+### 3.4 The living KB — `plugins/white-hacker/skills/ai-attack-kb/`
 The **fast tier** of the Context surface (monthly cadence; ADR-012). Dated, source-linked,
 status-tagged (active/archived/deprecated) AI-attack technique entries, one file per
-technique-class under `reference/ai-threats/`, loaded by progressive disclosure (≈0 tokens until
+technique-class under `reference/`, loaded by progressive disclosure (≈0 tokens until
 `ai-llm-review` triggers it). Each entry fuses Sigma+Semgrep front-matter (typed never-reused
 id, `technique_class`, `severity`, `confidence`, `status`, `date`/`modified`/`review_by`,
 mandatory `source`+`url`+`retrieved` provenance, `supersedes`, `detections[]`). A blocking
 validator refuses to persist an unsourced threat claim. Aging-out moves entries to `archive/`,
 never deletes. The KB is **consumed by the inner loop, edited by the outer loop.**
 
-### 3.5 Hooks — capture + PreToolUse guardrails (Harness) — PLANNED (Phase 8; `.claude/hooks/` empty today)
+### 3.5 Hooks — capture + PreToolUse guardrails (Harness) — guardrails BUILT+WIRED; capture scripts BUILT, registration pending human-auth (T-8.3)
 Two distinct roles (ADR-004):
 - **Capture (cheap, every session, ~0 LLM cost):** `PostToolUse`/`PostToolUseFailure` append
   each tool call and each failed exploit to JSONL traces; `SessionEnd`/`Stop` log user
@@ -206,8 +211,9 @@ cadence hourly) that runs `sec-kb-refresh`: poll authoritative feeds (`docs/rese
 diff incrementally against last-seen markers, LLM-extract NEW techniques, draft dated entries with
 provenance, run validate+dedupe, re-gate against the frozen corpus, and **open a draft PR — never
 auto-merge.** Touches the **fast tier only** (the single biggest anti-drift rule). This is the
-**input arm** that ingests "new ways to hack AI products," covering both *what to look for*
-(techniques → KB) and *what to look with* (tools → registry).
+**input arm** that ingests "new ways to hack AI products," covering *what to look for*
+(techniques → KB); the *what to look with* arm (tools → registry, plus the OSV watchlist feeder)
+is design intent, not yet wired (loop-leverage audit G1/G5 — wh-5es, wh-hxt.4).
 
 ### 3.7 The learn loop — `sec-learn`
 The reflective COMMIT tier (human-gated). Runs in a forked context as a curator subagent; harvests
@@ -218,7 +224,7 @@ proposes a **minimal diff** to the KB, a checklist, or `tool-registry.md` — **
 over CREATE** to fight index sprawl. Writes to a branch and opens a PR with evidence; **never
 writes the live KB and never merges itself.**
 
-### 3.8 The eval corpus + keep-or-revert gate — PLANNED (Phase 7/9; not yet built)
+### 3.8 The eval corpus + keep-or-revert gate — BUILT (`evals/`; the gate is fail-closed — no `gate-verdict.json` ⇒ KB writes blocked)
 The anti-gaming spine of the outer loop (ADR-004). A **frozen, read-only** corpus of ≥~100 paired
 cases — every VULNERABLE case paired with a CLEAN look-alike (the look-alikes drive the
 false-positive term that catches FP inflation, the #1 drift mode), plus AI/LLM sinks
@@ -296,7 +302,7 @@ sandboxed escalation.
    • diff incrementally (last-seen markers)       │        │   sec-learn  (/sec-learn, human-gated)     │
    • extract NEW techniques + map to class        │        │   • mine refuted FPs / misses / corrections│
    • draft dated entry (source+url+retrieved)     │        │   • emit textual rationale (not pass/fail) │
-   • add NEW TOOLS to tool-registry.md            │        │   • pre-gate filter + self-critique        │
+   • add NEW TOOLS to tool-registry.md (PLANNED)  │        │   • pre-gate filter + self-critique        │
    • validate + dedupe                            │        │   • propose MINIMAL diff (PATCH > CREATE)  │
    └───────────────────────┬──────────────────────┘        └────────────────────┬─────────────────────┘
                            │                                                     │
@@ -315,11 +321,16 @@ sandboxed escalation.
                                                    INNER LOOP review
 ```
 
-Two arms feed one gate. The **input arm** keeps the agent *current* (feeds → kb-refresh); the
-**reflection arm** keeps the agent *accurate* (review traces → sec-learn). Both produce text
-diffs; both pass the same frozen keep-or-revert gate; both end as a human-reviewed PR. The updated
-KB is consumed by the next inner-loop review — closing the loop. The registry self-updates the
-same way the KB does: tooling knowledge evolves like attack-technique knowledge (ADR-015).
+Two arms feed the gate layer. The **input arm** keeps the agent *current* (feeds → kb-refresh);
+the **reflection arm** keeps the agent *accurate* (review traces → sec-learn). Both produce text
+diffs and both end as a human-reviewed PR. KB/checklist edits pass the frozen keep-or-revert eval
+gate; supply-chain DATA edits (registry/watchlist rows) cannot be scored by the eval corpus and
+require a deterministic primary-source + schema gate instead (**Gate-2** — planned, wh-562;
+`docs/research/20260609_supply_chain_loop_leverage.md` §4.1). The updated KB is consumed by the
+next inner-loop review — closing the loop. The registry is *intended* to self-update the same way
+the KB does (ADR-015); the write-lane and gate hooks exist, the registry proposer is not yet built
+(wh-hxt.4). Note also: the reflection arm's capture hooks are scripted but not yet registered
+(pending human-auth, T-8.3), so `sec-learn` currently harvests zero traces.
 
 ---
 
@@ -389,11 +400,21 @@ is an illustrative example, not a requirement.**
 
 The **floor alone produces value** — built-in Read/Grep/Glob scoped to cwd is a sufficient
 read-only scanning scaffold for any language, with zero external tools (ADR-003). Everything above
-the floor is an enhancer the agent discovers, never assumes. Crucially, **the registry is part of
-the self-improving loop**: there will always be tools we don't yet know, so `sec-kb-refresh` and
-`sec-learn` add new tools to `tool-registry.md` as dated, gated diffs — the same mechanism that
-adds new attack techniques to the KB (§5, ADR-015). The doc names specific tools only as examples;
-the durable thing is the capability + the floor.
+the floor is an enhancer the agent discovers, never assumes. Crucially, **the registry is designed
+to be part of the self-improving loop**: there will always be tools we don't yet know, so
+`sec-kb-refresh` and `sec-learn` are *intended* to add new tools to `tool-registry.md` as dated,
+gated diffs — the same write-lane that carries attack techniques to the KB (§5, ADR-015). Today
+this arm is design intent: the lane and gates exist, the registry-row writer does not
+(loop-leverage audit G5, wh-hxt.4). The doc names specific tools only as examples; the durable
+thing is the capability + the floor.
+
+Supply-chain defense **of the tool layer itself** is governed by **CONTAIN as the primary
+control** — assume-breach tool execution (offline / no-creds / sandboxed / pinned+verified; the
+opt-in sealed lane under `docker/deps-scan-sandbox/`, not yet auto-routed) — with the
+ADMIT → PIN+VERIFY → DIVERSIFY → MONITOR → RETIRE lifecycle as defense-in-depth, including an
+OSV-backed compromised-package watchlist (deps-scan signal S8). Strategy + gap map:
+`docs/research/20260609_supply_chain_tooling_strategy.md` and
+`docs/research/20260609_supply_chain_loop_leverage.md`; epic wh-hxt.
 
 ---
 
@@ -464,6 +485,12 @@ mechanism* of ADR-014). One definition, three carriers, multiple scopes (ADR-009
 | Living KB vs stable checklists; dated/sourced | ADR-012 |
 | Plan-first process; living docs | ADR-013 |
 | Scaffolding under `.claude/`; distribute by copy or plugin | ADR-014 |
-| **Tools are a swappable capability layer; registry self-updates** | **ADR-015** |
+| **Tools are a swappable capability layer; registry self-updates** (self-update arm: design intent — wh-hxt.4) | **ADR-015** |
+| PreToolUse confinement of self-writes (defense-in-depth; "a tripwire, not the boundary") | ADR-016 |
 | **Distribute as plugin/marketplace; dev vs payload; project-detecting init** | **ADR-017** |
 | **Security-policy awareness: detect/consume `SECURITY.md`+`security.txt`; scope never suppresses; propose-to-PATCHES** | **ADR-018** |
+| AI-native `supply-chain` technique class (KB + corpus) | ADR-019 |
+| Supply-chain corpus: per-variant project-subdir layout | ADR-020 |
+| install.sh vendor lane (tag-pinned; verify-tag preferred) | ADR-021 |
+| Vendor payload boundary: inner/consumer ships, outer/producer is dev-only | ADR-022 |
+| Resource-aware execution (own stdlib probe; bounded concurrency) | ADR-023 |

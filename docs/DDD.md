@@ -265,8 +265,12 @@ arm* (poll Feeds → extract NEW Techniques → draft dated entries → same gat
   `tool_assisted:false`, cap confidence, record `tools_unavailable` (ADR-003).
 - **Pin & verify whatever IS used.** Known-good version, signature/digest where relevant;
   no single Tool is complete (combine Capabilities for coverage).
-- **The registry self-updates.** Tooling knowledge evolves through the same outer-loop
-  gate as attack-technique knowledge — *what to look with* learns like *what to look for*.
+- **The registry self-updates (design intent — proposer not yet built).** Tooling knowledge
+  is designed to evolve through the same outer-loop lane as attack-technique knowledge —
+  *what to look with* learns like *what to look for*. Today the gated write-lane exists but
+  the registry-row proposer does not; and registry/watchlist DATA edits need a deterministic
+  source+schema gate (Gate-2), not the eval gate
+  (`docs/research/20260609_supply_chain_loop_leverage.md` §3 ADMIT + §4.1; wh-hxt.4 / wh-562).
 
 ---
 
@@ -386,28 +390,28 @@ file's behaviour, not this table, is the source of truth where they differ.)
 
 | Domain object / context | Concrete file(s) |
 |---|---|
-| **AgentIdentity** (Team) | `.claude/agents/white-hacker.md` |
-| **Engagement / Handoff** (Team) | `.claude/commands/security-review.md`; team-mode spawn prompts + `SendMessage` |
-| **ReviewSession orchestration** (Review) | `.claude/agents/white-hacker.md` (stage dispatch) |
-| **ThreatModel** → `THREAT_MODEL.md` | `.claude/skills/sec-threat-model/` |
-| **ScanPlan** → `SCAN-PLAN.json` | `.claude/skills/sec-detect/` |
-| **Discovery (RECALL)** → `VULN-FINDINGS.json` | `.claude/skills/sec-vuln-scan/`, `secrets-scan/`, `deps-scan/`, `ai-llm-review/` |
-| **Verification + triage (PRECISION)** → `TRIAGE.json` | `.claude/skills/sec-triage/` |
-| **Report** → `SECURITY-REPORT.md` + JSON | `.claude/skills/sec-report/` |
-| **PatchProposal** → `PATCHES/` | `.claude/skills/sec-patch/` |
-| **KnowledgeBase / KnowledgeBaseEntry / Technique** | `.claude/skills/ai-attack-kb/` (+ `reference/` entries) |
-| **sec-learn** (reflect on traces → PR) | `.claude/skills/sec-learn/` |
-| **sec-kb-refresh** (Feeds → PR) | `.claude/skills/sec-kb-refresh/` |
+| **AgentIdentity** (Team) | `plugins/white-hacker/agents/white-hacker.md` |
+| **Engagement / Handoff** (Team) | `plugins/white-hacker/commands/security-review.md`; team-mode spawn prompts + `SendMessage` |
+| **ReviewSession orchestration** (Review) | `plugins/white-hacker/agents/white-hacker.md` (stage dispatch) |
+| **ThreatModel** → `THREAT_MODEL.md` | `plugins/white-hacker/skills/sec-threat-model/` |
+| **ScanPlan** → `SCAN-PLAN.json` | `plugins/white-hacker/skills/sec-detect/` |
+| **Discovery (RECALL)** → `VULN-FINDINGS.json` | `plugins/white-hacker/skills/sec-vuln-scan/`, `secrets-scan/`, `deps-scan/`, `ai-llm-review/` |
+| **Verification + triage (PRECISION)** → `TRIAGE.json` | `plugins/white-hacker/skills/sec-triage/` |
+| **Report** → `SECURITY-REPORT.md` + JSON | `plugins/white-hacker/skills/sec-report/` |
+| **PatchProposal** → `PATCHES/` | `plugins/white-hacker/skills/sec-patch/` |
+| **KnowledgeBase / KnowledgeBaseEntry / Technique** | `plugins/white-hacker/skills/ai-attack-kb/` (+ `reference/` entries) |
+| **sec-learn** (reflect on traces → PR) | `plugins/white-hacker/skills/sec-learn/` |
+| **sec-kb-refresh** (Feeds → PR) | `plugins/white-hacker/skills/sec-kb-refresh/` |
 | **Feed list** (Knowledge input arm) | `docs/research/si-07-threat-feeds.md` (16 feeds) |
-| **ToolRegistry / Capability / Tool / Floor** (Tooling) | `.claude/skills/_shared/reference/tool-registry.md` |
-| **ExclusionRuleSet** (Review consumes, Knowledge curates) | `.claude/skills/_shared/reference/exclusion-rules.md` |
-| **Severity** value object & rubric | `.claude/skills/_shared/reference/severity-rubric.md` |
-| **Finding** schema (the published contract) | `.claude/skills/_shared/reference/finding-schema.json` |
-| **Vuln-class taxonomy / appendices** (Review reads) | `.claude/skills/_shared/reference/{core-checklist,api,ai-llm,infra,lang-go,lang-python,lang-typescript,lang-java}.md` |
-| **EvalCorpus / keep-or-revert gate / traces** (Knowledge) | *planned* — `evals/` (corpus, `score.py`, `keep_or_revert.py`, traces JSONL); see `docs/research/si-08-design-synthesis.md` §6 |
-| **CAPTURE hooks + PreToolUse guardrails** (Harness) | *planned* — `.claude/hooks/` (dir exists, empty); see `si-08` §3.1 & §3.4 |
-| **Settings / permissions / size-cap lint** (Harness) | `.claude/settings.local.json`; *planned* `lint_skill` + `validate_kb` (ADR-005; see plan T-8.1) |
-| **Conventions & the key concept** | `.claude/CLAUDE.md`; decisions in `docs/ARD.md`; build order in `docs/plan/PLAN.md` |
+| **ToolRegistry / Capability / Tool / Floor** (Tooling) | `plugins/white-hacker/skills/_shared/reference/tool-registry.md` |
+| **ExclusionRuleSet** (Review consumes, Knowledge curates) | `plugins/white-hacker/skills/_shared/reference/exclusion-rules.md` |
+| **Severity** value object & rubric | `plugins/white-hacker/skills/_shared/reference/severity-rubric.md` |
+| **Finding** schema (the published contract) | `plugins/white-hacker/skills/_shared/reference/finding-schema.json` |
+| **Vuln-class taxonomy / appendices** (Review reads) | `plugins/white-hacker/skills/_shared/reference/{core-checklist,api,ai-llm,infra,lang-go,lang-python,lang-typescript,lang-java}.md` |
+| **EvalCorpus / keep-or-revert gate** (Knowledge) | BUILT — `evals/` (corpus, `score.py`, `keep_or_revert.py`; the gate is fail-closed — no `gate-verdict.json` ⇒ KB writes blocked) |
+| **CAPTURE hooks + PreToolUse guardrails** (Harness) | guardrails BUILT+WIRED — `plugins/white-hacker/hooks/` (`hooks.json`); capture scripts built, registration pending human-auth (T-8.3) ⇒ `evals/traces/` is empty today |
+| **Settings / permissions / size-cap lint** (Harness) | `.claude/settings.local.json`; `lint_skill.py` + `validate_kb.py` BUILT — `plugins/white-hacker/skills/ai-attack-kb/scripts/` (ADR-005) |
+| **Conventions & the key concept** | `.claude/CLAUDE.md` (dev-only); decisions in `docs/ARD.md`; build order in `docs/plan/PLAN.md` |
 
 ---
 
@@ -425,5 +429,6 @@ file's behaviour, not this table, is the source of truth where they differ.)
   PoCs are *recorded and confidence-capped*, never silently ignored — and never a reason
   to block: the Floor alone produces value.
 - **Tools are swappable; the concept is not.** Any brand named anywhere in the system is
-  an illustrative example behind a Capability, and the registry self-updates through the
-  same loop that updates attack knowledge.
+  an illustrative example behind a Capability, and the registry is designed to self-update
+  through the same loop that updates attack knowledge (proposer arm: design intent —
+  loop-leverage audit G5, wh-hxt.4).

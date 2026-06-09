@@ -30,7 +30,7 @@ statement: `docs/ARD.md` ADR-001.
      │                                                                            ▼
    ┌──────────────────────────────  KNOWLEDGE BASE  ──────────────────────────────────┐
    │   ai-attack-kb/reference/ (dated, sourced, status-tagged)  +  _shared/reference/ │
-   │   + tool-registry.md (tools are knowledge too — the registry self-updates)       │
+   │   + tool-registry.md (tools are knowledge too — registry self-update: planned)   │
    └──────────────────────────────────────────────────────────────────────────────────┘
      │                          consumes ▲
      ▼                                   │
@@ -68,8 +68,10 @@ THREAT_MODEL.md → SCAN-PLAN.json → VULN-FINDINGS.json → TRIAGE.json → PA
   unchanged. Only four things vary per stack (the oracle, PoC format, build/run, in-scope classes).
 - **Self-improving.** The outer loop edits text behind open interfaces (Context + Harness
   surfaces), not the weights — cheap, testable, reversible. Every change is a reviewable diff
-  behind an eval keep-or-revert gate and size caps; never auto-merged (ADR-004). Procedural
-  memory lives as progressive-disclosure skills; the KB and the tool registry both self-update.
+  behind a deterministic gate (eval keep-or-revert for KB/checklist edits; a source+schema DATA
+  gate — planned — for registry/watchlist entries) and size caps; never auto-merged (ADR-004).
+  Procedural memory lives as progressive-disclosure skills; the KB self-updates today, and the
+  tool registry is designed to (its proposer arm is in progress).
 - **AI-aware.** First-class OWASP **LLM (2025)**, **MCP (beta)**, and **Agentic/ASI (2026)**
   coverage — improper output handling (the highest-yield code check), the lethal trifecta,
   MCP token-passthrough, RAG poisoning, excessive agency, unbounded consumption — grounded in
