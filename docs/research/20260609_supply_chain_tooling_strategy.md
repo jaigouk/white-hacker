@@ -135,6 +135,56 @@ OpenSSF S2C2F · GitHub SHA-pin policy (2025-08-15) · EU CRA (reporting 2026-09
 - **DIVERSITY-by-design as registry policy** — make multi-vendor (≥2 sources for high-value capabilities,
   where a compliant second source exists) a stated registry policy, not a one-off for Trivy.
 
+## Riding the self-improvement loops (leverage them — don't build bespoke)
+
+The supply-chain lifecycle IS the outer loop applied to tooling (ADR-001/015): `/sec-kb-refresh` should be
+MONITOR, the self-updating registry/watchlist is ADMIT/RETIRE, `/sec-learn` is the self-correction when a
+review FPs or misses a compromised dep, and the INNER loop CONSUMES all of it per review. A file-grounded
+audit (6 readers, adversarially verified — 5/6 claims confirmed, 1 over-claim caught) found the loop
+*machinery* all exists, but the supply-chain arms are wired to the **KB only**. Verdict: **leverage it — YES,
+with wiring.**
+
+### What each stage rides, and its honest state
+| Stage | Loop arm | State | Note (file-grounded) |
+|---|---|---|---|
+| CONTAIN | INNER: PreToolUse egress hooks + the deps-scan sandbox | PARTIAL | sandbox is OPT-IN; **not auto-routed** into a default review (S8 degrades to `[]`) |
+| ADMIT | OUTER reflect → tool-registry rows | ASPIRATIONAL | registry is PROSE; no registry-row writer; `patch_merge` wired to nothing |
+| PIN+VERIFY | OUTER input → watchlist + ADR-006 pin | PARTIAL | snapshot pin **is** SHA-verified (`fetch-snapshot.sh`); missing = per-ENTRY GHSA/OSV verify + schema gate |
+| DIVERSIFY | INNER: `SCANNER_PREFERENCE` + degrade-to-floor | PARTIAL (by design) | capability-not-brand is BUILT; it's defense-in-depth, not the answer |
+| MONITOR | INNER `signal_s8` ← OUTER `/sec-kb-refresh` | PARTIAL | watchlist degraded-by-default; **name-only** match; `/sec-kb-refresh` doesn't feed it |
+| RETIRE | OUTER: `staleness_check --archive` | PARTIAL | only ages out KB entries; no tool/watchlist retire path |
+| INNER consumption | the SCAN-PLAN chain | BUILT | the most-built arm; the gap is entirely on PRODUCING + ACTIVATING |
+
+### The crux: supply-chain DATA needs a SECOND gate (Gate-2)
+The eval keep/revert gate (**Gate-1**) governs KB *review-quality* edits — it scores "did adding this
+technique improve recall without raising FPR?" against the corpus. It **structurally cannot** score a
+watchlist/registry DATA edit (no corpus label measures "did adding compromised-package X help"; `score.py`
+consumes only findings-vs-`label.json`). So supply-chain edits ride the SAME draft-PR + confinement +
+human-review wrapper but need a DIFFERENT inner verdict: **Gate-2 = primary-source (every entry cites a
+GHSA/OSV URL) + OSV-schema validity + regression-green**, deterministic, no LLM/RNG (Rule 5), mirroring
+`validate_kb.py`. Reusing Gate-1 for a watchlist edit would be a **false-merit merge**. (Also: the deps-scan
+watchlist path isn't in `confine_self_writes` ALLOW_SEGMENTS yet, so the outer loop can't even write it.)
+
+### CONTAIN rides the loop differently — by design
+The KB self-edits (text behind an interface). CONTAIN enforcement is CODE (hooks / sandbox / gate), and
+`confine_self_writes` FROZEN/CONTROL basenames + default-deny put it **out-of-lane** for self-editing
+(identity preservation, Rule 5). CONTAIN improvements therefore arrive as **human-PR'd, TDD'd,
+keep-or-revert-gated code diffs**, never as KB text — the outer loop proposes; it cannot self-rewrite the
+boundary. Rule-of-Two is preserved: feed-polling has egress but holds no secrets, advisories are parsed as
+untrusted *values* via `safe_dump`, and fetch (network-on) is split from analyze (network-none).
+
+### The wiring (rides EXISTING tickets — reuse > create)
+- **P0** `/sec-kb-refresh` → watchlist: add an OSSF parser + a `{source-url, package, version, ecosystem}`
+  candidate writer (same `safe_dump` untrusted-feed handling) → **EXTENDS wh-5es**.
+- **P0** Gate-2 for DATA edits: a deterministic OSV-schema + GHSA/OSV-source validator + put the watchlist in
+  the write-lane → **EXTENDS wh-562 + wh-k6l**.
+- **P1** version-aware S8 (call `is_known_bad` instead of name-only) → **EXTENDS wh-4k9** (already scoped).
+- **P1** auto-route the sealed sandbox when a pinned snapshot + docker are present (S8 default-when-safe) →
+  **EXTENDS wh-hxt.3**.
+- **P2** ADMIT-via-loop: machine-readable registry + a registry-row writer behind `confine`+`gate_kb_edit` →
+  **NEW spike (wh-hxt.4)**.
+- **P3** RETIRE path for tools/watchlist entries (not just KB `--archive`) → **EXTENDS wh-hxt.1**.
+
 ## Outcome
 
 **Security comes from CONTAINMENT, not selection.** Because every tool runs offline + no-creds + sandboxed +
