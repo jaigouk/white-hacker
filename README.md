@@ -223,9 +223,11 @@ curl -fsSL https://raw.githubusercontent.com/jaigouk/white-hacker/HEAD/install.s
 curl -fsSL https://raw.githubusercontent.com/jaigouk/white-hacker/HEAD/install.sh | bash -s -- --plugin
 ```
 
-Pin/override with `--ref <tag>`; preview with `--dry-run`; CI with `--unattended`. The skills are
-**stdlib-only** and run isolated via `uv run --project` — **nothing is installed into your project's
-Python env** (only `uv` is required; it also provisions Python). Review-before-run: download, read, run.
+Works on **macOS or Linux** (detects the host). Pin/override with `--ref <tag>`; preview with
+`--dry-run`; CI with `--unattended`. The skills are **stdlib-only** and run isolated via
+`uv run --project` — **nothing is installed into your project's Python env**; the only prereq is
+`uv`, which the installer **auto-installs (pinned) if missing** (it also provisions Python).
+Review-before-run: download, read, run.
 
 > (Pre-ADR-021 manual fallback: hand-copying `plugins/white-hacker/{agents,skills,commands,hooks}/`
 > into `~/.claude/` is unpinned and drifts — use `install.sh` or the marketplace instead.)

@@ -11,9 +11,11 @@
 #                       `claude plugin update`, identity canonical, shared across your projects.
 #
 # Version: defaults to the LATEST RELEASE TAG (override with WH_REF=<tag|sha> or --ref <tag>).
+# Platform: macOS or Linux (any arch). Detects the host; refuses elsewhere.
 # Python: white-hacker's skills are STDLIB-ONLY and run via `uv run --project` in ISOLATED venvs —
-#         NO Python packages are installed into your project. The only runtime prereq is `uv`
-#         (which also provisions Python). uv injects test deps (jsonschema/pytest) ephemerally.
+#         NO Python packages are installed into your project. The only runtime prereq is `uv`; if it's
+#         absent the installer installs it (PINNED, via the cross-platform astral installer) and
+#         provisions Python. uv injects test deps (jsonschema/pytest) ephemerally via `uv run --with`.
 # Security (ADR-006 — the agent that scans supply chains must not be a supply-chain victim):
 #         pins a tag, verifies a GPG-signed tag when present, and fetches NOTHING unpinned.
 #
@@ -27,12 +29,25 @@ WH_MARKETPLACE="white-hacker-marketplace"
 WH_PLUGIN="white-hacker"
 
 LANE="vendor"; DRYRUN=0; UNATTENDED="${WH_UNATTENDED:-0}"; WH_REF="${WH_REF:-}"; TARGET="$PWD"
+UV_VERSION="${UV_VERSION:-0.11.2}"   # pinned uv to install if absent (ADR-006); override via env
+OS=""; ARCH=""
 
 c() { printf '\033[%sm%s\033[0m' "$1" "$2"; }
 log()  { printf '%s %s\n' "$(c '1;36' '==>')" "$*"; }
 warn() { printf '%s %s\n' "$(c '1;33' 'warning:')" "$*" >&2; }
 die()  { printf '%s %s\n' "$(c '1;31' 'error:')" "$*" >&2; exit 1; }
 run()  { if [ "$DRYRUN" = 1 ]; then printf '   [dry-run] %s\n' "$*"; else eval "$*"; fi; }
+have() { command -v "$1" >/dev/null 2>&1; }
+fetch() { if have curl; then curl -fsSL "$1"; elif have wget; then wget -qO- "$1"; else die "need curl or wget to fetch $1"; fi; }
+
+detect_os() {
+  case "$(uname -s)" in
+    Darwin) OS=macos;; Linux) OS=linux;;
+    *) die "unsupported OS '$(uname -s)' — white-hacker installs on macOS or Linux only";;
+  esac
+  ARCH="$(uname -m)"
+  log "host: $OS/$ARCH"
+}
 
 usage() {
   cat <<EOF
@@ -59,9 +74,9 @@ parse_args() {
 
 resolve_ref() {
   [ -n "$WH_REF" ] && { printf '%s' "$WH_REF"; return; }
-  local t=""
-  command -v curl >/dev/null 2>&1 && t="$(curl -fsSL "https://api.github.com/repos/${WH_SLUG}/releases/latest" 2>/dev/null \
-        | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -1)"
+  local t="" api="https://api.github.com/repos/${WH_SLUG}/releases/latest"
+  if   have curl; then t="$(curl -fsSL "$api" 2>/dev/null | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -1)"
+  elif have wget; then t="$(wget -qO- "$api" 2>/dev/null | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -1)"; fi
   [ -n "$t" ] || t="$(git ls-remote --tags --refs --sort=-v:refname "$WH_REPO" 2>/dev/null | sed -n 's#.*refs/tags/##p' | head -1)"
   [ -n "$t" ] || die "no release tag found — cut a stable tag (e.g. v0.1.0) first, or pass --ref <tag>"
   printf '%s' "$t"
@@ -82,13 +97,22 @@ clone_pinned() {  # echoes the temp clone dir; caller traps cleanup
 }
 
 ensure_uv() {
-  if command -v uv >/dev/null 2>&1; then log "uv $(uv --version 2>/dev/null | awk '{print $2}') present (skills run isolated via uv)"; return; fi
-  warn "uv not found — white-hacker's stdlib-only skills run via 'uv run' (uv also provisions Python)."
-  echo "   install uv:  curl -LsSf https://astral.sh/uv/install.sh | sh"
-  [ "$UNATTENDED" = 1 ] && die "uv is required — install it and re-run"
-  printf '   install uv now via the official installer? [y/N] '
-  read -r a </dev/tty 2>/dev/null || a=n
-  case "$a" in y|Y) run "curl -LsSf https://astral.sh/uv/install.sh | sh";; *) warn "skipping uv — install it before a review";; esac
+  if have uv; then log "uv $(uv --version 2>/dev/null | awk '{print $2}') present (skills run isolated via uv)"; return; fi
+  warn "uv not found — required to run white-hacker's (stdlib-only) skills; uv also provisions Python."
+  if [ "$DRYRUN" = 1 ]; then log "[dry-run] would install uv ${UV_VERSION} (official astral installer, $OS/$ARCH)"; return; fi
+  if [ "$UNATTENDED" != 1 ]; then
+    printf '   install uv %s now? (official astral installer; %s/%s) [Y/n] ' "$UV_VERSION" "$OS" "$ARCH"
+    read -r a </dev/tty 2>/dev/null || a=y
+    case "$a" in n|N) die "uv is required — install it (https://docs.astral.sh/uv/) then re-run";; esac
+  fi
+  have curl || have wget || die "need curl or wget to install uv (install one, or install uv manually)"
+  log "installing uv ${UV_VERSION} ($OS/$ARCH) via the official installer…"
+  # pinned uv (ADR-006); the astral installer is cross-platform (macOS + Linux, multi-arch) + idempotent
+  fetch "https://astral.sh/uv/${UV_VERSION}/install.sh" | sh
+  # surface uv to THIS run (astral default ~/.local/bin; older/cargo ~/.cargo/bin)
+  export PATH="${XDG_BIN_HOME:-$HOME/.local/bin}:$HOME/.cargo/bin:$PATH"
+  have uv || die "uv installed but not on PATH — open a new shell (or add ~/.local/bin to PATH) and re-run"
+  log "uv $(uv --version 2>/dev/null | awk '{print $2}') installed"
 }
 
 vendor() {  # $1 = pinned clone, $2 = target
@@ -121,7 +145,8 @@ plugin() {  # $1 = pinned clone (used as a LOCAL pinned marketplace)
 
 main() {
   parse_args "$@"
-  need_git() { command -v git >/dev/null 2>&1 || die "git is required"; }; need_git
+  detect_os
+  have git || die "git is required (install git, or use a git-bundled environment)"
   [ -d "$TARGET" ] || die "target not a directory: $TARGET"
   WH_REF="$(resolve_ref)"; log "white-hacker @ $(c '1;32' "$WH_REF")  lane=$LANE  target=$TARGET${DRYRUN:+}"
   [ "$DRYRUN" = 1 ] && log "(dry-run — nothing will change)"
