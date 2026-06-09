@@ -27,8 +27,9 @@ docker run --rm \
   --cap-drop ALL --security-opt no-new-privileges \
   --pids-limit 256 --memory 1g --memory-swap 1g \
   -v "$abs:/out" \
+  --entrypoint sh \
   alpine/git \
-  sh -ceu '
+  -ceu '
     rm -rf /out/.mp
     git clone --filter=blob:none "https://github.com/ossf/malicious-packages" /out/.mp
     cd /out/.mp

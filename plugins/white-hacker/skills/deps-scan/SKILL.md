@@ -78,7 +78,10 @@ for `pom.xml`, targeted regex/line parsing for Gemfile/go.mod; no new runtime de
   .claude`) — **HIGH** when ≥2 hit. Reported once, **project-level** (keyed to the script).
 - **S7** obfuscation (single line >50 KB, `_0x[0-9a-f]{4,}` density).
 - **S8** known-bad vs an **OPTIONAL** offline OSSF/GHSA snapshot — a HOOK that **degrades**: no
-  snapshot → record `malware-db` in `summary.tools_unavailable` and skip (wh-0o7 wires the snapshot).
+  snapshot → record `malware-db` in `summary.tools_unavailable` and skip. To ACTIVATE, pass
+  `malware_db=load_malware_db(<osv>)` to `scan()` (wh-0o7 loader). A snapshot is PINNED + verified
+  active (wh-8qw: OSSF `174a862…`, real pkg `a-constructor.js`/MAL-2024-1708 → HIGH S8) — pin +
+  fetch + operational caveats in `reference/MALWARE-DB.md`.
 
 ### Per-ecosystem adapters (npm lead + 5 follow-ons, same interface — wh-w30)
 Every signal is a property of *a manifest + a lockfile + install/build hooks*, present in every
