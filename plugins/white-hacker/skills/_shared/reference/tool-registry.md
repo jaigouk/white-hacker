@@ -63,4 +63,4 @@ verification.
 > Append dated entries when a tool/capability is added or retired. Format:
 > `YYYY-MM-DD · +/- · capability · tool · source · rationale`
 - 2026-06-06 · seed · initial registry from research (`docs/research/fnd-tool-matrix.md`).
-- 2026-06-09 · - · iac · trivy demoted below checkov · CVE-2026-33634/GHSA-69fq-xp46-6x23 · TeamPCP compromise — interim quarantine (wh-d5b), permanent removal wh-nvk
+- 2026-06-09 · - · iac · trivy · CVE-2026-33634/GHSA-69fq-xp46-6x23 · TeamPCP compromise — demoted below checkov, interim quarantine (wh-d5b), permanent removal wh-nvk

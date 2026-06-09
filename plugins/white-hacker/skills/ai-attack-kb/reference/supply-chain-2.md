@@ -18,7 +18,7 @@ detections:
   - "installed artifact (binary/image/package) consumed without verifying its checksum or signature (cosign / GPG) against the publisher's expected value"
   - "installed/locked dependency version matches a known-compromised watchlist (the deps-scan S8 signal): Trivy v0.69.4-.6 / trivy-action 76-77, LiteLLM 1.82.7-1.82.8, Telnyx 4.87.1-4.87.2, ~42 @tanstack/* packages, nrwl.angular-console v18.95.0 — caveat: a specific-version match resolves the version from the target's OWN lockfile, which is attacker-controlled and can be edited to mask the bad version, so the manifest pin warrants a human cross-check rather than trusting the resolved version alone; wildcard (name-only) watchlist entries are unaffected"
   - "CI workflow grants a broad GITHUB_TOKEN or keeps long-lived SSH/cloud/K8s/Docker/Git secrets in the runner environment with no egress allowlist (the runner-memory-dump / secret-harvest blast surface)"
-xref: ["LLM03:2025", "AISEC-SUPPLY-CHAIN-001"]
+xref: ["LLM03:2025"]
 ---
 A breached maintainer/bot account (incomplete credential rotation) is used to force-push imposter
 commits over existing release **tags** — mutable refs — and to publish malicious binaries/images;
@@ -37,3 +37,5 @@ Checklist: maps to the deps-scan supply-chain floor (S8 known-compromised-versio
 / digest + signature verification) and to CI-workflow hardening — re-pin every Action and tool to an
 immutable commit-SHA or image digest, verify artifact signatures, and run with a minimal token, no
 ambient secrets, and an egress allowlist so a riding payload cannot exfiltrate.
+Sibling: AISEC-SUPPLY-CHAIN-001 (slopsquatting / AI-SDK typosquatting) — the name-trust failure that
+precedes this version-trust failure.
