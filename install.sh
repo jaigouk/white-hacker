@@ -120,6 +120,11 @@ vendor() {  # $1 = pinned clone, $2 = target
   [ -d "$src" ] || die "payload not found in clone (plugins/${WH_PLUGIN}) — wrong ref?"
   log "vendor: copy pinned payload ($WH_REF) -> $dst"
   run "mkdir -p '$dst/agents' '$dst/skills'"
+  # the agent identity is often project-CUSTOMIZED — back it up before overwriting (never silent clobber)
+  if [ -e "$dst/agents/white-hacker.md" ]; then
+    run "mv '$dst/agents/white-hacker.md' '$dst/agents/white-hacker.md.bak.$(date +%s 2>/dev/null || echo old)'"
+    warn "your existing white-hacker.md was backed up (.bak.*) — it may be project-customized; diff/restore it if you meant to keep yours (or adopt the generic agent + a /white-hacker:sec-init companion)."
+  fi
   run "cp '$src/agents/white-hacker.md' '$dst/agents/white-hacker.md'"   # only OUR agent; leaves your others
   # skills: copy each, excluding venvs/caches (stdlib-only; uv recreates venvs on first run)
   for s in "$src"/skills/*/; do
