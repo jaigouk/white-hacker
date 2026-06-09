@@ -60,6 +60,18 @@ _Add your build and test commands here_
 # npm test
 ```
 
+### Resource discipline (CPU & I/O)
+
+This dev machine runs endpoint security (CrowdStrike) doing on-access file scanning. Saturating all CPU cores — or fanning out parallel Python/builds — serializes I/O **system-wide** and freezes the UI even with RAM free (RAM is not the bottleneck; more cores would not help — work expands to fill them). Every command-running agent in `.claude/agents/` carries these rules **inline** (subagents don't reliably inherit this file); keep this canonical copy in sync:
+
+- **Test parallelism:** never `pytest -n auto` / "all cores" — at most `-n 4`; run serially if pytest-xdist isn't configured.
+- **Multiprocessing:** never `os.cpu_count()`-sized pools — `<= 4` workers, e.g. `Pool(processes=min(4, (os.cpu_count() or 4)//2))`.
+- **Priority:** prefix heavy/long commands with `nice -n 10 ` (e.g. `nice -n 10 uv run pytest -n 4`).
+- **Native thread pools:** export `OMP_NUM_THREADS=4 MKL_NUM_THREADS=4 OPENBLAS_NUM_THREADS=4 VECLIB_MAXIMUM_THREADS=4 NUMEXPR_NUM_THREADS=4` for numeric/ML code.
+- **One heavy task at a time:** finish or background one test/build/Python job before starting the next.
+- **Scope file ops:** exclude `.venv`, `node_modules`, build output, `.git` from recursive scans/builds (each touched file is scanned).
+- **Orchestrators** (tech-lead, project-manager): run at most 2 heavy subagents concurrently; never fan out one heavy Python task per agent across many agents.
+
 ## Architecture Overview
 
 _Add a brief overview of your project architecture_
