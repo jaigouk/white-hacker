@@ -39,7 +39,29 @@ def _rates(tp: int, fn: int, fp: int, tn: int) -> dict:
     return {"tpr": tpr, "fpr": fpr, "youden_j": tpr - fpr, "tp": tp, "fn": fn, "fp": fp, "tn": tn}
 
 
-def score(findings_doc: dict, labels: list[dict], tol: int = 3) -> dict:
+# wh-71r — DOCUMENTED, AUDITED category equivalences for the OPT-IN lenient scorer. Each frozenset is
+# a pair of categories that are BOTH defensible labels for the SAME flaw, so a finding that pinpoints
+# the vuln at the right line but picks the sibling class should not read as a miss. Symmetric.
+# OPT-IN ONLY (score(..., lenient=True) / `--lenient`); the STRICT default is the gate metric and is
+# never silently widened — silent widening is exactly what inflated the prior baseline (see
+# docs/qa/20260609/opus-rebaseline-report.md). NOTE: improper-output-handling↔ssrf (py-llm05-ssrf) is
+# deliberately NOT aliased — that equivalence is too broad to apply safely to all 18 ssrf cases.
+CATEGORY_ALIASES = (
+    frozenset({"crypto", "config"}),                              # hardcoded secret: a crypto/secrets AND a config flaw
+    frozenset({"AuthN/AuthZ", "crypto"}),                         # JWT alg-confusion/none: a crypto flaw that bypasses authz
+    frozenset({"prompt-injection", "rag-poisoning"}),            # LLM01/LLM08: untrusted content entering the model context
+    frozenset({"improper-output-handling", "excessive-agency"}), # LLM05/LLM06: unsafe LLM output that drives an action
+)
+
+
+def _cat_match(found: str, label: str, lenient: bool) -> bool:
+    """Strict: categories must be equal. Lenient: equal OR in the same documented alias group."""
+    if found == label:
+        return True
+    return lenient and any({found, label} <= g for g in CATEGORY_ALIASES)
+
+
+def score(findings_doc: dict, labels: list[dict], tol: int = 3, lenient: bool = False) -> dict:
     findings = findings_doc.get("findings", [])
     tp = fn = fp = tn = 0
     cats: dict[str, dict] = {}
@@ -52,7 +74,7 @@ def score(findings_doc: dict, labels: list[dict], tol: int = 3) -> dict:
         vf, vl = lab["vulnerable"]["file"], lab["vulnerable"]["line"]
         hit = any(
             _file_match(f.get("file", ""), vf)
-            and f.get("category") == cat
+            and _cat_match(f.get("category", ""), cat, lenient)
             and abs(f.get("line", -999) - vl) <= tol
             for f in findings
         )
@@ -99,6 +121,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--labels")
     parser.add_argument("--corpus")
     parser.add_argument("--tol", type=int, default=3)
+    parser.add_argument("--lenient", action="store_true",
+                        help="credit DOCUMENTED defensible category equivalences (CATEGORY_ALIASES); off by default")
     try:
         ns = parser.parse_args(sys.argv[1:] if argv is None else argv)
     except SystemExit:
@@ -108,7 +132,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     findings_doc = json.loads(Path(ns.findings).read_text())
     labels = load_labels(ns.labels, ns.corpus)
-    print(json.dumps(score(findings_doc, labels, ns.tol), indent=2))
+    print(json.dumps(score(findings_doc, labels, ns.tol, ns.lenient), indent=2))
     return 0
 
 

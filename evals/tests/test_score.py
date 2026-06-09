@@ -93,3 +93,55 @@ def test_main_requires_labels_or_corpus(tmp_path):
     import json
     fp = tmp_path / "f.json"; fp.write_text(json.dumps({"findings": []}))
     assert sc.main(["--findings", str(fp)]) == 2
+
+
+# --------------------------------------------------------------------------- #
+# wh-71r — OPT-IN lenient mode credits DOCUMENTED defensible category equivalences.
+# (e.g. a hardcoded secret is both `crypto` and `config`.) Strict default UNCHANGED.
+# --------------------------------------------------------------------------- #
+_CRYPTO_LABEL = [
+    {"case_id": "c3", "language": "python", "category": "crypto", "severity": "HIGH",
+     "vulnerable": {"file": "cases/c3/vulnerable_variant.py", "line": 1},
+     "benign_lookalike": {"file": "cases/c3/benign_lookalike.py"}},
+]
+
+
+def test_lenient_credits_an_aliased_category():
+    # a `config` finding on a `crypto` label (the hardcoded-secret equivalence)
+    findings = {"findings": [_f("cases/c3/vulnerable_variant.py", 1, "config")]}
+    assert sc.score(findings, _CRYPTO_LABEL)["tp"] == 0               # == strict: not a match
+    assert sc.score(findings, _CRYPTO_LABEL, lenient=True)["tp"] == 1  # lenient credits the alias
+
+
+def test_lenient_is_opt_in_strict_is_default():
+    # default scoring is UNCHANGED strict — leniency must never be silently on
+    findings = {"findings": [_f("cases/c3/vulnerable_variant.py", 1, "config")]}
+    assert sc.score(findings, _CRYPTO_LABEL)["tp"] == 0
+    assert sc.score(findings, _CRYPTO_LABEL)["youden_j"] != 1.0       # != wrong: not silently inflated
+
+
+def test_lenient_does_not_credit_an_unaliased_category():
+    # `xss` is NOT a defensible equivalent of `injection` -> miss even in lenient mode
+    findings = {"findings": [_f("cases/c1/vulnerable_variant.py", 12, "xss")]}
+    assert sc.score(findings, LABELS[:1], lenient=True)["tp"] == 0
+    assert sc.score(findings, LABELS[:1], lenient=True)["youden_j"] != 1.0
+
+
+def test_aliases_are_symmetric():
+    # crypto finding on a config label is credited too (the alias is a set, both directions)
+    config_label = [{**_CRYPTO_LABEL[0], "category": "config"}]
+    findings = {"findings": [_f("cases/c3/vulnerable_variant.py", 1, "crypto")]}
+    assert sc.score(findings, config_label, lenient=True)["tp"] == 1
+    assert sc.score(findings, config_label)["tp"] == 0
+
+
+def test_lenient_cli_flag(tmp_path, capsys):
+    import json
+    findings = {"findings": [_f("cases/c3/vulnerable_variant.py", 1, "config")]}
+    fp = tmp_path / "f.json"; fp.write_text(json.dumps(findings))
+    lp = tmp_path / "l.json"; lp.write_text(json.dumps(_CRYPTO_LABEL))
+    assert sc.main(["--findings", str(fp), "--labels", str(lp), "--lenient"]) == 0
+    assert json.loads(capsys.readouterr().out)["tp"] == 1
+    # without the flag -> strict -> not a TP
+    assert sc.main(["--findings", str(fp), "--labels", str(lp)]) == 0
+    assert json.loads(capsys.readouterr().out)["tp"] == 0
