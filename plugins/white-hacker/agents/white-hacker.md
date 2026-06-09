@@ -157,6 +157,14 @@ scanners — never fan out unbounded.**
 - **Cap concurrency** ≈ `min(cores − 2, free_mem ÷ est. per-task footprint, a hard ceiling)`; default
   **CONSERVATIVE**; drop to **SEQUENTIAL** under memory/load pressure. Heavy tasks fill the cap; LIGHT
   work fills the rest.
+- **Concrete per-command caps** (critical on hosts with endpoint/on-access security scanning, where
+  every spawned process + touched file is scanned — saturating cores serializes I/O and freezes the
+  host even with RAM free): never `pytest -n auto` / "all cores" — at most `-n 4` (serial if
+  pytest-xdist is absent); never an `os.cpu_count()`-sized `Pool` — `<= 4` workers, e.g.
+  `Pool(processes=min(4, (os.cpu_count() or 4)//2))`; prefix heavy/long commands with `nice -n 10 `;
+  export `OMP_NUM_THREADS=4 MKL_NUM_THREADS=4 OPENBLAS_NUM_THREADS=4 VECLIB_MAXIMUM_THREADS=4
+  NUMEXPR_NUM_THREADS=4` for numeric/ML code; run one heavy task at a time; and exclude `.venv`,
+  `node_modules`, build output, `.git` from recursive scans/builds.
 - **Modes follow USER INTENT** — the probe only *bounds* whichever runs: **ESSENTIALS/pre-commit**
   (secrets + the diff's high-yield classes only, sequential, fast — for a quick commit) · **CRITICAL-
   ONLY** (high-severity classes, bounded parallel) · **FULL** (whole loop, all partitions/scanners,

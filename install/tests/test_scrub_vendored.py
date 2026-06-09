@@ -152,3 +152,5 @@ def test_real_agent_keeps_inner_loop_identity(tmp_path):
     assert "## Verification of your own work" in agent
     # the resource-aware execution-budget section is inner-loop guidance — it MUST ship to targets
     assert "## Execution budget" in agent and "OOM-safety is a HARD rule" in agent
+    # the concrete per-command caps must ship too (don't freeze a target user's host)
+    assert "Concrete per-command caps" in agent and "nice -n 10" in agent and "pytest -n auto" in agent
