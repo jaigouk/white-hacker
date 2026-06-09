@@ -294,6 +294,52 @@ the feeder; turn CONTAIN on by default; then the aspirational arm):
 
 ---
 
+## Addendum (2026-06-09, refinement pass — workflow `wdf3tkjjp`)
+
+The handoff above was **acted on** the same day. What changed:
+
+### A1. The §2 limit is CLOSED — `/sec-learn` audited first-hand
+The failed reader was re-run directly. Findings (all `file:line`-verified):
+- **The skill is ~90% prose, 10% code.** Implemented: `harvest.py:18-38` (deterministic trace collator
+  over `evals/traces/findings-*.jsonl`) + `patch_merge.py:40-58` (pure `str→str` section-keyed merge —
+  tested, **no file I/O, no CLI, no non-test caller repo-wide**, confirming the §2 inference). The
+  reflect/pre-gate/self-critique/branch+PR flow is LLM instruction prose with zero scripts.
+- **NEW finding — the trace input arm is DRY:** the T-8.3 capture hooks exist as tested scripts
+  (`capture_hooks.py` + wrappers) but are registered in **no** `hooks.json`/`settings.json`
+  (registration "(pending human-auth)", `docs/plan/phase-8-self-improvement.md:107`), and
+  `evals/traces/` **does not exist on disk** — a `/sec-learn` run today harvests **0 rows**; its
+  "≥3 sessions" pre-gate is unsatisfiable prose. *Open human decision: register the capture hooks.*
+- **wh-hxt.4 design consequence:** `sec-kb-refresh` is the structurally correct PRIMARY proposing arm
+  for ADMIT (tool discovery is feed-shaped; it has the real deterministic pipeline); `sec-learn` is a
+  SECONDARY, experience-driven arm — design the registry-row writer **arm-agnostic**, never blocked on
+  sec-learn wiring. `gate_kb_edit` demands `gate-verdict.json==KEEP` for the registry segment — the
+  Gate-2 verdict path must mint it for DATA edits (never reuse an eval-J KEEP).
+
+### A2. §9 decisions — RESOLVED
+1. **Gate-2's home** → wh-562 RQ-A (leaning `_shared/` if wh-hxt.4 shares the gate; decided there).
+2. **Sandbox auto-route default** → promoted into wh-hxt.3 RQ3 (default-on vs louder-opt-in decided there).
+3. **One ADR or two** → **resolved: wh-hxt.3 owns THE strategy ADR**; wh-hxt.2 dropped its ADR
+   deliverable (runbook + policy only); wh-562 owns ONE watchlist-mechanism ADR with **wh-5es's ADR
+   folded in**. Six planned ADRs collapsed to **four** (strategy / watchlist-mechanism / admissibility /
+   drop-Trivy); all numbers computed at write time — nothing reserved.
+   3b. *(sec-learn scope)* → closed by A1.
+4. **CI-checklist home** → wh-hxt.3 RQ5 decides (ci/ docs vs ADR content).
+
+### A3. §6 ticket actions — EXECUTED (2026-06-09)
+- **Created `wh-hxt.4`** (ADMIT-via-loop; blocked-by wh-562). Epic now 9 children.
+- **Re-scoped:** wh-562 → the Gate-2 DATA-gate spike (title + body; the §5.1 LBC-6 correction folded —
+  no "snapshot checksum" scope); wh-hxt.2 → runbook+policy, no ADR; wh-d5b → the single iac-reorder
+  stopgap with a no-return rollback; wh-5es → the OSSF feeder promoted to primary, RQ3 delegated to
+  wh-4k9, schema ownership stated; wh-4k9/wh-k6l/wh-q86/wh-xn0/wh-nvk → groom-note corrections folded
+  into the bodies; wh-hxt.1 → extended with the G6 tool/watchlist RETIRE paths.
+- **Deps wired:** wh-hxt.2←{wh-hxt.3, wh-nvk}; wh-nvk←wh-d5b; wh-hxt.4←wh-562 (plus the existing
+  wh-562←wh-hxt.3, wh-k6l←wh-4k9). Epic body records the settled coordination decisions + waves.
+- **Key-doc consistency pass committed** (ARCHITECTURE.md, DDD.md, README.md, PRD FR-18): the
+  "registry self-updates" / "one gate for everything" claims marked as design intent with pointers;
+  the stale "hooks/evals PLANNED-not-built" markers flipped to the verified built state; component
+  tree re-rooted at `plugins/white-hacker/`. ARD.md untouched (append-only — clarifications route
+  through the pending ADRs, ownership per A2.3).
+
 ## Appendix — file:line index
 
 - **Outer-input:** `sec-kb-refresh/scripts/poll_feeds.py` (`:23` VALID_CLASSES, `:69` PARSERS, `:82-107`
