@@ -134,7 +134,12 @@ vendor() {  # $1 = pinned clone, $2 = target
     fi
     run "rsync -a --exclude '.venv' --exclude '__pycache__' --exclude '.pytest_cache' '$s' '$dst/skills/$name/' 2>/dev/null || cp -R '$s' '$dst/skills/$name'"
   done
-  [ -d "$src/commands" ] && run "cp -R '$src/commands' '$dst/commands-white-hacker'" || true
+  # Deliberately DO NOT vendor plugins/.../commands/ — they are PLUGIN-lane entry points:
+  #  (1) Claude Code only scans .claude/commands/ (a commands-white-hacker/ dir is never loaded);
+  #  (2) they delegate via ${CLAUDE_PLUGIN_ROOT}, which is unset outside an installed plugin;
+  #  (3) /security-review shadows the built-in and /sec-patch duplicates the sec-patch SKILL.
+  # In the vendor lane you invoke the agent (.claude/agents/white-hacker.md) directly; its skills
+  # auto-load from .claude/skills/. (The --plugin lane is where /white-hacker:* commands belong.)
   # keep recreated skill venvs out of the repo
   if [ "$DRYRUN" != 1 ] && ! grep -qxF '.venv/' "$2/.gitignore" 2>/dev/null; then echo '.venv/' >> "$2/.gitignore"; fi
   warn "confinement hooks (plugins/${WH_PLUGIN}/hooks) are NOT auto-wired in the vendor lane — register them in $2/.claude/settings.json if you want the self-improvement guards (or use --plugin)."
@@ -161,14 +166,28 @@ main() {
     vendor) vendor "$CLONE" "$TARGET";;
     plugin) plugin "$CLONE";;
   esac
-  cat <<EOF
+  if [ "$LANE" = plugin ]; then
+    cat <<EOF
 
-$(c '1;32' '✓') white-hacker installed ($WH_REF, $LANE lane).
-Next, in this project (a Claude Code session):
-   /white-hacker:sec-init          # detect stack + write .white-hacker/project-profile.json (commit it)
-   /white-hacker:security-review   # run a review
+$(c '1;32' '✓') white-hacker installed ($WH_REF, plugin lane). Restart Claude Code, then:
+   /white-hacker:security-review   # run the review (thin entry -> the agent's inner loop)
+   /white-hacker:sec-patch         # opt-in remediation (writes diffs to ./PATCHES, never applies)
+Update later: claude plugin update ${WH_PLUGIN}
+EOF
+  else
+    cat <<EOF
+
+$(c '1;32' '✓') white-hacker vendored into $TARGET/.claude ($WH_REF).
+   - agent:  .claude/agents/white-hacker.md   (a project subagent — the behavioral source of truth)
+   - skills: .claude/skills/*                 (inner loop: threat-model -> discovery -> triage ->
+                                                report; + secrets-scan / deps-scan / ai-llm-review;
+                                                opt-in sec-patch). No slash commands in this lane.
+In a Claude Code session here, just ask, e.g.:
+   "run a white-hacker security review on my working-tree diff"
+Claude delegates to the white-hacker subagent. Commit .claude/ to share it / run it in CI.
 Refresh later: re-run this installer (picks up the latest release tag).
 EOF
+  fi
 }
 
 main "$@"
