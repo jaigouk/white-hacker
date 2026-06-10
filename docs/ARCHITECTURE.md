@@ -21,8 +21,13 @@ the loops are the whole point.
 > two impl tickets pending), the S8 auto-route bridge (ADR-024 §4 — ARMED-by-config, default-false),
 > the watchlist file (wh-k6l — hard-ordered after `gate_data_edit`), the registry rewrite to the
 > diversified set (ADR-027 — one shared impl ticket), and the registry-row / feeder proposer arms
-> (wh-hxt.4 / wh-5es). **Still pending human-auth:** capture-hook registration (T-8.3). Sections
-> below mark these explicitly — present tense elsewhere describes what is built.
+> (wh-hxt.4 / wh-5es). **Surfaced by the Hades dogfood RCA** (`docs/research/20260610_hades_shai_hulud_pypi.md`
+> §5), DESIGNED but not yet built: **AI-config-file-poisoning detection** (wh-hxt.11 — an `ai-llm-review`
+> check that scans a target's `.claude/`/`.cursor`/`.vscode` agent-config for injected exec
+> instructions; RC4), **campaign-lineage tracking** (wh-hxt.10 + the `campaign_family` KB field wh-hxt.14;
+> RC3), and **first-detector threat feeds** (wh-hxt.9 — Socket / StepSecurity / Phylum into `si-07`; RC2).
+> **Still pending human-auth:** capture-hook registration (T-8.3 / wh-hxt.8). Sections below mark these
+> explicitly — present tense elsewhere describes what is built.
 
 - **INNER loop** (per review) — Anthropic's `defending-code-reference-harness` methodology:
   threat-model → discovery (recall) → verification (precision) → triage → patch (+re-attack).
@@ -204,6 +209,13 @@ A target repo's `SECURITY.md`/`security.txt` is detected and consumed as **untru
 declared scope/embargo only annotate findings and never suppress a real HIGH, and a missing policy
 surfaces as an informational hygiene advisory rather than a vuln (ADR-018, spike-08).
 
+**Designed-pending — AI-config-file-poisoning detection (wh-hxt.11).** `ai-llm-review` today models
+what the model *reads at runtime* (prompts, tool descriptions, RAG); it does **not** yet scan the
+on-disk agent-config that bootstraps execution (`.claude/setup.mjs`, `.cursor/rules/`,
+`.github/copilot-instructions.md`, `.vscode/tasks.json`, …) — the exact persistence vector the Hades
+PyPI wave used (`docs/research/20260610_hades_shai_hulud_pypi.md` §1, §5 RC4). A check that flags
+injected exec instructions in those files is **designed, not built**.
+
 ### 3.3 `_shared/reference/` incl. the capability tool-registry
 The **stable tier** of the Context surface (yearly cadence): language checklists
 (`lang-{go,python,typescript,java}.md`), `ai-llm.md`, `api.md`, `infra.md`, the severity rubric,
@@ -223,6 +235,12 @@ id, `technique_class`, `severity`, `confidence`, `status`, `date`/`modified`/`re
 mandatory `source`+`url`+`retrieved` provenance, `supersedes`, `detections[]`). A blocking
 validator refuses to persist an unsourced threat claim. Aging-out moves entries to `archive/`,
 never deletes. The KB is **consumed by the inner loop, edited by the outer loop.**
+
+**Designed-pending — campaign-lineage tracking (wh-hxt.10 + the `campaign_family` field wh-hxt.14).**
+The schema above is **per-technique static IOCs** with a 90-day `review_by`; it cannot follow a
+campaign *family* that re-waves under new package names (Shai-Hulud → Mini → Hades/Miasma). A typed
+`campaign_family` front-matter field (wh-hxt.14) plus a re-poll trigger for active families
+(wh-hxt.10) is **designed, not built** (`docs/research/20260610_hades_shai_hulud_pypi.md` §5 RC3).
 
 ### 3.5 Hooks — capture + PreToolUse guardrails (Harness) — guardrails BUILT+WIRED; capture scripts BUILT, registration pending human-auth (T-8.3)
 Two distinct roles (ADR-004):
@@ -348,6 +366,14 @@ way the KB does (ADR-015); the write-lane + DATA gate are designed (ADR-026), th
 proposer is wh-hxt.4 (unblocked, not yet built). Note also: the reflection arm's capture hooks are
 scripted but not yet registered (pending human-auth, T-8.3), so `sec-learn` currently harvests
 zero traces.
+
+The Hades dogfood RCA (`docs/research/20260610_hades_shai_hulud_pypi.md` §5) surfaced two further
+**designed-pending** gaps on the **input arm**: (1) the named feeds above lean on OSV/GHSA, which
+lag the **first-detectors** (Socket / StepSecurity / Phylum) that break PyPI/npm waves days earlier
+— adding them to `si-07` is **wh-hxt.9** (RC2; the 33-vs-37 single-vendor split proves one list is
+partial); and (2) a static-IOC KB with a 90-day `review_by` cannot follow a re-waving campaign
+*family*, so **campaign-lineage tracking** — a `campaign_family` KB field (wh-hxt.14) plus a re-poll
+trigger for active families (wh-hxt.10) — is designed (RC3). Neither is wired yet.
 
 ---
 

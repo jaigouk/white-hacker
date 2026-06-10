@@ -2,8 +2,9 @@
 
 This repo builds a **generic, self-improving white-hat security agent** for Claude Code:
 a security reviewer that works on any TypeScript/Go/Python/Java repo (backend, frontend,
-or AI framework), composes into a TL/QA/Dev/white-hacker team workflow, and **keeps its
-AI-attack knowledge current** over time.
+or AI framework), composes into a TL/QA/Dev/white-hacker team workflow, and is designed to
+**keep its AI-attack knowledge current** over time (the outer-loop currency arm is
+human-triggered today, not yet autonomous — see `docs/ARCHITECTURE.md` build-state).
 
 ## Foundations (the key concept)
 Built on two references — keep both in view:

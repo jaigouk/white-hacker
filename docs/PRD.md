@@ -240,17 +240,25 @@ Each FR carries a one-line **Verification criterion (VC)** — checkable accepta
 ```
 
 ### 5.5 Outer loop — KB refresh & learn
-- **FR-16 — KB refresh (input arm).** A scheduled routine polls authoritative AI-threat feeds (OSV.dev,
-  GitHub Advisory DB, MITRE ATLAS, arXiv cs.CR, OWASP GenAI, practitioner blogs — see
-  `docs/research/si-07-threat-feeds.md`), incrementally diffs (last-seen markers), extracts NEW
-  techniques, and proposes **dated, source-linked** KB entries for human approval; touches the fast
+- **FR-16 — KB refresh (input arm).** *(status: skill BUILT + human-triggerable; **autonomous**
+  scheduling pending-wiring — wh-hxt.12 mechanism + wh-hxt.8 capture-hook registration. The
+  `/sec-kb-refresh` path runs and proposes a PR when a human invokes it; it does **not** self-fire
+  today — a dogfood RCA confirmed ingestion currently depends on a human noticing,
+  `docs/research/20260610_hades_shai_hulud_pypi.md` §5 RC1.)* A scheduled routine polls authoritative
+  AI-threat feeds (OSV.dev, GitHub Advisory DB, MITRE ATLAS, arXiv cs.CR, OWASP GenAI, practitioner
+  blogs — see `docs/research/si-07-threat-feeds.md`), incrementally diffs (last-seen markers), extracts
+  NEW techniques, and proposes **dated, source-linked** KB entries for human approval; touches the fast
   tier only; never auto-merges (`sec-kb-refresh`, ADR-012).
   *VC:* a proposed KB entry carries mandatory `metadata.source` (matching `AML\.T\d+|ASI\d+|CVE-\d{4}-\d+`)
   + `url` + `retrieved`; an unsourced threat claim is refused; the proposal is a PR, not a live edit.
-- **FR-17 — Learn loop (reflection arm).** Mine recent sessions for false-positives, missed findings,
-  user corrections, novel techniques, and useful unknown tools; emit *structured rationale* (why
-  missed / why FP fired); propose dated diffs to KB/checklists/skills/tool-registry as a reviewable PR
-  with a before/after score table (`sec-learn`, ADR-004).
+- **FR-17 — Learn loop (reflection arm).** *(status: skill BUILT + human-triggerable; depends on
+  capture-hook registration for input — wh-hxt.8. `/sec-learn` runs on demand, but the trace-capture
+  hooks that feed it are scripted-not-registered today, so it currently harvests zero traces — same
+  RCA, `docs/research/20260610_hades_shai_hulud_pypi.md` §5 RC1.)* Mine recent sessions for
+  false-positives, missed findings, user corrections, novel techniques, and useful unknown tools; emit
+  *structured rationale* (why missed / why FP fired); propose dated diffs to
+  KB/checklists/skills/tool-registry as a reviewable PR with a before/after score table (`sec-learn`,
+  ADR-004).
   *VC:* `/sec-learn` opens a PR (feature branch, not default) containing a diff + evidence (session
   ids, motivating FP/miss) + a before/after eval score table; nothing is written to the live KB
   directly.
@@ -386,7 +394,7 @@ Each NFR carries a one-line **Verification criterion (VC)**.
 |---|---|---|
 | **M1 — False-positive rate** | Final-report FPR ≤ baseline; FPR_gain on any self-edit ≤ 1pp (hard-revert above) | Frozen paired corpus (vulnerable + benign look-alike); Youden's J; paired bootstrap k=3–5 |
 | **M2 — Recall on eval corpus** | Severity-weighted recall ≥ baseline; recall_loss on any self-edit ≤ 2pp (hard-revert above) | Same frozen corpus, ≥~100 paired cases incl. CVE regression anchors |
-| **M3 — KB freshness** | 0 active fast-tier entries past `review_by`; refresh routine processes feed deltas on cadence (daily JSON/RSS, weekly blogs, monthly frameworks) | `staleness_check.py` in CI; `feed-state.json` delta markers |
+| **M3 — KB freshness** *(target; autonomous arm pending-wiring — wh-hxt.12/.8; RCA §5 RC1)* | 0 active fast-tier entries past `review_by`; refresh routine processes feed deltas on cadence (daily JSON/RSS, weekly blogs, monthly frameworks). **Today the cadence is human-driven, not scheduled** — the staleness check gates, but feed-delta processing only runs when a human invokes `/sec-kb-refresh`. | `staleness_check.py` in CI; `feed-state.json` delta markers |
 | **M4 — Triage precision lift** | Adversarial N-of-N verification measurably reduces non-exploitable findings vs. discovery raw count | Compare `VULN-FINDINGS.json` count → accepted `TRIAGE.json` count per run |
 | **M5 — Floor value** | Zero-tool run still surfaces true positives on a labeled fixture | Run FR-13 path against the corpus; count caught labeled cases |
 | **M6 — Safety** | 0 secret values leaked to any artifact; 0 successful injection-driven behavior changes | Injection-payload fixtures + secret-leak grep over all emitted artifacts |

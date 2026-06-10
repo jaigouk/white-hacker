@@ -2,8 +2,15 @@
 
 A **generic, self-improving white-hat security agent** for Claude Code. It reviews any
 TypeScript / Go / Python / Java repo (backend, frontend, or AI/LLM framework) for **real,
-high-confidence, exploitable** findings, composes into a TL/QA/Dev team workflow, and
-**keeps its AI-attack knowledge current** over time.
+high-confidence, exploitable** findings, composes into a TL/QA/Dev team workflow, and is
+designed to **keep its AI-attack knowledge current** over time.
+
+> **Build state.** The **inner review loop works today**; the **outer self-improvement loop
+> is designed and partly built** — its currency arm is **human-triggered today**, not yet
+> autonomous. The scheduled refresh mechanism and the trace-capture hooks that would close
+> the loop are pending wiring (the gap an internal dogfood RCA surfaced:
+> `docs/research/20260610_hades_shai_hulud_pypi.md` §5). "Self-improving" describes the
+> architecture and its human-run path — see **Why → Self-improving** below for what runs now.
 
 ## The concept: two nested loops
 
@@ -71,12 +78,17 @@ THREAT_MODEL.md → SCAN-PLAN.json → VULN-FINDINGS.json → TRIAGE.json → PA
   behind a deterministic gate (Gate-1: eval keep-or-revert for KB/checklist edits; Gate-2: the
   source+schema DATA gate, ADR-026 — implementation pending — for registry/watchlist entries) and
   size caps; never auto-merged (ADR-004).
-  Procedural memory lives as progressive-disclosure skills; the KB self-updates today, and the
-  tool registry is designed to (its proposer arm is in progress).
+  Procedural memory lives as progressive-disclosure skills. The KB-edit lane is built and
+  **human-triggered today** (`/sec-kb-refresh`, `/sec-learn` — a human runs them and merges the
+  PR); **autonomous** currency is not yet wired — the scheduled refresh mechanism (wh-hxt.12) and
+  the trace-capture hook registration (wh-hxt.8) are pending, so the loop does not yet self-fire
+  (dogfood RCA: `docs/research/20260610_hades_shai_hulud_pypi.md` §5). The tool registry's
+  proposer arm is likewise in progress.
 - **AI-aware.** First-class OWASP **LLM (2025)**, **MCP (beta)**, and **Agentic/ASI (2026)**
   coverage — improper output handling (the highest-yield code check), the lethal trifecta,
   MCP token-passthrough, RAG poisoning, excessive agency, unbounded consumption — grounded in
-  the living KB that refreshes from authoritative threat feeds.
+  the living KB, which is **refreshed from authoritative threat feeds via a human-run pass today**
+  (autonomous refresh pending wiring — see **Self-improving** above).
 - **Disciplined.** Recall and precision are *separate stages* (ADR-008); triage is adversarial
   ("assume false positive"), runs in a fresh context, and the decision-maker sees only
   `{file,line,category,diff}` — context starvation that also defeats prompt injection. The
