@@ -309,3 +309,235 @@ onboarding surface.
 **Supersedes:** nothing — extends ADR-006 (pin) and ADR-003 (degrade) into a primary execution-containment layer, and elevates the Agents Rule of Two (`white-hacker.md:39-41`) from posture to the load-bearing control. Carries ADR-015's self-updates clarification (intent until wh-hxt.4); delegates ADR-021's tag→SHA supersession to wh-562's Gate-2 ADR (cross-referenced).
 **Alternatives rejected:** (a) keep DIVERSIFY/PIN-VERIFY as the primary answer — falsified by Mini Shai-Hulud (valid provenance still passed); diversity cited as the fix in zero 2026 postmortems. (b) A shared `_shared` tool-exec lane NOW — abstraction-for-single-use (only deps-scan runs in containment today); Policy 2 / ADR-015 add the port at ≥2 callers. (c) S8 auto-route default-on unconditionally — a surprise `docker run` on hosts where the daemon is often down (the operator's Rancher Desktop is frequently unregistered); contradicts ADR-007. (d) Fold tool-admission into Gate-1 or Gate-2 — category error (three object kinds). (e) Put the CI checklist in the ADR — append-only ADR prose is the wrong home for evolving operational guidance (Policy 11). (f) Let the outer loop self-edit the sandbox/hooks as KB text — breaks identity preservation (Policy 5; ADR-016).
 **References:** wh-hxt.3 (this spike), `docs/research/20260610_contain_primary_control.md` (matrix + RQ decisions + draft impl tickets); `docs/research/20260609_supply_chain_tooling_strategy.md` (CONTAIN section + 2026 primary sources: StepSecurity Mini Shai-Hulud postmortem, SLSA L3 hermetic, NIST SP 800-218/204D, CISA-NSA Defending CI/CD, OpenSSF S2C2F, GitHub SHA-pin policy 2025-08-15, EU CRA) + `docs/research/20260609_supply_chain_loop_leverage.md` (G4, LBC-4/LBC-5, §9) + `docs/research/20260609_trivy_teampcp_supply_chain.md` (offline ≠ binary-verify scorecard); `docker/deps-scan-sandbox/{run.sh,fetch-snapshot.sh,README.md}`; `plugins/white-hacker/skills/deps-scan/SKILL.md:81-82` + `scripts/supply_chain.py` (the `unavailable.add("malware-db")` degrade in `_build_doc`); `plugins/white-hacker/agents/white-hacker.md:39-41`; ADR-001 (two loops), ADR-003 (degrade), ADR-006 (pin+verify), ADR-007 (opt-in sandboxed detonation + microVM-ceiling risk register), ADR-015 (capability-not-brand registry; self-updates), ADR-016 (confinement defense-in-depth), ADR-019 (supply-chain class); siblings wh-562 (Gate-2 DATA gate — blocked by this; owns the ADR-021 tag→SHA supersession), wh-nvk (DIVERSIFY), wh-xn0 (ADMIT), wh-hxt.2 (runbook — references this), wh-hxt.4 (ADMIT-via-loop).
+
+## ADR-025 — Tool admissibility = two deterministic gates (license MIT/Apache-2.0-only + data-egress local/no-default-telemetry); supersedes ADR-011's Opengrep SAST default
+**Status:** accepted — resolves spike wh-xn0 (`docs/research/20260609_tool_admissibility_license_gdpr.md`); the ADMIT-policy ADR for epic wh-hxt; every license re-verified from the upstream LICENSE/SPDX 2026-06-10. The registry rewrite is wh-nvk (shared ticket); the deterministic screen is wh-hxt.4.
+**Context:** `tool-registry.md` had no license/egress columns and seeded **License-gate violators as defaults** — Opengrep (`:24`), govulncheck (`:29`), trufflehog (`:34`), hadolint (`:38`) — and ADR-011 named **Opengrep (LGPL-2.1)** the cross-language SAST default. ADR-023 already adopted **MIT/Apache-2.0-only bundling** and rejected psutil (BSD-3) for the one bundled helper; nothing generalised that bar to *every capability tool*, so the self-update loop (ADR-015) could keep admitting copyleft/proprietary tools. Distinct from ADR-024's **admission** arm (pin + verify *the artifact*) and from wh-562's **Gate-2** (per-entry provenance for DATA): this is **admissibility** — *is this tool allowed in the registry at all?* — decided *before* a tool is pinned. Four names, four objects, never merged: eval **Gate-1** (KB edits) · **Gate-2** (DATA entries, wh-562) · **CONTAIN admission** (TOOL artifacts, ADR-024) · **admissibility** (license + egress *policy*, this ADR).
+**Decision:**
+1. **Two deterministic gates, both required (Policy 5 — code answers, no LLM).** **License-gate (license):** `license ∈ {MIT, Apache-2.0}` ONLY — reject BSD (incl. BSD-3), LGPL (any), GPL, AGPL, MPL, any copyleft, proprietary/commercial; a dual offering one of them *at the user's option* passes (elect the permissive arm — e.g. cargo-audit `MIT OR Apache-2.0`). **Egress-gate (data-egress):** the tool's DEFAULT invocation runs **local/offline**, uploads no source, sends no telemetry; a telemetry-on-by-default tool is admissible ONLY with the disable flag pinned. The screen is a pure function (`admit_tool(record) -> (admitted, reason)`); a NEW tool failing either gate is rejected with a stated reason. **SPEC in the spike §8; IMPLEMENTED in wh-hxt.4** (the ADMIT-via-loop row writer — no registry-row writer exists today).
+2. **The re-audited admissible set (every SPDX upstream-verified 2026-06-10).** SAST: gosec (Apache-2.0), bandit (Apache-2.0), ruff (MIT), eslint-plugin-security (Apache-2.0). SCA: OSV-Scanner/Grype/Syft/pip-audit (Apache-2.0), cargo-audit (MIT/Apache). secrets: gitleaks (MIT), detect-secrets (Apache-2.0). IaC/CI: Checkov (Apache-2.0), actionlint/zizmor (MIT). AI-redteam: promptfoo (MIT — **admit only with `PROMPTFOO_DISABLE_TELEMETRY=1`**; telemetry on by default, never sends prompts/outputs/configs), garak (Apache-2.0). **Dropped (License-gate):** Opengrep & Semgrep CE (LGPL-2.1), CodeQL (proprietary + private-repo/CI-forbidden), govulncheck (BSD-3; DB data CC-BY-4.0), trufflehog (AGPL-3.0; `--results=verified` = egress), hadolint (GPL-3.0), find-sec-bugs (LGPL-3.0). **Trivy stays OUT regardless of its Apache-2.0 license** (TeamPCP — wh-nvk; license-clean ≠ admissible).
+3. **Every capability has ≥1 admissible tool; the floor (ADR-003) is the named backstop, NOT triggered.** Exception to flag: **no admissible Java SAST** remains (find-sec-bugs/SpotBugs are LGPL) → Java taint drops to the floor; cross-language taint drops to the floor + per-language linters.
+4. **Supersede ADR-011 explicitly.** The cross-language SAST default is replaced by **floor + per-language MIT/Apache linters**. This is a **precision DOWNGRADE** (linters are mostly intra-procedural; Opengrep gave interprocedural taint). Per Policy 9 the cost is **MEASURED against `evals/score.py`** (Opengrep-on baseline vs linters+floor; neutralized filenames; re-baseline the stale 32→103 corpus first) and gates the KEEP of the SAST change in the impl ticket — **NOT asserted, and NOT run in this spike wave**.
+5. **Registry schema (RQ4): add `license` / `data_egress` / `gdpr` columns** to every `tool-registry.md` entry (admissibility evidence inline; violators move to a "Rejected (License-gate)" subsection with SPDX + reason). `detect_tools.py:110` `SCANNER_PREFERENCE` stays in sync — `test_registry_lock.py` enforces doc↔code **at the CAPABILITY level** (GREEN, 4 passed); **per-tool drops are the impl ticket's TDD** (pin violators ABSENT and admitted PRESENT — Policy 9), not the lock. The registry rewrite (columns here + replacement rows from wh-nvk + the lock-regex fix) is **ONE coordinated change** — never two uncoordinated writers.
+6. **Pinning is ADR-024's, not re-derived here.** Admissibility (this ADR) decides *whether a tool may enter the registry*; ADR-024's artifact-provenance **admission** arm then pins to an immutable ref + verifies checksum/cosign/SLSA at each execution. They **compose** — a tool passes admissibility once (to be listed) and admission every run (to be executed). The `gdpr` column records ONLY the *tool's* data-flow; the agent's own model-call PII posture is **wh-81y** (Spike B), out of scope here.
+**Rationale:** A license + data-egress gate is **registry governance, not a coupling** — the capability interface (ADR-015) is unchanged; only *which* tools sit behind it is constrained. The bar is ADR-023's MIT/Apache-2.0-only rule **generalised** from one bundled helper to every capability tool, keeping the reviewer free of copyleft obligations and SaaS source-upload. The SAST supersession is the honest cost of the license rule (no permissive cross-language taint engine exists in 2026) and is measured not asserted (Policy 9). The deterministic screen keeps tool admission in code (Policy 5); the floor (ADR-003) guarantees no capability is left empty. Naming discipline (four gates, four objects) prevents the category error ADR-024 §5 warned against.
+**Supersedes:** **ADR-011** (Opengrep LGPL-2.1 as the cross-language SAST default — replaced by floor + per-language MIT/Apache linters, the cost measured before KEEP). **Generalises** ADR-023 (MIT/Apache-2.0-only bundling; psutil BSD-3 rejection) from the bundled helper to every capability tool — does not supersede it. **Composes with** ADR-024 (admissibility precedes that ADR's artifact admission; pinning lives there, not re-derived here) and is **distinct from** wh-562's Gate-2 DATA gate.
+**Alternatives rejected:** (a) keep Opengrep/Semgrep for cross-language taint — LGPL-2.1, fails the License-gate (ADR-023 bar); (b) admit BSD-3 / "permissive-enough" tools (govulncheck) — ADR-023 already rejected BSD-3 (psutil); the bar is MIT/Apache-2.0, not "permissive"; (c) keep Trivy because it is Apache-2.0 — license-clean but TeamPCP-compromised (wh-nvk); admissibility composes with admission/integrity; (d) assert the SAST downgrade is acceptable without measuring — Policy 9 forbids it (eval plan gates KEEP); (e) fold this into ADR-024's admission or wh-562's Gate-2 — category error (admissibility = *may the tool be listed?*, a different object from *is this artifact verified?* and *is this DATA entry sourced?*); (f) an LLM-judged admissibility check — Policy 5 (a deterministic allowlist + egress-default check is a pure function); (g) admit promptfoo as-is — telemetry on by default, so admit only with `PROMPTFOO_DISABLE_TELEMETRY=1` pinned.
+**References:** wh-xn0 (this spike), `docs/research/20260609_tool_admissibility_license_gdpr.md` (the admissibility matrix — every SPDX cited to the upstream LICENSE/GitHub License API + promptfoo telemetry doc, verified 2026-06-10; the eval-measurement plan; the deterministic-screen contract; the shared registry-rewrite draft spec); `plugins/white-hacker/skills/_shared/reference/tool-registry.md` (violators at `:24`/`:29`/`:34`/`:38`); `plugins/white-hacker/skills/sec-detect/scripts/detect_tools.py:110` (SCANNER_PREFERENCE); ADR-003 (floor/degrade), ADR-006 (pin+verify), ADR-011 (**superseded**), ADR-015 (capability-not-brand registry; self-updates), ADR-023 (MIT/Apache-2.0-only precedent — **generalised**), ADR-024 (CONTAIN; the artifact-provenance **admission** arm + the gates-are-distinct-objects rule); siblings wh-nvk (Trivy replacement + the SHARED registry rewrite), wh-hxt.4 (the ADMIT-via-loop writer where the §8 screen lands), wh-562 (its Gate-2 is the DATA-edit gate — distinct from this ADR's data-egress gate), wh-81y (Spike B — the agent's own-model-call PII/GDPR posture, NOT covered here).
+
+## ADR-026 — Gate-2: a deterministic DATA gate for watchlist/registry edits, distinct from the eval keep-or-revert gate; the watchlist write-lane; tag-pins resolve to commit SHAs
+**Status:** accepted — resolves spike wh-562 (`docs/research/20260609_trivy_teampcp_supply_chain.md`); the
+ONE watchlist-mechanism ADR for epic wh-hxt (wh-5es's monitoring design folds in — one watchlist, one ADR);
+unblocked by ADR-024 (wh-hxt.3 CLOSED). Consumed by wh-k6l (the watchlist file), wh-5es (the OSSF feeder),
+wh-hxt.4 (the registry sidecar + row writer), wh-nvk (the Trivy-replacement rows).
+**Context:** ADR-001/004/022 framed the outer loop's self-edits as *"gated by the eval keep-or-revert
+harness."* That framing was scoped to **KB / review-quality edits** — a KB entry contributes detections the
+labeled corpus can score, so `evals/score.py` (`:64-95`, findings-vs-`label.json`) + `keep_or_revert.py` can
+emit KEEP/REVERT on merit, and `gate_kb_edit.py` (`:40-49`) enforces it on `/ai-attack-kb/` + `/_shared/
+reference/` writes. A **watchlist or tool-registry DATA edit is a different object**: no corpus case measures
+"did adding compromised-package X help," so the eval gate **structurally cannot** score it (loop-leverage
+§4.1/LBC-2). Reusing an eval-J KEEP to admit a DATA row would be a **false-merit merge** — an unrelated KB
+change's KEEP smuggling a poisoned/wrong-version entry through. Separately, the outer loop cannot even write the
+watchlist today: its planned home was outside `confine_self_writes.ALLOW_SEGMENTS` (`:40`). This ADR is an
+**append-only clarification** of ADR-001/004/022 (which are never edited): the eval gate governs KB edits;
+DATA edits need a second deterministic gate.
+**Decision:**
+1. **Gate-1 vs Gate-2 split — which gate governs which edit kind.** **Gate-1** (eval keep-or-revert,
+   `evals/keep_or_revert.py` → `gate_kb_edit.py`, verdict `evals/gate-verdict.json==KEEP`) governs **KB /
+   review-quality edits** (`/ai-attack-kb/` + prose under `/_shared/reference/`). **Gate-2** (this ADR) governs
+   **watchlist/registry DATA entries** via a deterministic validator (`_shared/scripts/validate_watchlist.py`,
+   no LLM/RNG — Policy 5) checking, per entry: **(a)** a REQUIRED primary-source advisory URL (GHSA/OSV/CVE in
+   `references[]`); **(b)** schema validity against the pinned `watchlist-1.0` schema; **(c)** regression-green
+   (`malware_db.load_malware_db` + the version-aware `is_known_bad` predicate, plus the deps-scan suite). This
+   is the SECOND of the four-objects-never-merged set (ADR-024 §5; ADR-025): Gate-1 (KB) · **Gate-2 (DATA,
+   here)** · CONTAIN admission (TOOL artifacts, ADR-024) · admissibility (license+egress policy, ADR-025).
+   (The advisory-URL check is **id-bound** — at least one `references[].url` must contain the entry's own
+   `id` — so a host-valid but unrelated/forged advisory link fails; SEC-Q4.) This is ADR-024 §5's
+   *"per-entry GHSA/OSV provenance + OSV-schema"* made concrete: **`watchlist-1.0` IS the plain-OSV-superset
+   that fulfills the "OSV-schema" requirement — not a different schema** (§2).
+2. **The schema is `watchlist-1.0`, by reference (never restated here).** The plain-OSV-superset finalized in
+   `docs/research/20260609_supply_chain_compromise_monitoring.md` (RQ2 DECISION) — pinned as a Draft-2020-12
+   JSON Schema at `plugins/white-hacker/skills/_shared/reference/watchlist-entry-schema.json`, the ONE artifact
+   the validator and the OSSF feeder share.
+3. **The write-lane.** The watchlist file is **`plugins/white-hacker/skills/_shared/reference/known-compromised.
+   osv.json`** — inside the existing `confine_self_writes.ALLOW_SEGMENTS` `/_shared/reference/` lane (`:40`), so
+   **the outer loop may write THIS ONE watchlist file, and only under a DATA-verdict KEEP** — with no change to
+   the confinement boundary (itself out-of-lane for self-edit, ADR-024 §8). This is **not** a segment-wide
+   grant: the `/_shared/reference/` segment's writability does **not** extend to other DATA objects (e.g. the
+   wh-hxt.4 registry sidecar) without each being named in `gate_data_edit.DATA_SEGMENTS` and carrying its own
+   DATA-verdict KEEP (SEC-Q7). Gate-2 mints a SEPARATE DATA verdict **`evals/data-verdict.json`** (never the
+   eval-J `gate-verdict.json`) that is **content-bound (records the sha256 of the validated bytes) and
+   one-shot** — `gate_data_edit.py` recomputes the write-target's hash and blocks on mismatch or replay, so a
+   KEEP for one candidate cannot admit a different (poisoned) one (SEC-Q2). `gate_data_edit` is scoped to the
+   named DATA file paths (initially the watchlist; wh-hxt.4 adds its sidecar path with a test); `gate_kb_edit`
+   excludes those paths so a DATA write is not double-gated by the KB verdict. Every entry is a human-gated
+   draft-PR, never auto-merged (ADR-012). **Verdict-writer trust (SEC-Q12):** because `validate_watchlist.py`
+   mints the DATA verdict and `watchlist-entry-schema.json` defines "valid," both are **gate-grade,
+   human-PR'd-only, out-of-lane** — added to `confine_self_writes.FROZEN_BASENAMES` (the same protection
+   `evals/keep_or_revert.py` has), so the outer loop cannot weaken the gate that admits its own DATA edits.
+   **Hard ordering:** `gate_data_edit` must be registered + the `gate_kb_edit` DATA_PATHS skip merged BEFORE
+   the watchlist file is created, else it would block on the absent eval-J verdict or be admitted by an
+   unrelated KB KEEP — the false-merit merge (SEC-Q3 / QA-#1).
+4. **Tag-pins resolve to commit SHAs (the force-push lesson) — DELEGATED here by ADR-024 §6(b).** The TeamPCP
+   compromise force-pushed the `trivy-action` `76`/`77` tags and `setup-trivy` tags (RQ1 above; the same vector
+   hit `tj-actions`), so a **version-tag pin is mutable and was defeated**; only an **immutable commit-SHA /
+   image-digest / binary-checksum** pin holds. This sharpens ADR-006 for every pinned ref. The DATA side already
+   honors it: the OSSF watchlist **snapshot** is pinned to a full 40-hex commit SHA and PIN-verified in code
+   (`docker/deps-scan-sandbox/fetch-snapshot.sh:16` enforce → `:37` `git rev-parse HEAD == PIN || exit 1`),
+   which is where force-push resistance lives — **not** in a per-entry digest (watchlist entries record an
+   identity, not an artifact to verify; that is CONTAIN admission's job, ADR-024 §5).
+**Rationale:** The eval gate is the wrong gate for DATA (it has no corpus signal to score), so a deterministic
+provenance+schema+regression gate is the honest control — and keeping it a pure function honors Policy 5. Siting
+the watchlist inside the existing `/_shared/reference/` lane is simplicity-first (Policy 2): zero change to the
+confinement boundary, and it co-locates with the registry sidecar (wh-hxt.4) so ONE DATA-gating mechanism covers
+both DATA objects — the ≥2-callers trigger for the shared `_shared/scripts/` validator (ADR-015). A separate
+DATA verdict is the only thing that prevents the false-merit merge the single-gate framing would have allowed.
+The tag→SHA rule is the structural lesson of TeamPCP/tj-actions, delegated to exactly this ADR by ADR-024 §6(b)
+so one ADR states it.
+**Supersedes:** **ADR-021's tag-pin wording only** — ADR-021's installer *"pins a tag, prefers a GPG-signed
+tag (`git verify-tag`)"* (ADR-021 Decision + Rationale (a)) is sharpened: **a tag-pin MUST resolve to and be
+verified against an immutable commit SHA** (a mutable tag was force-pushed in the TeamPCP/tj-actions vector);
+the GPG-signed-tag preference and the rest of ADR-021 (the two install lanes, the `mktemp`/trap, idempotent
+vendor copy, `main()`-last-line truncation safety) are **unchanged**. This supersession is the one **DELEGATED
+by ADR-024 §6(b)** (cross-referenced from ADR-024's Supersedes + References so exactly one ADR states it).
+Otherwise extends ADR-001/004/022 (append-only clarification of "gated by the eval keep-or-revert" → KB edits
+only) and composes with ADR-024 (CONTAIN admission, a different object) + ADR-025 (admissibility, a different
+object). Does not supersede ADR-006 (it sharpens the pin granularity ADR-006 already mandates).
+**Alternatives rejected:** (a) reuse Gate-1 (the eval keep-or-revert) for DATA edits — false-merit merge; the
+corpus cannot score a watchlist row (loop-leverage §4.1/LBC-2). (b) Site the watchlist in `deps-scan/reference/`
+(wh-k6l's draft path) — requires editing the frozen `confine_self_writes.ALLOW_SEGMENTS` + `gate_kb_edit.
+GATED_SEGMENTS`, both out-of-lane for the outer loop to self-edit (ADR-024 §8); `_shared/reference/` needs zero
+hook edit. (c) Put the validator in `deps-scan/scripts/` — only one caller there; the registry sidecar
+(wh-hxt.4) is the second DATA caller, so `_shared/scripts/` is the ADR-015 home (and `validate_findings.py`
+already proves the pattern). (d) A per-entry artifact digest on watchlist entries — the force-push lesson
+applies to the SHA-pinned snapshot, not the entry; a digest belongs to CONTAIN admission (ADR-024 §5), a
+different object. (e) An LLM-judged DATA gate — Policy 5 (provenance + schema + a regression predicate are pure
+functions). (f) Fold this into ADR-024's admission or ADR-025's admissibility — category error (four objects:
+KB / DATA / TOOL-artifact / license-policy; ADR-024 §5).
+**References:** wh-562 (this spike); `docs/research/20260609_trivy_teampcp_supply_chain.md` (RQ1/RQ2 FINAL +
+this Gate-2 design); `docs/research/20260609_supply_chain_compromise_monitoring.md` (the `watchlist-1.0` schema
+RQ2 DECISION + the OSSF feeder + the ide-hygiene scan — wh-5es, folded in here); `docs/research/20260609_
+supply_chain_loop_leverage.md` (§4.1 Gate-2, §5.1/LBC-6 the snapshot-pin correction, Addendum A1 the
+DATA-verdict path). Code: `evals/score.py:64-95`, `evals/keep_or_revert.py`, `evals/gate-verdict.json` (absent →
+Gate-1 fail-closed); `plugins/white-hacker/hooks/gate_kb_edit.py:18,22-24,40-49`, `confine_self_writes.py:40`
+(ALLOW_SEGMENTS); `plugins/white-hacker/skills/deps-scan/scripts/malware_db.py:27,48,62-68` (loader +
+`is_known_bad` + OSV read), `supply_chain.py:1015-1050` (version-aware S8); `_shared/scripts/validate_findings.py`
++ `_shared/scripts/conftest.py:10-15` (the shared-validator + cross-skill-import precedent); `_shared/scripts/
+tests/test_registry_lock.py`; `docker/deps-scan-sandbox/fetch-snapshot.sh:16,34,36,37,40` (the SHA-pinned
+snapshot); `deps-scan/reference/MALWARE-DB.md:39,48`. ADRs: **ADR-021** (its tag-pin wording superseded —
+delegated by ADR-024 §6(b)), ADR-001/004/022 (the single-gate framing this clarifies, never edited), ADR-024
+(CONTAIN admission + the gates-are-distinct-objects rule + §6(b) delegation), ADR-025 (admissibility — distinct
+object), ADR-006 (pin+verify — sharpened), ADR-012 (human-gated draft-PR, never auto-merge), ADR-015
+(capability port at ≥2 callers — the shared validator home), ADR-019 (the `supply-chain` class), ADR-027
+(wh-nvk's drop-Trivy ADR — the Trivy-replacement rows ride this Gate-2; appended after this one). Siblings:
+wh-k6l (the watchlist file — consumes the path + Gate-2), wh-5es (the feeder — schema-first, draft-PR + Gate-2),
+wh-hxt.4 (the registry sidecar + row writer — Gate-2 mints its DATA verdict), wh-nvk (DIVERSIFY rows).
+
+## ADR-027 — Trivy permanently removed; a diversified multi-vendor SCA/IaC set (Grype+Syft · Checkov · OSV-Scanner · gitleaks; kube-linter optional) behind the capability layer, each pinned+verified
+**Status:** accepted — resolves spike wh-nvk (`docs/research/20260609_trivy_replacement_sca_iac.md`); the
+DIVERSIFY-arm ADR for epic wh-hxt. License/egress verdicts cited from ADR-025 (every SPDX upstream-verified
+2026-06-10); kube-linter verified upstream by this spike; Action-SHAs + release-artifact facts resolved
+2026-06-10. The registry rewrite is the SHARED wh-xn0∪wh-nvk impl ticket (one coordinated writer);
+per-tool pin+verify plugs into ADR-024 §5.
+**Context:** Trivy (aquasecurity) was a do-everything tool covering SCA · IaC/misconfig
+(Dockerfile/k8s/Helm/Terraform/CloudFormation) · container-image CVE · secrets · SBOM behind several
+white-hacker capabilities. It was **TeamPCP-compromised** (CVE-2026-33634 / GHSA-69fq-xp46-6x23: the
+`trivy-action`/`setup-trivy` tags were force-pushed, malicious binary v0.69.4 + images v0.69.5–.6
+published — verification + our LOW–MEDIUM partial exposure are FINAL in
+`docs/research/20260609_trivy_teampcp_supply_chain.md`), and the `trivy-mcp` wrapper was unmaintained +
+pinned a stale binary (the "MCP trap"). The user DECIDED to drop Trivy; wh-d5b quarantined it as the
+interim stopgap (demoted below Checkov for IaC, `detect_tools.py:116`; "permanent removal wh-nvk" caveat
+in `tool-registry.md:54-57`). **Trivy stays OUT regardless of its Apache-2.0 license** (ADR-025 §2:
+license-clean ≠ admissible — admissibility composes with admission/integrity).
+**Decision:**
+1. **Permanently remove Trivy** from `SCANNER_PREFERENCE` (`detect_tools.py:114` sca; `:116` iac) and the
+   `tool-registry.md` SCA/IaC lines + the safe-version pin block (`:50-57`); record it in the
+   "Rejected (integrity/TeamPCP)" subsection — a category DISTINCT from ADR-025's License-gate rejections
+   (Trivy is license-clean but integrity-compromised). **It does not return.**
+2. **Adopt the diversified split behind the capability layer (ADR-015), each a CLI (no MCP, ADR-002):**
+   **SCA** → OSV-Scanner (cross-language) + Grype (image/dir) + native gates per-language; **container
+   image + SBOM** → Grype + Syft; **IaC/misconfig** → Checkov (incl. Dockerfile, filling hadolint's
+   GPL-rejected slot); **secrets** → gitleaks; **k8s second-source** → kube-linter (optional EXTEND);
+   **GH-Actions** → actionlint/zizmor (kept). KICS is **excluded** (same TeamPCP campaign); trufflehog is
+   removed by ADR-025 (AGPL License-gate fail) — not a swap.
+3. **DIVERSIFY is blast-radius reduction, NOT the security control (subordinate to ADR-024 §1).** Security
+   comes from CONTAIN (every tool offline + no-creds + sandboxed + provenance-verified), so a compromise
+   of any tool — Trivy, its replacement, or one not yet picked — is inert. Multi-vendor split additionally
+   limits blast radius (no single-vendor compromise removes the whole pipeline) at the **cost of more
+   supply-chain surfaces** — every replacement therefore passes the SAME ADR-025 admissibility +
+   ADR-024 admission gates. Diversity is defense-in-depth under containment; it is never re-elevated to
+   "the answer."
+4. **Per-tool pin+verify is ADR-024 §5's admission arm — not a new mechanism.** Pin every official Action
+   to a **full commit-SHA** (a version tag is a mutable ref — the `trivy-action` 76/77 force-push proves
+   only a SHA is immutable) and **verify the binary at admission**: Grype/Syft = cosign keyless
+   (`checksums.txt`+`.pem`+`.sig`); OSV-Scanner = SLSA provenance (`multiple.intoto.jsonl`) + SHA256SUMS;
+   kube-linter = Sigstore bundle (`.sigstore.json`); **gitleaks = checksum-only with NO upstream signature,
+   so the expected checksum VALUE is pinned in OUR registry row / a committed pin file (reviewed once at
+   admission via human PR) — the upstream `checksums.txt` ships from the same release as the binary and so
+   does not defeat a publisher/release compromise (the TeamPCP vector: re-published binary + metadata);
+   pinning the value in our git history makes the trust root our reviewed commit (the recorded gap is the
+   missing upstream signature, the compensating control is the in-repo pin)**; Checkov = pip hash-pin
+   (`pip install checkov==<ver> --require-hashes`) or a **digest**-pinned image — its Docker Action pins a
+   *mutable* `:3.3.0` image tag, so the binary/pip path is preferred. The resolved SHAs are point-in-time
+   (2026-06-10) — re-resolve + re-verify at the actual pin commit (ADR-006).
+5. **The registry rewrite is ONE coordinated change shared with wh-xn0** (admissibility columns + these
+   replacement rows + the `test_registry_lock.py:51` `r"0\.7[01]"` lock-regex retirement + the
+   SCANNER_PREFERENCE edits) — never two uncoordinated writers to `tool-registry.md` + `detect_tools.py`.
+6. **GATING (lens-5):** the impl must NOT flip the SAST default live until `evals/score.py` measures the
+   downgrade (ADR-025 §4) GREEN on a **re-baselined, Java-inclusive** corpus (the stale 32-vs-103 baseline
+   re-baselined first) — because Java taint is floor-only after find-sec-bugs (LGPL) drops, the measurement
+   is blind where the loss is worst without Java cases. This gates the SAST arm of the shared rewrite; the
+   Trivy/SCA/IaC row changes are not blocked by it.
+**Rationale:** Removing a compromised tool is necessary but not sufficient (ADR-024: selection-by-trust was
+defeated by Mini Shai-Hulud's valid SLSA provenance); the replacement set is safe **because it runs under
+CONTAIN**, and diversified **so one vendor compromise degrades at most one capability** while the ADR-003
+floor guarantees no capability is left empty. CLI-first (ADR-002) avoids recreating the trivy-mcp trap (a
+3rd-party MCP layer obscuring the pinned artifact). Pin-to-SHA + verify-at-admission (ADR-024 §5 / ADR-006)
+defeats the tag-force-push and substituted-binary vectors. The honest costs are recorded, not hidden:
+gitleaks' single-maintainer/feature-complete posture + checksum-only releases (tracked via the staleness
+arm), the checkov-action mutable image-tag, and the SAST precision downgrade (measured, not asserted —
+Policy 9).
+**Supersedes:** **nothing formally superseded in the ARD.** This ADR **RATIFIES** the `tool-registry.md`
+COMPROMISED-block's "permanent removal wh-nvk" caveat (`:54-57`) and **supersedes wh-d5b's *temporary*
+framing** ("Quarantined … returns when a safe pinned+verified version is cleared") — the removal is
+**permanent; Trivy does not return**. **Extends** ADR-024 (uses its §5 admission arm + its CONTAIN-primary
+demotion of DIVERSIFY — does not re-derive either) and **consumes** ADR-025 (cites its admissibility
+verdicts + registry-schema columns + the SAST eval-measurement gate — does not restate them).
+**Alternatives rejected:** (a) keep Trivy because it is Apache-2.0 — license-clean ≠ admissible; TeamPCP
+integrity compromise (ADR-025 §2; wh-nvk). (b) Replace Trivy with one other do-everything tool — re-creates
+the single-vendor blast radius the diversified set reduces. (c) Adopt KICS — same TeamPCP campaign
+(`20260609_trivy_teampcp_supply_chain.md:44`); re-introduces a compromised-vendor surface. (d) Keep
+trufflehog as the secrets tool — AGPL-3.0 License-gate fail + `--results=verified` egress (ADR-025 §2).
+(e) Wrap any replacement in a 3rd-party MCP — the trivy-mcp trap (unmaintained indirection over a stale
+binary); CLI-first (ADR-002). (f) Pin Actions to version tags — defeated by the `trivy-action` force-push;
+only a full commit-SHA is immutable (ADR-024 §5). (g) Treat diversity as the security control — falsified
+by Mini Shai-Hulud (ADR-024 §1); CONTAIN is primary, diversity is blast-radius reduction under it. (h) Use
+the checkov Docker Action as-is — it pins a mutable `:3.3.0` image tag (the trivy-action trap class);
+prefer the pip/digest-pinned binary path. (i) Flip the SAST default before measuring — Policy 9 /
+ADR-025 §4 (the Java-inclusive eval gate must run GREEN first).
+**References:** wh-nvk (this spike), `docs/research/20260609_trivy_replacement_sca_iac.md` (the scorecard +
+coverage-parity matrix + the resolved Action-SHAs + per-tool verify primitives + the diversity-thesis
+verdict subordinated to CONTAIN); `docs/research/20260609_trivy_teampcp_supply_chain.md` (TeamPCP
+verification + exposure FINAL); `docs/research/20260609_tool_admissibility_license_gdpr.md` (ADR-025's
+admissibility matrix — cited, not re-derived); `docs/research/20260610_contain_primary_control.md` +
+`docs/research/20260609_supply_chain_tooling_strategy.md` (CONTAIN-primary framing). Code/registry anchors:
+`plugins/white-hacker/skills/sec-detect/scripts/detect_tools.py:110-119` (SCANNER_PREFERENCE),
+`plugins/white-hacker/skills/_shared/reference/tool-registry.md:30,38,50-57` (SCA/IaC + Trivy block),
+`plugins/white-hacker/skills/_shared/scripts/tests/test_registry_lock.py:51` (the `r"0\.7[01]"` lock).
+ADRs: ADR-002 (CLI-first/MCP-optional), ADR-003 (floor/degrade), ADR-006 (pin+verify), ADR-015
+(capability-not-brand registry; self-updates), ADR-024 (CONTAIN primary; the artifact-provenance admission
+arm §5; DIVERSIFY=blast-radius reduction §1), ADR-025 (admissibility two gates; the re-audited admissible
+set; the SAST supersession + eval gate; the registry-schema columns); siblings wh-d5b (interim quarantine —
+its temporary framing **superseded** here), wh-562 (the Gate-2 DATA gate validates the shared Trivy
+watchlist entry — wh-k6l's instantiation; the sibling Gate-2 ADR is ADR-026), wh-xn0
+(the SHARED registry rewrite), wh-hxt.4 (the ADMIT-via-loop screen), wh-hxt.1 (the staleness arm tracking
+Betterleaks), wh-hxt.2 (the retire→replace runbook).
+
+## ADR-028 — Distribution posture: manual install from the repo (vendor lane or local plugin registration); marketplace publication deferred
+**Status:** accepted — operator decision 2026-06-10. Amends ADR-017's *primacy* claim only; the plugin mechanism is unchanged.
+**Context:** ADR-017 made the Claude Code plugin **marketplace** the primary distribution and ADR-021 added the pinned `install.sh` vendor lane beside it. No marketplace listing has been published, and the operator has decided not to publish one for now — yet README/ARCHITECTURE presented "installed from a marketplace" as the path, claiming a distribution that is not offered (Rule 12: fail loud, never imply an unshipped path).
+**Decision:** (1) **Manual install is the documented path** until a listing ships: clone/fetch this repo and either run the **`install.sh` vendor lane** (default + recommended — pinned tag, `git verify-tag` preferred, idempotent; ADR-021, tag→SHA per ADR-026) or **register the clone locally** (`claude --plugin-dir ./plugins/white-hacker`, or `claude plugin marketplace add <local clone>` against the in-repo catalog `.claude-plugin/marketplace.json`, then `claude plugin install white-hacker@white-hacker-marketplace`). (2) User-facing docs (README § Install & onboarding, ARCHITECTURE §8, release-checklist §4) present manual install as primary and drop "published via a marketplace" wording. (3) The payload remains a **valid plugin**: the dev-vs-payload split (ADR-017), the vendor payload boundary (ADR-022), `packaging/validate_manifest.py`, and `claude plugin validate` still gate releases — flipping to a published marketplace later is a docs-only change.
+**Rationale:** Honest docs over aspirational ones; zero mechanism change (the same validated payload serves both paths); the strongest pin/verify posture (ADR-006/021) is the vendor lane, which is already built and tested; the in-repo catalog keeps local registration working without any publication step.
+**Supersedes:** nothing structurally — **amends ADR-017's "primary distribution" to "intended end-state; publication deferred."** ADR-017's manifest/namespacing/dev-vs-payload decisions and ADR-021's two lanes stand unchanged.
+**Alternatives rejected:** (a) publish the marketplace listing now — deferred by the operator. (b) Drop the plugin shape and ship copy-only — loses manifest validation, namespacing, and the cheap future flip. (c) Leave the docs claiming marketplace distribution — asserts a path that is not offered (Rule 12).
+**References:** operator instruction 2026-06-10; ADR-017 (mechanism — primacy amended), ADR-021 (`install.sh` vendor lane), ADR-022 (payload boundary), ADR-026 (tag→SHA); `README.md` § Install & onboarding; `docs/ARCHITECTURE.md` §8; `docs/release-checklist.md` §4; `.claude-plugin/marketplace.json` (in-repo catalog — local registration only).
