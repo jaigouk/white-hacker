@@ -53,6 +53,27 @@
       "type": "boolean",
       "description": "True when LLM/AI deps are present; the AI/LLM review pass applies."
     },
+    "package_managers": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Package managers detected from manifests + lockfiles (npm/pnpm/yarn/bun, uv/poetry/pip, go, maven/gradle). Factual identifiers the user confirms/corrects during onboarding. Additive (NOT required) — old profiles without it still validate."
+    },
+    "build_test_commands": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Best-guess build/test/lint/run commands the user confirms. A FIXED key set with additionalProperties:false — NOT a free-form map — so a manifest-influenced value can never smuggle an unknown command role (the stricter option vs patternProperties; preserves the structural identity guarantee of ADR-004/017). Values are FACTUAL command strings (e.g. 'uv run pytest'); write_profile's is_factual gate rejects imperatives.",
+      "properties": {
+        "build": { "type": "string" },
+        "test": { "type": "string" },
+        "lint": { "type": "string" },
+        "run": { "type": "string" }
+      }
+    },
+    "in_scope_focus": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "OPTIONAL project-specific concerns the user names (e.g. 'payment flow', 'auth token handling'). Factual noun phrases — write_profile's is_factual gate rejects imperative phrasing."
+    },
     "scoring_standard": {
       "type": ["string", "null"],
       "description": "Severity scoring standard (e.g. CVSS or an org bug-bar). Defaults to null: must be human-confirmed, never hardcoded."
