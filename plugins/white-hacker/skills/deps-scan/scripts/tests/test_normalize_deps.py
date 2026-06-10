@@ -108,8 +108,13 @@ def test_clean_result_yields_zero_findings():
 
 # --- degradation: no SCA tool on PATH -------------------------------------
 def test_tool_assisted_true_when_scan_plan_binds_sca(tmp_path):
+    # ADR-027: osv-scanner (admitted, serves *) replaces trivy as the bound SCA tool.
+    # The fixture/normalizer (Trivy JSON output SHAPE) is unchanged — only the
+    # SCANNER_PREFERENCE *selection* injected here moves to the admitted set.
     (tmp_path / "go.mod").write_text("module x\n")
-    plan = dt.build_scan_plan(tmp_path, lambda n: "/usr/bin/trivy" if n == "trivy" else None).to_dict()
+    plan = dt.build_scan_plan(
+        tmp_path, lambda n: "/usr/bin/osv-scanner" if n == "osv-scanner" else None
+    ).to_dict()
     doc = nd.normalize(_doc({"VulnerabilityID": "CVE-Z", "PkgName": "p",
                              "InstalledVersion": "1", "Severity": "HIGH"}), scan_plan=plan)
     assert doc["findings"][0]["tool_assisted"] is True

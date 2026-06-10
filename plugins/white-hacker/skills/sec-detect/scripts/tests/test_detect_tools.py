@@ -62,17 +62,22 @@ def _which_only(*present: str):
 
 
 def test_available_tools_filters_to_installed():
-    which = _which_only("trivy", "govulncheck")
-    assert dt.detect_available_tools(which) == ["govulncheck", "trivy"]
+    # ADR-027: inject admitted tools (trivy/govulncheck removed from SCANNER_PREFERENCE);
+    # the assertion (only-installed-known-scanners, sorted) is unchanged.
+    which = _which_only("osv-scanner", "gitleaks")
+    assert dt.detect_available_tools(which) == ["gitleaks", "osv-scanner"]
 
 
 # === ported PoC tests: scan-plan assembly + graceful degradation ==========
 def test_plan_picks_best_signal_first(tmp_path: Path):
+    # ADR-027: admitted per-category tools for a Go repo (gosec serves go, osv-scanner
+    # serves *, gitleaks serves *) — each is first-in-list for its capability, so the
+    # best-signal-first + all-caps-covered (degraded is False) intent is unchanged.
     (tmp_path / "go.mod").write_text("module x\n")
-    which = _which_only("opengrep", "govulncheck", "gitleaks")
+    which = _which_only("gosec", "osv-scanner", "gitleaks")
     plan = dt.build_scan_plan(tmp_path, which)
-    assert plan.category_tool["sast"] == "opengrep"
-    assert plan.category_tool["sca"] == "govulncheck"
+    assert plan.category_tool["sast"] == "gosec"
+    assert plan.category_tool["sca"] == "osv-scanner"
     assert plan.category_tool["secrets"] == "gitleaks"
     assert plan.degraded is False
 
@@ -90,35 +95,33 @@ def test_plan_degrades_when_category_tool_missing(tmp_path: Path):
 
 
 def test_sca_tool_language_match(tmp_path: Path):
+    # ADR-027: cargo-audit (admitted, serves rust) replaces govulncheck as the
+    # language-mismatch case — installed but does NOT serve python → sca degrades.
     (tmp_path / "pyproject.toml").write_text("[project]\n")
-    which = _which_only("govulncheck")
+    which = _which_only("cargo-audit")
     plan = dt.build_scan_plan(tmp_path, which)
-    assert plan.category_tool["sca"] is None  # govulncheck doesn't serve python
+    assert plan.category_tool["sca"] is None  # cargo-audit doesn't serve python
     assert "sca" in plan.degraded_categories
 
 
 def test_iac_category_only_when_infra_present(tmp_path: Path):
+    # ADR-027: checkov (admitted, fills hadolint's Dockerfile slot) replaces trivy as
+    # the installed IaC tool; the conditional-category intent is unchanged.
     (tmp_path / "go.mod").write_text("module x\n")
-    which = _which_only("trivy")
+    which = _which_only("checkov")
     plan_no_infra = dt.build_scan_plan(tmp_path, which)
     assert "iac" not in plan_no_infra.category_tool
 
     (tmp_path / "Dockerfile").write_text("FROM scratch\n")
     plan_infra = dt.build_scan_plan(tmp_path, which)
-    assert plan_infra.category_tool["iac"] == "trivy"
+    assert plan_infra.category_tool["iac"] == "checkov"
 
 
-def test_iac_prefers_checkov_over_trivy_when_both_present(tmp_path: Path):
-    # wh-d5b: Trivy is TeamPCP-compromised (CVE-2026-33634 / GHSA-69fq-xp46-6x23).
-    # Interim quarantine demotes it below Checkov in the iac SCANNER_PREFERENCE
-    # (permanent removal is wh-nvk). When BOTH are installed and infra is present,
-    # Checkov must lead — Trivy must NOT be the chosen IaC scanner.
-    (tmp_path / "go.mod").write_text("module x\n")
-    (tmp_path / "Dockerfile").write_text("FROM scratch\n")
-    which = _which_only("checkov", "trivy")
-    plan = dt.build_scan_plan(tmp_path, which)
-    assert plan.category_tool["iac"] == "checkov"  # == expected (demotion took effect)
-    assert plan.category_tool["iac"] != "trivy"     # != the compromised tool
+# RETIRED (ADR-027): test_iac_prefers_checkov_over_trivy_when_both_present asserted
+# the wh-d5b *interim* demotion of Trivy below Checkov ("returns when cleared"). ADR-027
+# makes the Trivy removal PERMANENT — Trivy can never be installed/selected, so a
+# Checkov-beats-Trivy ordering test is moot. Trivy-absent is now pinned in the lock
+# (test_registry_lock.py::test_trivy_absent_from_every_category).
 
 
 # === Phase-2: framework fingerprint =======================================
@@ -261,7 +264,7 @@ def test_javascript_maps_to_typescript_appendix(tmp_path: Path):
 # === Phase-2: SCAN-PLAN dict shape (locks emitter ↔ schema) ===============
 def test_to_dict_has_required_scan_plan_keys(tmp_path: Path):
     (tmp_path / "pyproject.toml").write_text("[project]\ndependencies=['fastapi']\n")
-    d = dt.build_scan_plan(tmp_path, _which_only("opengrep")).to_dict()
+    d = dt.build_scan_plan(tmp_path, _which_only("bandit")).to_dict()
     for key in ("schema_version", "languages", "infra", "frameworks",
                 "available_tools", "ai_pass", "category_tool", "degraded",
                 "reference_appendices", "fallback", "kernel_adjacency"):

@@ -107,13 +107,33 @@ LANG_APPENDIX: dict[str, str] = {
 
 # --- per-category scanner preference (best signal first) ------------------
 # Each entry: category -> ordered list of (tool, languages-it-serves|"*").
+# Admissibility governs WHICH tools sit here (ADR-025: MIT/Apache-2.0-only license
+# gate + local/no-default-telemetry egress gate) and ADR-027 (Trivy permanently
+# removed — TeamPCP, does not return). The executable twin of
+# `_shared/reference/tool-registry.md`; `test_registry_lock.py` keeps them in sync.
+#
+# NOT wired here on purpose:
+#   * cross-language SAST engine — no MIT/Apache one exists in 2026 (Opengrep/Semgrep
+#     are LGPL-2.1); the SAST default is per-language linters + the floor (ADR-025 §4).
+#     Wiring a cross-language engine is the gated SAST-default flip — a NAMED follow-up
+#     measured on a Java-inclusive corpus, deliberately NOT done here (ADR-027 §6).
+#   * Grype/Syft (image/SBOM) — registry-listed but never auto-selected by this static
+#     filesystem default (no surprise docker/image pull — ADR-007); explicit scope only.
 SCANNER_PREFERENCE: dict[str, list[tuple[str, str]]] = {
-    "sast": [("opengrep", "*"), ("semgrep", "*"),
-             ("gosec", "go"), ("bandit", "python")],
-    "sca": [("govulncheck", "go"), ("pip-audit", "python"),
-            ("osv-scanner", "*"), ("trivy", "*")],
-    "secrets": [("gitleaks", "*"), ("trufflehog", "*")],
-    "iac": [("checkov", "*"), ("trivy", "*"), ("hadolint", "docker")],
+    # Per-language MIT/Apache linters + the floor (ADR-025 §4 supersedes ADR-011's
+    # cross-language Opengrep default). Java taint is floor-only (no admissible Java
+    # SAST after find-sec-bugs/SpotBugs LGPL drop — ADR-025 §3).
+    "sast": [("gosec", "go"), ("bandit", "python"), ("ruff", "python"),
+             ("eslint-plugin-security", "typescript")],
+    # Trivy + govulncheck (BSD-3) dropped; cargo-audit (MIT/Apache dual) added.
+    "sca": [("pip-audit", "python"), ("osv-scanner", "*"),
+            ("cargo-audit", "rust")],
+    # trufflehog (AGPL-3.0) dropped; detect-secrets (Apache-2.0) added.
+    "secrets": [("gitleaks", "*"), ("detect-secrets", "*")],
+    # Trivy + hadolint (GPL-3.0) dropped; Checkov first (covers Dockerfile in
+    # hadolint's slot) + actionlint/zizmor for GH Actions.
+    "iac": [("checkov", "*"), ("actionlint", "github-actions"),
+            ("zizmor", "github-actions")],
     # ai-redteam is only assembled when ai_pass is set (see build_scan_plan).
     "ai-redteam": [("promptfoo", "*"), ("garak", "*")],
 }

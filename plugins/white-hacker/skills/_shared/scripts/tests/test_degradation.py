@@ -21,7 +21,8 @@ FLOOR_PLAN = {
     "degraded": ["sast", "sca", "secrets"],
 }
 TOOLED_PLAN = {
-    "category_tool": {"sast": None, "sca": "trivy", "secrets": "gitleaks"},
+    # ADR-027: osv-scanner (admitted) replaces trivy as the bound SCA tool.
+    "category_tool": {"sast": None, "sca": "osv-scanner", "secrets": "gitleaks"},
     "degraded": ["sast"],
 }
 
@@ -42,7 +43,7 @@ def test_summary_tools_all_degraded():
 
 def test_summary_tools_with_tools_present():
     s = dg.summary_tools(TOOLED_PLAN)
-    assert s["tools_used"] == ["gitleaks", "trivy"]   # sorted, deduped, non-null
+    assert s["tools_used"] == ["gitleaks", "osv-scanner"]   # sorted, deduped, non-null
     assert s["tools_unavailable"] == ["sast"]
 
 
@@ -142,13 +143,14 @@ def test_tool_present(tmp_path):
     """With SCA + secrets tools injected present, findings flip to tool_assisted:true and the
     capability leaves tools_unavailable."""
     (tmp_path / "requirements.txt").write_text("flask==0.12.2\n")
-    plan = dt.build_scan_plan(tmp_path, _which_only("trivy", "gitleaks")).to_dict()
+    # ADR-027: osv-scanner (admitted, serves *) replaces trivy as the injected SCA tool.
+    plan = dt.build_scan_plan(tmp_path, _which_only("osv-scanner", "gitleaks")).to_dict()
 
     deps = nd.normalize(_TRIVY_DOC, scan_plan=plan)
     assert vf.validate(deps) == []
     assert deps["findings"][0]["tool_assisted"] is True
     assert "sca" not in deps["summary"]["tools_unavailable"]
-    assert "trivy" in deps["summary"]["tools_used"]
+    assert "osv-scanner" in deps["summary"]["tools_used"]
 
     secret = rd.to_finding("config.py", 3, "aws-key", "AKIAEXAMPLE0000000000", scan_plan=plan)
     assert secret["tool_assisted"] is True

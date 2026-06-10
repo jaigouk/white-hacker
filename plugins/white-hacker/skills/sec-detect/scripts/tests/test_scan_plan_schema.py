@@ -33,7 +33,9 @@ def test_schema_is_valid_draft_2020_12():
 def test_emitter_output_validates_ai_backend(tmp_path: Path):
     (tmp_path / "pyproject.toml").write_text("[project]\ndependencies=['fastapi','langchain']\n")
     (tmp_path / "Dockerfile").write_text("FROM scratch\n")
-    plan = _plan_dict(tmp_path, "opengrep", "trivy", "promptfoo")
+    # ADR-027: admitted tool names (opengrep/trivy removed); this test asserts schema
+    # validity, not tool selection — the injected names are incidental.
+    plan = _plan_dict(tmp_path, "bandit", "checkov", "promptfoo")
     assert vsp.validate(plan) == []
 
 
@@ -41,7 +43,7 @@ def test_emitter_output_validates_multi_language(tmp_path: Path):
     (tmp_path / "go.mod").write_text("module x\nrequire github.com/gin-gonic/gin v1\n")
     (tmp_path / "package.json").write_text('{"dependencies":{"next":"15.2.3"}}')
     (tmp_path / "tsconfig.json").write_text("{}")
-    plan = _plan_dict(tmp_path, "opengrep", "govulncheck", "gitleaks")
+    plan = _plan_dict(tmp_path, "gosec", "osv-scanner", "gitleaks")  # ADR-027 admitted set
     assert vsp.validate(plan) == []
 
 
@@ -86,14 +88,14 @@ def test_kernel_adjacency_optional_for_legacy_artifacts(tmp_path: Path):
 
 # --- negative cases --------------------------------------------------------
 def test_missing_degraded_is_rejected(tmp_path: Path):
-    plan = _plan_dict(tmp_path, "opengrep")
+    plan = _plan_dict(tmp_path, "bandit")  # ADR-027: admitted tool (opengrep removed)
     del plan["degraded"]
     errors = vsp.validate(plan)
     assert errors and any("degraded" in e for e in errors)
 
 
 def test_unknown_capability_key_is_rejected(tmp_path: Path):
-    plan = _plan_dict(tmp_path, "opengrep")
+    plan = _plan_dict(tmp_path, "bandit")  # ADR-027: admitted tool (opengrep removed)
     plan["category_tool"]["totally-made-up"] = "foo"
     assert vsp.validate(plan) != []
 
@@ -105,12 +107,12 @@ def test_unknown_degraded_capability_is_rejected(tmp_path: Path):
 
 
 def test_additional_root_property_is_rejected(tmp_path: Path):
-    plan = _plan_dict(tmp_path, "opengrep")
+    plan = _plan_dict(tmp_path, "bandit")  # ADR-027: admitted tool (opengrep removed)
     plan["surprise"] = True
     assert vsp.validate(plan) != []
 
 
 def test_wrong_type_ai_pass_is_rejected(tmp_path: Path):
-    plan = _plan_dict(tmp_path, "opengrep")
+    plan = _plan_dict(tmp_path, "bandit")  # ADR-027: admitted tool (opengrep removed)
     plan["ai_pass"] = "yes"  # must be boolean
     assert vsp.validate(plan) != []
