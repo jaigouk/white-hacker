@@ -9,7 +9,7 @@ date: 2026-06-09
 modified: 2026-06-09
 review_by: 2026-09-09
 metadata:
-  source: GitHub Advisories GHSA-69fq-xp46-6x23 (Trivy CVE-2026-33634), GHSA-5mg7-485q-xm76 (LiteLLM), GHSA-c9j4-9m59-847w (Nx Console CVE-2026-48027) + dated research note docs/research/20260609_trivy_teampcp_supply_chain.md
+  source: GitHub Advisories GHSA-69fq-xp46-6x23 (Trivy CVE-2026-33634), GHSA-5mg7-485q-xm76 (LiteLLM), GHSA-c9j4-9m59-847w (Nx Console CVE-2026-48027)
   url: https://github.com/advisories/GHSA-69fq-xp46-6x23
   retrieved: 2026-06-09
 supersedes: null
