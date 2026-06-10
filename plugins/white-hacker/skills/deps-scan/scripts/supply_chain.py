@@ -416,6 +416,35 @@ def _resolved_pypi(root: Path) -> dict[str, str]:
             version = entry.get("version")
             if isinstance(name, str) and isinstance(version, str):
                 out.setdefault(name, version)
+    # Pipfile.lock (JSON) fills in any name a TOML lock didn't pin (poetry/uv win on clash).
+    for name, version in _resolved_pipfile(root).items():
+        out.setdefault(name, version)
+    return out
+
+
+def _resolved_pipfile(root: Path) -> dict[str, str]:
+    """Extract `{name: version}` from a `Pipfile.lock` (wh-7o1).
+
+    Pipfile.lock is JSON with `default`/`develop` maps of `{name: {"version": "==1.2.3"}}`.
+    A Pipenv lock pins exact (`"==1.2.3"`); the leading `==` is stripped to a bare version
+    so it specific-matches in S8 exactly like the poetry/uv path. Only a `==` exact pin is
+    taken — a non-exact value (e.g. `"*"`) is NOT a resolved version and is skipped, so it
+    can never mis-attach `resolved="*"`. Parsed via the package's defensive `_read_json`, so
+    a missing/odd/garbage file (or a non-dict `default`/entry) degrades to `{}` — NEVER
+    raises. `default` is read before `develop`; the first version for a name wins."""
+    out: dict[str, str] = {}
+    data = _read_json(root / "Pipfile.lock")
+    for section in ("default", "develop"):
+        block = data.get(section)
+        if not isinstance(block, dict):
+            continue
+        for name, meta in block.items():
+            if not isinstance(meta, dict):
+                continue
+            version = meta.get("version")
+            if isinstance(name, str) and isinstance(version, str) \
+                    and version.startswith("=="):
+                out.setdefault(name, version[2:].strip())
     return out
 
 
@@ -497,13 +526,35 @@ def parse_pypi(project_dir: str) -> dict:
 # ------------------------------- RubyGems ---------------------------------- #
 # `gem 'name', ...` line; capture the quoted gem name + the remainder (for git:/path:).
 _GEM_RE = re.compile(r"""^\s*gem\s+['"]([^'"]+)['"]\s*(.*)$""")
+# A Gemfile.lock `specs:` top-level entry: EXACTLY 4-space indent, then `name (version)`.
+# Sub-dependencies are indented 6 spaces (`      dep (>= 0)`) and are deliberately NOT
+# matched — they are transitive constraints, not the resolved top-level pin.
+_GEMLOCK_SPEC_RE = re.compile(r"^    ([A-Za-z0-9._-]+) \(([^()]+)\)\s*$")
+
+
+def _resolved_gem(root: Path) -> dict[str, str]:
+    """Extract `{name: resolved_version}` from a `Gemfile.lock` `specs:` block (wh-7o1).
+
+    Bundler writes each installed gem under `GEM`/`specs:` as a 4-space-indented
+    `name (1.2.3)`; its transitive deps are 6-space-indented and are NOT resolved pins, so
+    only the 4-space entries are taken. Plain text (stdlib regex), so no new dep. NEVER
+    raises: a missing/odd/garbage lockfile yields `{}` (mirrors `_resolved_npm`)."""
+    out: dict[str, str] = {}
+    for line in _read_text(str(root / "Gemfile.lock")).splitlines():
+        m = _GEMLOCK_SPEC_RE.match(line)
+        if m:
+            out.setdefault(m.group(1), m.group(2))
+    return out
 
 
 def parse_gem(project_dir: str) -> dict:
     """RubyGems ADAPTER: Gemfile (`gem '...'` lines, incl. `git:`/`path:` sources) +
     Gemfile.lock. A native C extension (`extconf.rb` / an `ext/` dir) builds arbitrary
-    code at install (S1 hook) — its `extconf.rb` files are scanned (S6/S7)."""
+    code at install (S1 hook) — its `extconf.rb` files are scanned (S6/S7). The OPTIONAL
+    `resolved` key (wh-7o1) carries the Gemfile.lock `specs:` version when the lock pins
+    the gem — additive, so an idiomatic `~> 1.2` range resolves to the locked version."""
     root = Path(project_dir)
+    resolved = _resolved_gem(root)
     deps: list[dict] = []
     for line in _read_text(str(root / "Gemfile")).splitlines():
         m = _GEM_RE.match(line)
@@ -521,7 +572,10 @@ def parse_gem(project_dir: str) -> dict:
         # spec = the version constraint if one is quoted right after the name, else rest.
         ver = re.search(r"""['"]([~^<>=!\d][^'"]*)['"]""", rest)
         spec = ver.group(1) if ver else (rest.strip() or "*")
-        deps.append({"name": str(name), "spec": str(spec), "source_type": source})
+        dep = {"name": str(name), "spec": str(spec), "source_type": source}
+        if str(name) in resolved:  # additive optional key, only when the lock pins it
+            dep["resolved"] = resolved[str(name)]
+        deps.append(dep)
 
     lifecycle: dict[str, str] = {}
     script_files: list[str] = []
@@ -554,10 +608,23 @@ def _classify_go_replace(target: str) -> str:
     return "git"  # replaced to a different (fork) module path — non-registry source
 
 
+def _go_require_dep(name: str, version: str) -> dict:
+    """A go.mod `require` dep. The require version IS the selected version (post
+    `go mod tidy`), so attach it as the OPTIONAL `resolved` key (wh-7o1) — additive,
+    alongside `spec`. A later `replace` re-classifies source + rewrites `spec` to the
+    `=> ...` expression; `resolved` is only consulted by S8 for registry deps, and a
+    replaced (fork/file) dep is no longer a registry version pin."""
+    return {"name": name, "spec": version, "source_type": "registry",
+            "resolved": version}
+
+
 def parse_go(project_dir: str) -> dict:
     """Go ADAPTER: go.mod (`require` + `replace`) + go.sum (the lockfile). A `replace`
     to a local path or a fork module makes that dependency a non-registry source (S2).
-    Go has NO install/build hook → empty `lifecycle_scripts` + `script_files`."""
+    Go has NO install/build hook → empty `lifecycle_scripts` + `script_files`. The
+    OPTIONAL `resolved` key (wh-7o1) carries the `require` version — the selected version
+    post `go mod tidy` (Go has no separate version-pinning lockfile; go.sum is checksums,
+    not a version map) — additive, never replaces name/spec/source_type."""
     root = Path(project_dir)
     text = _read_text(str(root / "go.mod"))
     deps: dict[str, dict] = {}
@@ -574,15 +641,13 @@ def parse_go(project_dir: str) -> dict:
         if in_require:
             m = _GO_REQUIRE_RE.match("    " + stripped)
             if m:
-                deps[m.group(1)] = {"name": m.group(1), "spec": m.group(2),
-                                    "source_type": "registry"}
+                deps[m.group(1)] = _go_require_dep(m.group(1), m.group(2))
             continue
         # single-line `require mod vX`
         if stripped.startswith("require "):
             m = _GO_REQUIRE_RE.match(line.replace("require ", "    ", 1))
             if m:
-                deps[m.group(1)] = {"name": m.group(1), "spec": m.group(2),
-                                    "source_type": "registry"}
+                deps[m.group(1)] = _go_require_dep(m.group(1), m.group(2))
     # apply replaces: re-classify the module's source (a known require, or add it).
     for raw in text.splitlines():
         m = _GO_REPLACE_RE.match(raw.split("//", 1)[0])
@@ -594,6 +659,9 @@ def parse_go(project_dir: str) -> dict:
         if old in deps:
             deps[old]["source_type"] = source
             deps[old]["spec"] = f"=> {target} {ver}".strip()
+            # a replaced dep is a fork/local path, no longer a registry version pin —
+            # drop the stale require `resolved` so S8 doesn't match the pre-replace version
+            deps[old].pop("resolved", None)
         else:
             deps[old] = {"name": old, "spec": f"=> {target} {ver}".strip(),
                          "source_type": source}
@@ -620,18 +688,50 @@ def _classify_cargo(val: object) -> tuple[str, str]:
     return (str(val), "registry")
 
 
+def _resolved_cargo(root: Path) -> dict[str, str]:
+    """Extract `{name: version}` from a `Cargo.lock` `[[package]]` array (wh-7o1).
+
+    Cargo.lock is TOML with a `package` array of `{name, version}` tables — parsed via the
+    package's EXISTING defensive tomllib import, so on a Python 3.10 floor (no stdlib
+    tomllib) this degrades to `{}` rather than crashing. NEVER raises; the first entry for
+    a name wins. PREFERRING this over the bare Cargo.toml spec matters: a bare crates.io
+    spec (`"1.2.3"`) is semantically `^1.2.3` (a RANGE), so the lockfile's pinned version
+    is the right one to match in S8. (Treating a *no-lock* bare spec as a `^range` — rather
+    than the `_exact_pin` plain-literal pin it is today — is the per-ecosystem exact-pin
+    semantics deferred to wh-5es RQ2's ecosystem key; this attach is the lockfile half.)"""
+    out: dict[str, str] = {}
+    data = _read_toml(root / "Cargo.lock")
+    packages = data.get("package")
+    if not isinstance(packages, list):
+        return out
+    for entry in packages:
+        if not isinstance(entry, dict):
+            continue
+        name = entry.get("name")
+        version = entry.get("version")
+        if isinstance(name, str) and isinstance(version, str):
+            out.setdefault(name, version)
+    return out
+
+
 def parse_cargo(project_dir: str) -> dict:
     """Cargo ADAPTER: Cargo.toml (`[dependencies]`, incl. `git`/`path` tables) +
     Cargo.lock. `build.rs` runs arbitrary code at build time (S1 hook) — scanned
-    for S6/S7."""
+    for S6/S7. The OPTIONAL `resolved` key (wh-7o1) carries the Cargo.lock-pinned version
+    and is PREFERRED over the bare Cargo.toml spec in S8 — a bare crates.io spec (`"1.2.3"`)
+    is semantically a `^` range, so the lockfile pin is the version actually built."""
     root = Path(project_dir)
     cargo = _read_toml(root / "Cargo.toml")
+    resolved = _resolved_cargo(root)
     deps: list[dict] = []
     block = cargo.get("dependencies") if isinstance(
         cargo.get("dependencies"), dict) else {}
     for name, val in block.items():
         spec, source = _classify_cargo(val)
-        deps.append({"name": str(name), "spec": spec, "source_type": source})
+        dep = {"name": str(name), "spec": spec, "source_type": source}
+        if str(name) in resolved:  # additive optional key; resolved wins over the ^range spec
+            dep["resolved"] = resolved[str(name)]
+        deps.append(dep)
 
     lifecycle: dict[str, str] = {}
     script_files: list[str] = []
@@ -662,11 +762,41 @@ def _mvn_child_text(dep: ET.Element, name: str) -> str:
     return ""
 
 
+# A `${property.name}` reference in a Maven `<version>` (the centralized-version idiom).
+_MVN_PROP_RE = re.compile(r"^\$\{([^}]+)\}$")
+
+
+def _mvn_properties(xroot: ET.Element) -> dict[str, str]:
+    """`{property_name: value}` from the pom's `<properties>` block (namespace-stripped).
+
+    Only the SAME pom's `<properties>` are read — parent-pom / BOM-managed values may live
+    outside the repo and are intentionally NOT resolved (wh-7o1: those deps stay wildcard-
+    only BY DESIGN). NEVER raises: a missing/odd block yields `{}`."""
+    props: dict[str, str] = {}
+    for el in xroot.iter():
+        if _strip_ns(el.tag) != "properties":
+            continue
+        for child in el:
+            key = _strip_ns(child.tag)
+            val = (child.text or "").strip()
+            if key and val:
+                props.setdefault(key, val)
+    return props
+
+
 def parse_maven(project_dir: str) -> dict:
     """Maven ADAPTER: pom.xml `<dependencies><dependency>` (groupId/artifactId/version)
     via xml.etree. The dep `name` is the `groupId:artifactId` coordinate. A `system`
     scope (a local jar via `systemPath`) is a non-registry (file) source. Maven has no
-    standard committed lockfile (lockfile_present=False) and no install hook."""
+    standard committed lockfile (lockfile_present=False) and no install hook.
+
+    The OPTIONAL `resolved` key (wh-7o1): a `<version>${prop}</version>` ref is resolved
+    against the SAME pom's `<properties>` (the centralized-version idiom) and attached as
+    `resolved` — additive, never replaces name/spec/source_type. An UNRESOLVABLE property
+    (no matching `<properties>` entry, e.g. parent-managed `${project.version}` or a typo)
+    AND a BOM/parent-managed dep with NO `<version>` BOTH stay wildcard-only BY DESIGN:
+    the parent pom may live outside the repo, so S8 conservatively matches only a `"*"`
+    whole-package entry there (never a specific version)."""
     root = Path(project_dir)
     pom = root / "pom.xml"
     deps: list[dict] = []
@@ -676,6 +806,7 @@ def parse_maven(project_dir: str) -> dict:
     except (OSError, ET.ParseError):
         return _empty_norm()
 
+    props = _mvn_properties(xroot)
     for dep in xroot.iter():
         if _strip_ns(dep.tag) != "dependency":
             continue
@@ -687,7 +818,11 @@ def parse_maven(project_dir: str) -> dict:
         scope = _mvn_child_text(dep, "scope").lower()
         name = f"{gid}:{aid}" if gid else aid
         source = "file" if scope == "system" else "registry"
-        deps.append({"name": name, "spec": ver or "*", "source_type": source})
+        d = {"name": name, "spec": ver or "*", "source_type": source}
+        m = _MVN_PROP_RE.match(ver)
+        if m and m.group(1) in props:  # resolvable ${prop} → attach the property value
+            d["resolved"] = props[m.group(1)]
+        deps.append(d)
 
     return {
         "deps": deps,
@@ -733,24 +868,28 @@ def _unpinned(spec: str) -> bool:
     return bool(re.search(r"[\^~*]|latest|x", s)) and _classify_source(s) == "registry"
 
 
-# A PLAIN version literal: a numeric core with an OPTIONAL pre-release AND an OPTIONAL
-# build-metadata segment (semver order: `core(-prerelease)?(+build)?`), e.g. `1.0.0`,
+# A PLAIN version literal: an OPTIONAL leading `v` (Go/OSV-Go sets are v-prefixed, e.g.
+# `v1.2.3`) + a numeric core with an OPTIONAL pre-release AND an OPTIONAL build-metadata
+# segment (semver order: `core(-prerelease)?(+build)?`), e.g. `1.0.0`, `v1.2.3`,
 # `2.5.0-rc.1`, `1.0.0+build.7`, `1.0.0-beta+meta`. The two segments are matched SEPARATELY
 # (a single `[-+]…` class wrongly accepted only one and excluded `+` — TL finding 1).
 # Anything with a range operator (`^ ~ >= < =`), a wildcard (`* x`), a tag (`latest`), a
 # hyphen RANGE, or a vcs/url/file spec is NOT this.
 _EXACT_VERSION_RE = re.compile(
-    r"^\d+(?:\.\d+){0,2}(?:-[0-9A-Za-z.\-]+)?(?:\+[0-9A-Za-z.\-]+)?$"
+    r"^v?\d+(?:\.\d+){0,2}(?:-[0-9A-Za-z.\-]+)?(?:\+[0-9A-Za-z.\-]+)?$"
 )
 
 
 def _exact_pin(spec: str) -> str | None:
     """The settled EXACT-PIN rule (wh-4k9): a manifest spec that is a plain version
     literal counts as a resolved version when no lockfile entry exists — npm `1.0.0`,
-    pypi `==1.0.0` / bare `1.0.0`. Returns the bare version, or None for any RANGE
-    (`^`/`~`/`>=`/`*`/`latest`/hyphen ranges) or git/url/file spec. Conservative: when in
-    doubt it returns None so an unresolved range NEVER matches a specific-version DB entry
-    (that name-only match is exactly the false positive wh-4k9 removes)."""
+    pypi `==1.0.0` / bare `1.0.0`, Go `v1.2.3`. Returns the version AS WRITTEN — the
+    `v` of a Go spec is KEPT (wh-7o1: OSV-Go version sets are v-prefixed, so dropping it
+    would make a known-bad Go module never specific-match), the pypi `==` is stripped.
+    Returns None for any RANGE (`^`/`~`/`>=`/`*`/`latest`/hyphen ranges, incl. v-prefixed
+    `v1.x`/`>=v1.2`/`v1 - v2`) or git/url/file spec. Conservative: when in doubt it
+    returns None so an unresolved range NEVER matches a specific-version DB entry (that
+    name-only match is exactly the false positive wh-4k9 removes)."""
     s = (spec or "").strip()
     if not s:
         return None
@@ -891,7 +1030,10 @@ def signal_s8(norm: dict, malware_db: dict | None) -> list[str]:
     Accepted residual (wh-4k9): `resolved` comes from the target's OWN lockfile — the same
     trust domain as the manifest (attacker-controlled), so a tampered lockfile can suppress
     a specific-version hit; S8 stays a human-triaged candidate (never a block) and a `"*"`
-    wildcard DB entry still fires regardless of the resolved version."""
+    wildcard DB entry still fires regardless of the resolved version. (The same residual
+    covers every resolution source added by wh-7o1 — go.mod require versions, Maven
+    <properties> values, and the Gemfile.lock/Cargo.lock/Pipfile.lock parsers — all in-repo
+    and attacker-controlled, the same trust domain as the manifest.)"""
     if not malware_db:
         return []
     hits: list[str] = []
