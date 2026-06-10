@@ -1,0 +1,19 @@
+{
+  "schema_version": "watchlist-1.0",
+  "id": "GHSA-test-dep0-0000",
+  "target": "dependency",
+  "modified": "2026-06-10",
+  "affected": [
+    {
+      "package": { "ecosystem": "PyPI", "name": "neutralized-sample-pkg" },
+      "versions": ["9.9.99"]
+    }
+  ],
+  "references": [
+    { "type": "ADVISORY", "url": "https://github.com/advisories/GHSA-test-dep0-0000" }
+  ],
+  "database_specific": {
+    "retrieved": "2026-06-10",
+    "watchlist_confidence": "low"
+  }
+}

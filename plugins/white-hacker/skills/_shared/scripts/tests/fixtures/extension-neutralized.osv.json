@@ -1,0 +1,19 @@
+{
+  "schema_version": "watchlist-1.0",
+  "id": "GHSA-test-ext0-0000",
+  "target": "extension",
+  "modified": "2026-06-10",
+  "affected": [],
+  "extension": {
+    "marketplace": "neutralized-marketplace",
+    "id": "neutralized.sample-extension",
+    "bad_versions": ["0.0.1"]
+  },
+  "references": [
+    { "type": "ADVISORY", "url": "https://osv.dev/vulnerability/GHSA-test-ext0-0000" }
+  ],
+  "database_specific": {
+    "retrieved": "2026-06-10",
+    "watchlist_confidence": "low"
+  }
+}

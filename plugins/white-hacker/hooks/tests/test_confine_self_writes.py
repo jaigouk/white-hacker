@@ -50,6 +50,51 @@ def test_denies_keep_or_revert_write(tmp_path):  # T-9.2 VC4 (-k keep_or_revert)
     assert deny("echo x > evals/keep_or_revert.py", tmp_path)
 
 
+def test_denies_gate2_verdict_writer_files(tmp_path):  # wh-hxt.5 SEC-Q12 (ADR-026 §3)
+    """The Gate-2 verdict-writer (validate_watchlist.py) and the schema that defines 'valid'
+    (watchlist-entry-schema.json) are gate-grade: the outer loop must NOT rewrite the gate that
+    admits its own DATA edits. Both are FROZEN_BASENAMES — Write/Edit to either is BLOCKED."""
+    assert deny(
+        "echo x > plugins/white-hacker/skills/_shared/scripts/validate_watchlist.py", tmp_path
+    )
+    assert deny(
+        "echo x > plugins/white-hacker/skills/_shared/reference/watchlist-entry-schema.json",
+        tmp_path,
+    )
+    # Write/Edit tool form (the path the agent actually takes) is blocked too.
+    assert not cs.decide({
+        "tool_name": "Write",
+        "tool_input": {
+            "file_path": "plugins/white-hacker/skills/_shared/scripts/validate_watchlist.py"
+        },
+        "cwd": str(tmp_path),
+    })[0]
+    assert not cs.decide({
+        "tool_name": "Edit",
+        "tool_input": {
+            "file_path": (
+                "plugins/white-hacker/skills/_shared/reference/watchlist-entry-schema.json"
+            )
+        },
+        "cwd": str(tmp_path),
+    })[0]
+
+
+def test_gate2_freeze_does_not_block_normal_shared_reference_md(tmp_path):  # wh-hxt.5 control
+    """The != side (no over-block): freezing the two Gate-2 basenames must NOT close the
+    `_shared/reference/` lane — a normal `*.md` checklist write there is STILL ALLOWED."""
+    assert allow(
+        "echo x > plugins/white-hacker/skills/_shared/reference/core-checklist.md", tmp_path
+    )
+    assert cs.decide({
+        "tool_name": "Write",
+        "tool_input": {
+            "file_path": "plugins/white-hacker/skills/_shared/reference/tool-registry.md"
+        },
+        "cwd": str(tmp_path),
+    })[0]
+
+
 def test_denies_settings_self_disable(tmp_path):
     assert deny("echo x > .claude/settings.json", tmp_path)
 

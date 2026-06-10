@@ -26,7 +26,15 @@ import sys
 
 import guard_bash as gb
 
-FROZEN_BASENAMES = {"keep_or_revert.py", "baseline.json", "score.py", "label-schema.json"}
+FROZEN_BASENAMES = {
+    "keep_or_revert.py", "baseline.json", "score.py", "label-schema.json",
+    # Gate-2 verdict-writer trust (ADR-026 §3, SEC-Q12): the validator that MINTS the DATA
+    # verdict and the schema that defines "valid" are gate-grade — the outer loop must not be
+    # able to weaken the gate that admits its own watchlist/registry DATA edits (same protection
+    # keep_or_revert.py/score.py have). watchlist-entry-schema.json lives in the writable
+    # `/_shared/reference/` lane, so freezing its basename is load-bearing, not redundant.
+    "validate_watchlist.py", "watchlist-entry-schema.json",
+}
 # Self-disablement / identity control files: once distributed as a plugin the agent must not be
 # able to rewrite its OWN harness wiring (settings, hook registration, plugin/marketplace manifests)
 # regardless of where the layout puts them. Matched by basename + the plugin-manifest dir marker.

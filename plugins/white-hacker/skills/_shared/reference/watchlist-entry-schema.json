@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://white-hacker/watchlist-entry-schema.json",
+  "title": "watchlist-1.0 entry (plain-OSV-superset)",
+  "description": "Schema for ONE supply-chain watchlist entry — the plain-OSV-superset finalized in docs/research/20260609_supply_chain_compromise_monitoring.md (RQ2 DECISION) and pinned by ADR-026 §2. `load_malware_db` (deps-scan/scripts/malware_db.py) parses target:dependency|tool unchanged via affected[].package.{name,ecosystem}+versions; the extension kind adds an `extension` block OUTSIDE affected[] (loader-ignored). Validated + Gate-2-gated by _shared/scripts/validate_watchlist.py. FROZEN by reference (ADR-026 §2): underspecification → follow-up against the schema doc, never fork the shape here.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "id", "target", "affected", "references", "database_specific"],
+  "properties": {
+    "schema_version": {
+      "description": "Pinned schema tag. Exactly 'watchlist-1.0' (ADR-026 §2).",
+      "const": "watchlist-1.0"
+    },
+    "id": {
+      "description": "The PRIMARY advisory id == the entry id (GHSA preferred; OSV/CVE ok). Non-empty.",
+      "type": "string",
+      "minLength": 1
+    },
+    "target": {
+      "description": "REQUIRED extension tag: which capability this row feeds. RQ2 DECISION dropped `repos`.",
+      "enum": ["dependency", "tool", "extension"]
+    },
+    "modified": {
+      "description": "OSV field; used for incremental delta polling. ISO-8601 date.",
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+    },
+    "affected": {
+      "description": "PLAIN OSV — load_malware_db reads exactly this for target:dependency|tool. May be empty [] for target:extension (the bad versions live in the `extension` block instead).",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["package"],
+        "properties": {
+          "package": {
+            "type": "object",
+            "additionalProperties": true,
+            "required": ["ecosystem", "name"],
+            "properties": {
+              "ecosystem": {
+                "description": "OSV-canonical ecosystem (PyPI/npm/Go/Maven/RubyGems/crates.io). Mandatory (provenance + dir path); NOT the match key today.",
+                "type": "string",
+                "minLength": 1
+              },
+              "name": { "type": "string", "minLength": 1 }
+            }
+          },
+          "versions": {
+            "description": "Explicit list → exactly those versions are bad; absent/[] → whole-package wildcard '*' in the loader fold.",
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 }
+          }
+        }
+      }
+    },
+    "extension": {
+      "description": "target:extension block, OUTSIDE affected[] (loader-ignored; read by the ide-hygiene module). Required keys marketplace/id/bad_versions.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["marketplace", "id", "bad_versions"],
+      "properties": {
+        "marketplace": { "type": "string", "minLength": 1 },
+        "id": { "type": "string", "minLength": 1 },
+        "bad_versions": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "references": {
+      "description": "REQUIRED >=1 advisory provenance URL. Gate-2 additionally asserts id-bound host-allowlisted provenance (SEC-Q4) — the schema only guarantees shape + minItems.",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["url"],
+        "properties": {
+          "type": { "type": "string" },
+          "url": { "type": "string", "pattern": "^https?://" }
+        }
+      }
+    },
+    "database_specific": {
+      "description": "OSV's sanctioned namespace for non-standard fields — Gate-2-checked, loader-ignored. retrieved = when the feeder fetched it; watchlist_confidence: auto-extracted candidates land low, human review can raise.",
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["retrieved", "watchlist_confidence"],
+      "properties": {
+        "retrieved": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+        "watchlist_confidence": { "enum": ["low", "medium", "high"] }
+      }
+    }
+  }
+}
