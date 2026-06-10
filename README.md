@@ -22,21 +22,21 @@ They nest: **the inner loop *consumes* the knowledge base; the outer loop *edits
 KB-refresh routine is the input arm that ingests "new ways to hack AI products." Canonical
 statement: `docs/ARD.md` ADR-001.
 
-```
-                       OUTER LOOP  (self-improvement — edits the KB; no retraining)
-   trace ─► reflect ─► propose text diffs ─► gate (eval keep/revert, size caps) ─► PR
-     ▲                                                                            │
-     │   /sec-learn (FPs / misses / corrections)   /sec-kb-refresh (threat feeds) │
-     │                                                                            ▼
-   ┌──────────────────────────────  KNOWLEDGE BASE  ──────────────────────────────────┐
-   │   ai-attack-kb/reference/ (dated, sourced, status-tagged)  +  _shared/reference/ │
-   │   + tool-registry.md (tools are knowledge too — registry self-update: planned)   │
-   └──────────────────────────────────────────────────────────────────────────────────┘
-     │                          consumes ▲
-     ▼                                   │
-   INNER LOOP  (per review — defending-code methodology)
-   threat-model ─► discovery (RECALL) ─► verification + triage (PRECISION,
-        fresh context, adversarial N-of-N) ─► report ─► patch (+ re-attack, opt-in)
+```mermaid
+flowchart TB
+    subgraph OUTER["OUTER LOOP — self-improvement (edits the KB · no retraining)"]
+        direction LR
+        TRACE["trace"] --> LEARN["reflect — /sec-learn<br/>FPs · misses · corrections"] --> DIFFS["propose<br/>text diffs"] --> GATE{"gate — eval keep/revert ·<br/>size caps<br/>(DATA rows: Gate-2 — ADR-026)"} --> PR["draft PR —<br/>human merges,<br/>never auto"]
+        FEEDS["threat feeds"] --> REFRESH["/sec-kb-refresh —<br/>dated draft entries"] --> GATE
+    end
+    KB[("KNOWLEDGE BASE<br/>ai-attack-kb/reference — dated · sourced · status-tagged<br/>+ _shared/reference checklists + tool-registry.md — tools are knowledge too")]
+    subgraph INNER["INNER LOOP — per review (defending-code methodology)"]
+        direction LR
+        TM["threat-model"] --> DISC["discovery<br/>(RECALL)"] --> VER["verification + triage<br/>PRECISION · fresh context ·<br/>adversarial N-of-N"] --> REP["report"] --> PAT["patch + re-attack<br/>(opt-in)"]
+    end
+    OUTER -->|"merged after human review"| KB
+    KB -->|"consumed each review"| INNER
+    INNER -->|"review traces"| OUTER
 ```
 
 Everything else — *especially* specific scanner tools — is secondary and swappable.
@@ -68,8 +68,9 @@ THREAT_MODEL.md → SCAN-PLAN.json → VULN-FINDINGS.json → TRIAGE.json → PA
   unchanged. Only four things vary per stack (the oracle, PoC format, build/run, in-scope classes).
 - **Self-improving.** The outer loop edits text behind open interfaces (Context + Harness
   surfaces), not the weights — cheap, testable, reversible. Every change is a reviewable diff
-  behind a deterministic gate (eval keep-or-revert for KB/checklist edits; a source+schema DATA
-  gate — planned — for registry/watchlist entries) and size caps; never auto-merged (ADR-004).
+  behind a deterministic gate (Gate-1: eval keep-or-revert for KB/checklist edits; Gate-2: the
+  source+schema DATA gate, ADR-026 — implementation pending — for registry/watchlist entries) and
+  size caps; never auto-merged (ADR-004).
   Procedural memory lives as progressive-disclosure skills; the KB self-updates today, and the
   tool registry is designed to (its proposer arm is in progress).
 - **AI-aware.** First-class OWASP **LLM (2025)**, **MCP (beta)**, and **Agentic/ASI (2026)**
@@ -144,9 +145,12 @@ depends on a *capability* (SAST · SCA · secrets · IaC · AI-redteam), **never
   and `sec-kb-refresh` add newly-discovered tools just as they add new attack techniques —
   *there will always be tools we don't know.*
 
-Examples *today* (illustrative defaults, not requirements): Opengrep (SAST), Trivy /
-OSV-Scanner (SCA/IaC), gitleaks / trufflehog (secrets), native gates (govulncheck / pip-audit /
-npm audit). Whatever the repo or user already has plugs in behind the same capability — see
+Examples *today* (illustrative, not requirements — the admissible set per ADR-025/027):
+OSV-Scanner · Grype (+ Syft) for SCA/images, Checkov + actionlint/zizmor for IaC/CI, gitleaks ·
+detect-secrets for secrets, per-language linters (gosec · bandit · ruff · eslint-plugin-security)
+for SAST, native low-FP gates (pip-audit · cargo-audit). **Trivy is permanently removed** (TeamPCP
+compromise — ADR-027); Opengrep / trufflehog / hadolint fail the License-gate (ADR-025). Whatever
+passes the same gates plugs in behind the capability — see
 **`plugins/white-hacker/skills/_shared/reference/tool-registry.md`** for the full mapping and the rules
 (pin versions, never auto-install from unpinned sources, ADR-006).
 
@@ -157,13 +161,14 @@ Execution-verified PoC detonation is an opt-in, sandboxed escalation for high-va
 
 ## Repo layout
 
-The repo root **is** the marketplace; the shipped artifacts live under `plugins/white-hacker/`
-(payload), separate from this repo's own thin `.claude/` (dev config). Identity comes from the
-agent's `name` field, not the path (ADR-017).
+The shipped artifacts live under `plugins/white-hacker/` (payload), separate from this repo's own
+thin `.claude/` (dev config). The repo carries an in-repo catalog (`.claude-plugin/marketplace.json`)
+used only for **local** plugin registration — there is **no published marketplace listing** (ADR-028).
+Identity comes from the agent's `name` field, not the path (ADR-017).
 
 ```
-white-hacker/                            # repo root == the marketplace
-├── .claude-plugin/marketplace.json      # catalog (lists the white-hacker plugin)
+white-hacker/                            # repo root (in-repo catalog — local registration only)
+├── .claude-plugin/marketplace.json      # catalog — used for LOCAL plugin registration (ADR-028)
 ├── plugins/white-hacker/                # the shipped plugin PAYLOAD
 │   ├── .claude-plugin/plugin.json       # ONLY the manifest lives here
 │   ├── agents/white-hacker.md           # the ONE definition (persona, posture, dispatch)
@@ -194,34 +199,20 @@ white-hacker/                            # repo root == the marketplace
 
 ## Install & onboarding
 
-white-hacker ships as a **Claude Code plugin distributed through a marketplace** (ADR-017,
-superseding ADR-014; see `docs/research/spike-07-agent-distribution-and-init-2026-06.md`).
-This repo *is* the marketplace: the catalog is `.claude-plugin/marketplace.json` (marketplace
-name `white-hacker-marketplace`) and the shipped payload is `plugins/white-hacker/`.
+white-hacker is **installed manually from this repo for now** (ADR-028 — no published marketplace
+listing; the plugin *mechanism*, ADR-017, is unchanged: the payload stays a valid, validated Claude
+Code plugin, so a published listing later is a docs-only flip). Two manual paths:
 
-### 1 — Install (end users)
+### 1 — Install (end users — manual, ADR-028)
 
-```
-/plugin marketplace add jaigouk/white-hacker
-/plugin install white-hacker@white-hacker-marketplace
-```
-
-The first line registers this GitHub repo as a marketplace; the second installs the
-`white-hacker` plugin from it. Once installed, skills are **namespaced** under the plugin:
-
-```
-/white-hacker:security-review            # the review entry point
-/white-hacker:sec-init                   # per-project onboarding (below)
-```
-
-**One-command install (`install.sh`, ADR-021).** A pinned, `curl|bash`-safe installer you run *inside*
-a target project — defaults to the **latest release tag**, dogfoods ADR-006 (pins + GPG-verifies, fetches
-nothing unpinned, function-wrapped against truncated downloads):
+**Recommended — the pinned `install.sh` vendor lane (ADR-021).** Run *inside* a target project —
+defaults to the **latest release tag**, dogfoods ADR-006 (pins + GPG-verifies, fetches nothing
+unpinned, function-wrapped against truncated downloads):
 
 ```
 # vendor into ./.claude/ (self-contained, committed, CI-runnable) — the default lane
 curl -fsSL https://raw.githubusercontent.com/jaigouk/white-hacker/HEAD/install.sh | bash
-# or the marketplace plugin (auto-updates):
+# or register the pinned clone as a LOCAL plugin instead of vendoring:
 curl -fsSL https://raw.githubusercontent.com/jaigouk/white-hacker/HEAD/install.sh | bash -s -- --plugin
 ```
 
@@ -231,12 +222,28 @@ Works on **macOS or Linux** (detects the host). Pin/override with `--ref <tag>`;
 `uv`, which the installer **auto-installs (pinned) if missing** (it also provisions Python).
 Review-before-run: download, read, run.
 
-> (Pre-ADR-021 manual fallback: hand-copying `plugins/white-hacker/{agents,skills,commands,hooks}/`
-> into `~/.claude/` is unpinned and drifts — use `install.sh` or the marketplace instead.)
+**Alternative — register your clone as a local plugin** (uses the in-repo catalog; nothing is
+fetched from a published marketplace):
+
+```
+git clone https://github.com/jaigouk/white-hacker
+/plugin marketplace add ./white-hacker         # register the LOCAL clone as a marketplace
+/plugin install white-hacker@white-hacker-marketplace
+```
+
+Once installed as a plugin, skills are **namespaced** under the plugin:
+
+```
+/white-hacker:security-review            # the review entry point
+/white-hacker:sec-init                   # per-project onboarding (below)
+```
+
+> (The old hand-copy fallback — copying `plugins/white-hacker/{agents,skills,commands,hooks}/` into
+> `~/.claude/` — is unpinned and drifts; use `install.sh` or the local plugin registration instead.)
 
 ### 2 — Dev / dogfood loop (no install)
 
-Run the plugin straight from the working tree — no marketplace registration, no copy:
+Run the plugin straight from the working tree — no registration, no copy:
 
 ```
 claude --plugin-dir ./plugins/white-hacker
@@ -322,7 +329,7 @@ on project-scope skills. See `docs/plan/PLAN.md` §7.1.
 |-----|------------|--------|
 | `.claude/CLAUDE.md` | Project conventions + the key concept | Written |
 | `.claude/agents/white-hacker.md` | The agent definition — behavior source of truth | Written |
-| `docs/ARD.md` | Architecture Decision Records (ADR-001…015) — the *why* | Written |
+| `docs/ARD.md` | Architecture Decision Records (ADR-001…028) — the *why* | Written |
 | `docs/plan/PLAN.md` | Foundation plan: gap analysis, skills, tooling, phased rollout | Written |
 | `docs/research/` | Spikes (`spike-01..04`), PoCs (`poc-tool-detection`, `poc-trivy-sca`, `poc-floor-review`, `poc-iac-scan`), foundation (`fnd-*`) + self-improvement (`si-*`) takeaways | Written |
 | `docs/PRD.md` | Product requirements (FR/NFR + verification criteria) | Written |

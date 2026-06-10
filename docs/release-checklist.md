@@ -38,9 +38,10 @@ uv run --with jsonschema python evals/score.py \
 - The security-review action's model id + `@anthropic-ai/claude-code` version are current
   (`ci/security-review.action.yml`).
 
-## 4. Plugin package valid (ADR-017)
-Since white-hacker ships as a Claude Code plugin via a marketplace, the package must validate
-before tagging:
+## 4. Plugin package valid (ADR-017/028)
+white-hacker ships as a plugin-shaped payload installed manually for now (ADR-028 — the in-repo
+catalog serves local registration only); the package must still validate as a plugin before
+tagging (the future marketplace flip stays docs-only):
 - **Bump the plugin version.** Increment `version` in
   `plugins/white-hacker/.claude-plugin/plugin.json` (semver; matches the release tag).
 - **Validate the manifest + catalog.** Either tool passes:
