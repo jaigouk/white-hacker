@@ -129,8 +129,8 @@ into `scan()` (`SKILL.md:81-82`). So containment exists but is never *reached* i
 
 **Weighing.** Containment-by-default (A) is the strategy's whole thesis (security comes from containment,
 not selection — strategy doc:190-197). But (A) **surprises the user with a `docker run`** they did not ask
-for, and the operator's own machine shows why that is risky: **Rancher Desktop is frequently not running**
-(probed today — only the dead `default` context is registered; the rancher-desktop context is
+for, and dev hosts often run a VM-based docker runtime that is **frequently not running**
+(when the VM is down, only a dead `default` docker context is registered; the runtime context is
 unregistered). A default that silently shells out to docker would either fail confusingly or run a
 container the user did not expect. SKILL.md:81-82 frames S8 as an **explicit activation contract**, not an
 ambient default — flipping that silently also contradicts ADR-007's "execution is opt-in, never default."
@@ -154,10 +154,10 @@ This is the smallest change that makes containment the steady state without viol
 execution": the user arms it once (config), and from then on every review runs S8 sealed when docker is
 up, and degrades cleanly when it is not.
 
-> **DEFERRED — operator starts Rancher Desktop, then `./run.sh build && ./run.sh test` (expect ~102).**
-> The lane's last build-verify was **67 passed / 1 deselected** on Rancher Desktop (README:85-88), which
+> **DEFERRED — start the docker runtime, then `./run.sh build && ./run.sh test` (expect ~102).**
+> The lane's last build-verify was **67 passed / 1 deselected** on a VM-based docker runtime (README:85-88), which
 > **predates wave-1a** — the deps-scan package is now **102 tests**, so the image must be REBUILT + re-run
-> before the auto-route can be relied on. Docker is **down on this host today** (Rancher Desktop not
+> before the auto-route can be relied on. Docker may be **down on a dev host** (the VM runtime not
 > running; only the `default` context exists). RQ3's **design** does not block on this; only the **live
 > verification** does. This probe is impl ticket (a)'s gating prerequisite.
 

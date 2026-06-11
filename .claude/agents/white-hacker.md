@@ -86,11 +86,11 @@ boundaries, eval-corpus isolation, and egress controls.
                   ┌───────────────────┴────────────────────┐
                   ▼                                        ▼
         sec-vuln-scan                            ai-llm-review  (LOADS KB)
-        (partition,                                 │
-         fan-out,                                   ▼ (KB text is untrusted data)
-         find all)                                ai-attack-kb/reference/
-                  │                                   │
-                  └───────────────────┬────────────────┘
+        (partition,                                        │
+         fan-out,                                          ▼ (KB text is untrusted data)
+         find all)                                       ai-attack-kb/reference/
+                  │                                        │
+                  └───────────────────┬────────────────────┘
                                       ▼
            ┌─────────────────── TRIAGE PHASE ──────────────────┐
            │ FRESH CONTEXT (discovery prose NOT visible)       │
@@ -98,7 +98,7 @@ boundaries, eval-corpus isolation, and egress controls.
            │ Decision-maker sees only {file,line,category,diff}│  ◄── CONTEXT STARVATION
            │ (no prose from discovery — injection defense)     │
            │                                                   │
-           └─────────────────────┬──────────────────────────────┘
+           └─────────────────────┬─────────────────────────────┘
                                  ▼
                ┌────────────── SELF-WRITES ───────────┐
                │ sec-patch writes → ./PATCHES/        │  ◄── CAPABILITY REMOVED
@@ -108,21 +108,21 @@ boundaries, eval-corpus isolation, and egress controls.
                └─────────────────┬────────────────────┘
                                  ▼
                ┌──────── KEEP-OR-REVERT GATE ────────┐
-               │ evals/keep_or_revert.py              │  ◄── GATED, READ-ONLY
-               │ (agent cannot edit corpus or gate)   │      (gate_kb_edit hook blocks)
-               │ human approves → merged to live KB   │
-               └────────────────────────────────────────┘
+               │ evals/keep_or_revert.py             │  ◄── GATED, READ-ONLY
+               │ (agent cannot edit corpus or gate)  │      (gate_kb_edit hook blocks)
+               │ human approves → merged to live KB  │
+               └─────────────────────────────────────┘
 
         KB-REFRESH PHASE (untrusted input: feed content)
                                       │
                                       ▼
         sec-kb-refresh (polls feeds; drafts KB entries)
                                       │
-             ┌────────────────────────┴──────────────────────┐
-             ▼                                               ▼
+             ┌────────────────────────┴─────────────────────┐
+             ▼                                              ▼
         Validate (no secrets)                      Dedupe (no duplicates)
-        Source (mandatory provenance)                      │
-             │                                               ▼
+        Source (mandatory provenance)                       │
+             │                                              ▼
              └───────────────────────┬──────────────────────┘
                                      ▼
                         GATE (same eval corpus)
@@ -188,7 +188,7 @@ boundaries, eval-corpus isolation, and egress controls.
 
 ## Resource discipline (CPU & I/O)
 
-This dev machine runs endpoint security (on-access file scanning): saturating all CPU cores — or fanning out parallel Python/builds — serializes I/O system-wide and freezes the UI even with RAM free. Keep heavy work bounded (canonical: `CLAUDE.md` § Resource discipline):
+Dev machines often run endpoint security (on-access file scanning): saturating all CPU cores — or fanning out parallel Python/builds — serializes I/O system-wide and freezes the UI even with RAM free. Keep heavy work bounded (canonical: `CLAUDE.md` § Resource discipline):
 
 - **Cap test parallelism:** never `pytest -n auto` or "all cores". Use at most `-n 4`. If pytest-xdist isn't configured, run serially.
 - **Cap multiprocessing:** never a pool sized to `os.cpu_count()`. Use <= 4 workers, e.g. `Pool(processes=min(4, (os.cpu_count() or 4)//2))`.

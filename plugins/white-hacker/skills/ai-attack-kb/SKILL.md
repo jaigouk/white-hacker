@@ -34,7 +34,7 @@ a class that grows splits to `reference/<class>-<n>.md`, still one level deep â€
 | **rag-poisoning** | [`reference/rag-poisoning.md`](reference/rag-poisoning.md) | Knowledge-base/vector poisoning, embedding inversion, cross-tenant retrieval leakage, memory poisoning. | `LLM08:2025`, `ASI06` |
 | **excessive-agency** | [`reference/excessive-agency.md`](reference/excessive-agency.md) | Over-broad tool scope/autonomy; missing human-in-the-loop on high-impact actions; least-agency violations. | `LLM06:2025`, `ASI03` |
 | **data-exfil** | [`reference/data-exfil.md`](reference/data-exfil.md) | The exfiltration leg of the trifecta; sensitive-info disclosure via outputs/tool results; MCP context over-sharing. | `LLM02:2025`, MITRE ATLAS exfiltration |
-| **supply-chain** | [`reference/supply-chain.md`](reference/supply-chain.md) | Slopsquatting (LLM-hallucinated package names) + AI-SDK typosquatting; cross-ecosystem (npm/PyPI/RubyGems/Go/crates/Maven). Detection lives in the deps-scan supply-chain floor. | `LLM03:2025` |
+| **supply-chain** | [`reference/supply-chain-1.md`](reference/supply-chain-1.md) | Slopsquatting (LLM-hallucinated package names) + AI-SDK typosquatting; cross-ecosystem (npm/PyPI/RubyGems/Go/crates/Maven). Detection lives in the deps-scan supply-chain floor. | `LLM03:2025` |
 
 `reference/ai-llm.md` does **not** live here â€” the inner-loop **checklist** is a stable
 `_shared/reference/ai-llm.md` (yearly cadence); this `ai-attack-kb/reference/` tier is the

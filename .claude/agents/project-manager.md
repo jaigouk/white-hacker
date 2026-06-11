@@ -111,7 +111,7 @@ Flip Status→`done` only when **every box is [x] or [ ] DEFERRED — <reason>**
 
 ## Resource discipline (CPU & I/O)
 
-This dev machine runs endpoint security (on-access file scanning): saturating all CPU cores — or fanning out parallel Python/builds — serializes I/O system-wide and freezes the UI even with RAM free. Keep heavy work bounded (canonical: `CLAUDE.md` § Resource discipline):
+Dev machines often run endpoint security (on-access file scanning): saturating all CPU cores — or fanning out parallel Python/builds — serializes I/O system-wide and freezes the UI even with RAM free. Keep heavy work bounded (canonical: `CLAUDE.md` § Resource discipline):
 
 - **Cap test parallelism:** never `pytest -n auto` or "all cores". Use at most `-n 4`. If pytest-xdist isn't configured, run serially.
 - **Cap multiprocessing:** never a pool sized to `os.cpu_count()`. Use <= 4 workers, e.g. `Pool(processes=min(4, (os.cpu_count() or 4)//2))`.

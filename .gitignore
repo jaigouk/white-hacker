@@ -22,9 +22,10 @@ PATCH-STATE.json
 .patch-state/
 *.sarif
 
-# PUBLIC REPO — QA evidence + run/investigation logs are LOCAL-ONLY (they leak machine paths,
-# installed-tool locations, and internal security posture). Keep producing under docs/qa/<date>/
-# for local reference; NEVER commit. (Claude memory: public-repo-no-personal-info)
+# PUBLIC REPO — QA + security-audit evidence + run/investigation logs are LOCAL-ONLY (they leak machine
+# paths, installed-tool locations, and internal security posture). Canonical home: .notes/{qa,security_audit}/
+# (already covered by the `.notes/` rule above). NEVER under the repo, NEVER commit. (memory: public-repo-no-personal-info)
+# docs/qa/ kept ignored defensively — DEPRECATED; contents moved to .notes/qa/.
 docs/qa/
 
 # Exception: the PoC run evidence under docs/research/ is DELIBERATE, sanitized fixture

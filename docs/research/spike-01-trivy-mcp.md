@@ -14,7 +14,7 @@ The answer decides whether tool integration is **MCP-based** or **CLI-via-Bash**
 ## What was checked (evidence)
 
 1. **Local binary (hands-on):** `trivy --version` → **Version 0.69.0**, vuln DB updated 2026-02-05.
-   Trivy is already installed on this machine (`/opt/homebrew/bin/trivy`).
+   Trivy is available as a local binary.
 2. **Official MCP plugin exists:** [`aquasecurity/trivy-mcp`](https://github.com/aquasecurity/trivy-mcp)
    — official Aqua Security plugin that starts an MCP server. Confirmed via the Aqua blog
    ["Security That Speaks Your Language: Trivy MCP Server"](https://www.aquasec.com/blog/security-that-speaks-your-language-trivy-mcp-server/)

@@ -62,7 +62,7 @@ _Add your build and test commands here_
 
 ### Resource discipline (CPU & I/O)
 
-This dev machine runs endpoint security (CrowdStrike) doing on-access file scanning. Saturating all CPU cores — or fanning out parallel Python/builds — serializes I/O **system-wide** and freezes the UI even with RAM free (RAM is not the bottleneck; more cores would not help — work expands to fill them). Every command-running agent in `.claude/agents/` carries these rules **inline** (subagents don't reliably inherit this file); keep this canonical copy in sync:
+A dev machine may run endpoint security with on-access file scanning (common in managed/enterprise environments). Saturating all CPU cores — or fanning out parallel Python/builds — serializes I/O **system-wide** and freezes the UI even with RAM free (RAM is not the bottleneck; more cores would not help — work expands to fill them). Every command-running agent in `.claude/agents/` carries these rules **inline** (subagents don't reliably inherit this file); keep this canonical copy in sync:
 
 - **Test parallelism:** never `pytest -n auto` / "all cores" — at most `-n 4`; run serially if pytest-xdist isn't configured.
 - **Multiprocessing:** never `os.cpu_count()`-sized pools — `<= 4` workers, e.g. `Pool(processes=min(4, (os.cpu_count() or 4)//2))`.
@@ -80,7 +80,11 @@ _Add a brief overview of your project architecture_
 
 **Public repo — no personal data, repo-relative paths only.** `jaigouk/white-hacker` is a PUBLIC
 repo; nothing from outside it may be committed — no absolute home paths (`/Users/…`, `/home/…`, `~`),
-no username, no installed-tool locations, no machine-environment / self-audit logs. Use repo-relative
+no username, no installed-tool locations, no machine-environment / self-audit logs, **no machine-specific
+details in agent profiles (`.claude/agents/*.md`) or `bd` memories** (which export to the committed
+`.beads/issues.jsonl` — keep machine-specific notes in `.notes/`, gitignored). Use repo-relative
 paths everywhere, **agent findings/reports included** — `plugins/white-hacker/skills/_shared/reference/finding-schema.json`
-deterministically rejects an absolute `file`. `docs/qa/` and `.notes/` are gitignored (local-only).
-Canonical statement: `.claude/CLAUDE.md` § Security posture.
+deterministically rejects an absolute `file`. **QA + security-audit evidence is local-only in
+`.notes/{qa,security_audit}/`** (gitignored — never under `docs/`, never committed). **Dogfood:** review
+our own ticket changes with the SHIPPED white-hacker (`plugins/white-hacker/`), improving it by use.
+Canonical statement: `.claude/CLAUDE.md` § Security posture / QA flow.
