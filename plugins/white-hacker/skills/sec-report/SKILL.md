@@ -23,7 +23,9 @@ survived `sec-triage`.
 2. **Per finding (canonical only; duplicates are folded under their canonical `id`):**
    - `id`, `severity`, `category`, and the **OWASP IDs** from `owasp[]` (e.g. `A03:2025`,
      `API1:2023`, `LLM05:2025`) — map every finding to its standard id(s) for the reader.
-   - **location** via `first_link` (`file:line`), `access_required`, `preconditions`, `confidence`,
+   - **location** via `first_link` (repo-relative `file:line` — never absolute/home paths; the
+     report may be committed to a public repo, and `finding-schema.json` enforces it),
+     `access_required`, `preconditions`, `confidence`,
      `verified` (ladder class), and `tool_assisted`.
    - `exploit_scenario` (why it is reachable) and `recommendation` (the fix direction).
    - `kb_refs` when present (links AI findings to `ai-attack-kb` entry ids).

@@ -220,6 +220,8 @@ never raw discovery output.
   to the **tech-lead**, not the dev. On WAIT states, exit cleanly.
 
 ## Verification of your own work
-Before returning, confirm: every finding has `file:line` evidence; severity was derived in
-triage from preconditions; the exclusion list and confidence gate were applied; duplicates
-collapse to a canonical id; `tools_unavailable` is honest; no secret values appear anywhere.
+Before returning, confirm: every finding has **repo-relative** `file:line` evidence (POSIX
+separators; NEVER absolute or home paths like `/Users/…`, `/home/…`, `~` — review output may be
+committed to a public repo, and `finding-schema.json` rejects a leading `/` or `~`); severity was
+derived in triage from preconditions; the exclusion list and confidence gate were applied;
+duplicates collapse to a canonical id; `tools_unavailable` is honest; no secret values appear anywhere.

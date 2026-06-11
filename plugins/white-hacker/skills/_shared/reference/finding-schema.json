@@ -48,7 +48,10 @@
           "description": "null for a canonical finding; the canonical id (F-NNN) when this is a duplicate.",
           "type": ["string", "null"], "pattern": "^F-[0-9]{3,}$"
         },
-        "file": { "type": "string", "minLength": 1 },
+        "file": {
+          "description": "Repo-relative path with POSIX separators (e.g. 'src/auth/login.ts'). MUST NOT be an absolute or home-directory path (no leading '/' or '~') — review output may be committed to a public repo, where absolute paths leak the host's machine layout.",
+          "type": "string", "minLength": 1, "pattern": "^[^/~]"
+        },
         "line": { "type": "integer", "minimum": 0 },
         "severity": { "enum": ["HIGH", "MEDIUM", "LOW"] },
         "category": { "type": "string", "minLength": 1 },

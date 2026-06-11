@@ -70,6 +70,23 @@ def test_missing_required_field_rejected():
     assert vf.validate(d)
 
 
+def test_absolute_file_path_rejected():
+    # Public-repo guard: an absolute/home path in `file` leaks the host machine layout
+    # (root cause of the path leak we scrubbed). The schema must REJECT these.
+    for bad in ("/Users/alice/repo/src/x.py", "/home/bob/main.go", "~/x.ts", "/etc/passwd"):
+        d = copy.deepcopy(VALID)
+        d["findings"][0]["file"] = bad
+        assert vf.validate(d), f"absolute path {bad!r} must be rejected"
+
+
+def test_repo_relative_file_path_accepted():
+    # The counter-direction (Policy 9): legitimate repo-relative paths still pass.
+    for ok in ("src/x.py", "go-vuln/main.go", "a.ts", "deep/nested/dir/File.java"):
+        d = copy.deepcopy(VALID)
+        d["findings"][0]["file"] = ok
+        assert vf.validate(d) == [], f"relative path {ok!r} must be accepted"
+
+
 def test_confidence_out_of_range_rejected():
     for bad in (1.5, -0.1):
         d = copy.deepcopy(VALID)

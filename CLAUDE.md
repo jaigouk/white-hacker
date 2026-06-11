@@ -78,4 +78,9 @@ _Add a brief overview of your project architecture_
 
 ## Conventions & Patterns
 
-_Add your project-specific conventions here_
+**Public repo — no personal data, repo-relative paths only.** `jaigouk/white-hacker` is a PUBLIC
+repo; nothing from outside it may be committed — no absolute home paths (`/Users/…`, `/home/…`, `~`),
+no username, no installed-tool locations, no machine-environment / self-audit logs. Use repo-relative
+paths everywhere, **agent findings/reports included** — `plugins/white-hacker/skills/_shared/reference/finding-schema.json`
+deterministically rejects an absolute `file`. `docs/qa/` and `.notes/` are gitignored (local-only).
+Canonical statement: `.claude/CLAUDE.md` § Security posture.

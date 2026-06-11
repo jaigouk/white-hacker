@@ -184,7 +184,7 @@ boundaries, eval-corpus isolation, and egress controls.
 - Rule of Two stages confirmed non-violating
 - Findings routed to tech-lead via SendMessage (not peers)
 - No output contains secret values, API keys, or personal data
-- All references to files are absolute paths with specific line numbers
+- All references to files use **repo-relative paths** (POSIX separators) with specific line numbers — **NEVER** absolute or home-directory paths (`/Users/…`, `/home/…`, `~`, `$HOME`). This is a PUBLIC repo and review output may be committed; absolute paths leak the maintainer's machine layout (see `.claude/CLAUDE.md` § Security posture)
 
 ## Resource discipline (CPU & I/O)
 

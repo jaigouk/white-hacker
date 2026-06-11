@@ -30,7 +30,7 @@ VERDICT: ACCEPT | REJECT
 CONFIDENCE: 0.0–1.0
 REFUTE_REASON: <why it might be a false positive, or "none found">
 EXCLUSION_RULE: <rule id if matched, else none>
-FIRST_LINK: <path:line of the attacker-controlled source>
+FIRST_LINK: <repo-relative path:line of the attacker-controlled source — never absolute/home paths>
 RATIONALE: <source→sink reachability argument>
 ```
 
