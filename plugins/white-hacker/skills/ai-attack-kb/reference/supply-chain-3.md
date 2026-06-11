@@ -41,3 +41,40 @@ is deferred (wh-hxt.14, needs an appended ADR per ADR-019). Sibling: **AISEC-SUP
 (slopsquatting / AI-SDK typosquatting) — the name-trust failure preceding this version-trust failure.
 Open for triage: adjudicate the wiper at the payload level (read the actual sample, not a vendor
 summary) and reconcile the full package set into the watchlist once a union list exists.
+
+## Recovery / IR note — `host-level — outside static-review scope, advisory only`
+
+> This is **operator/IR guidance, not a static-source-review finding**. A static reviewer of the
+> tree CANNOT confirm any of the live-host conditions below (running daemon, scraped memory, live
+> C2) — see the static-source-vs-EDR scope boundary in `sec-threat-model/SKILL.md`. Surface this as
+> advisory only; route execution to the host owner / IR responder, never claim it as static coverage.
+> Ordering below is **DISPUTED** (single community source); we adopt **isolate-FIRST** as the
+> primary, no-egress-safe sequence and recommend NO third-party "safe-revocation" endpoint.[^revoke]
+
+1. **Isolate FIRST, then rotate (the disputed-ordering call).** The DISPUTED wiper (line 20) is
+   gated on a token-revoked (HTTP 4xx) response — so rotating/revoking the leaked token **while the
+   host is online** could be the very trigger. **Isolate the host from the network first**
+   (pull it off-net), confirm the trigger daemon is dead, and only **then** rotate, from a
+   **different, clean host**. This is the existing isolate-before-rotate stance, made operational.
+2. **Confirm the daemon is dead; do NOT power off.** Remove/disable the persistence services BEFORE
+   rotating: macOS `~/Library/LaunchAgents/*.plist` (`launchctl bootout`), Linux systemd **user**
+   units `gh-token-monitor.service` / `update-monitor.service` (`systemctl --user disable --now`).
+   **Do not power the host off** — preserve volatile memory (the OIDC-token / payload evidence lives
+   there; ADR-024's primary case was an OIDC token scraped from `/proc/<pid>/mem`). Snapshot memory
+   for IR before any reboot.
+3. **Immutable-config trap.** Persistence files may be set immutable so a naive delete fails
+   silently — clear the flag first: Linux `chattr -i <file>`, macOS `chflags nouchg <file>`. Treat a
+   "delete succeeded" with no follow-up verify as suspect.
+4. **Rotation scope (in this order, only after isolation).** GitHub PAT(s) → npm **publish** tokens
+   (plus a registry publish-log audit for rogue versions) → AWS Secrets Manager **across all
+   regions** (region-scoping is a common miss). Rotate from the clean host; assume every secret the
+   compromised process could read is burned.
+5. **Exfil-repo discovery.** Hunt for **attacker-created private repos** in the incident window
+   (the campaign stages exfil into fresh private repos): list repos created/pushed under the
+   compromised account during the exposure window and treat any unrecognised one as exfil.
+
+[^revoke]: Do **not** route rotation/revocation through any third-party "safe-revocation endpoint."
+    Such an endpoint is **C2-shaped** (it phones an external host with a live credential) and
+    violates our no-egress / CONTAIN posture (`docs/ARD.md` ADR-024 — the egress allowlist was the
+    only control that stopped the analogous Mini Shai-Hulud worm in flight). Revoke directly at the
+    provider console/API from a clean host instead.

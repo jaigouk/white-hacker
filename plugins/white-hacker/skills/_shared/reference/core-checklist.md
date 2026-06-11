@@ -93,6 +93,9 @@ Untrusted data rendered into a browser/markup context without context-correct es
 - Pin GitHub Actions to a **commit SHA**; pin container base images by **digest**.
 - Typosquatting / dependency-confusion; verify signatures/provenance (SLSA, Sigstore) where available.
 - The tool the agent *uses* must itself be pinned/verified (ADR-006).
+- **Static-vs-EDR boundary:** runtime/host indicators (file-write-hash telemetry, live C2 DNS,
+  `/proc/<pid>/mem` scraping) are OUT of static-source scope → route to a host/CI check, never claim
+  as static coverage (see `sec-threat-model/SKILL.md` "Scope boundary"; ADR-024 egress-allowlist).
 
 # 9. Error handling & exceptional conditions  — `error`  (A10:2025 Mishandling of Exceptional Conditions — new)
 - **Fail-open:** auth/validation that defaults to allow on exception/timeout.

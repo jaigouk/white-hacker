@@ -43,6 +43,20 @@ ARG NPM_TOKEN=...                    USER 10001
 - **No `${{ github.event.* }}` interpolated into `run:`** (script injection) — pass via `env:` and quote.
 - **Pin Actions to a full commit SHA**, not a tag (the official Trivy action was compromised twice in
   March 2026). Tools: `zizmor` / `actionlint`.
+- **Whole-context secret serialization (`toJSON(secrets)`) — exfil primitive (signal, not block):**
+  `${{ toJSON(secrets) }}` serializes *every* secret in scope into one blob; co-located with
+  `actions/upload-artifact` (the blob becomes a downloadable artifact) or an outbound `curl`/`wget`
+  POST it is the concrete exfiltration step. Reference individual secrets by name; never serialize the
+  whole `secrets` context. `signal-not-block` — `toJSON(secrets)` has rare legitimate uses (debug
+  dumps to a private store), so route to triage rather than fail the gate.
+- **Trusted-publishing / OIDC token-exchange theft — provenance present ≠ safe (signal):** a
+  release/publish job that combines `permissions: id-token: write` with an OIDC **token-exchange**
+  endpoint (`…/oidc/token/exchange`, e.g. `npm/v1/oidc/token/exchange`) and a publish step is the
+  shape of trusted-publishing credential theft — a riding payload mints a short-lived registry token
+  from the runner. OIDC/SLSA provenance being *present* does **not** mean the pipeline is safe (a worm
+  rides the legitimate pipeline; see `ai-attack-kb/reference/supply-chain-2.md`). Confirm the publish
+  target package against the primary advisory; named hijacked packages belong in the **watchlist**
+  (deps-scan S8 catches a resolved bad version), **not** as a hardcoded grep here.
 
 ## Supply chain / provenance
 - **SLSA** build provenance (aim L2+ attestations); **Sigstore** keyless signing (`cosign`) + verify on
@@ -52,7 +66,11 @@ ARG NPM_TOKEN=...                    USER 10001
 ## What to grep for
 `FROM .*:latest` / `USER root` / `ARG .*(TOKEN|SECRET|KEY)` · k8s `privileged: true` / `hostPath` /
 missing `runAsNonRoot` · Actions `pull_request_target` + `actions/checkout` of the PR head · `${{
-github.event` inside `run:` · `uses: .*@v[0-9]` (tag, not SHA) · base images without `@sha256:`.
+github.event` inside `run:` · `uses: .*@v[0-9]` (tag, not SHA) · base images without `@sha256:` ·
+`toJSON(secrets)` near `actions/upload-artifact` or an outbound `curl`/`wget` POST (whole-context
+secret exfil — **signal-not-block**) · `id-token: write` + `oidc/token/exchange` (e.g.
+`npm/v1/oidc/token/exchange`) + a publish step (trusted-publishing token theft — **signal**;
+provenance/OIDC present ≠ safe).
 
 ### Kernel/container trust-boundary markers (ADVISORY only — spike-10, ADR-018)
 `sec-detect` surfaces these as `kernel_adjacency` in `SCAN-PLAN.json`; they drive an **informational

@@ -1,0 +1,12 @@
+[project]
+name = "white-hacker-ide-hygiene"
+version = "0.1.0"
+description = "IDE/editor hygiene floor: enumerate installed editor extensions, pin/verify (publisher, name, version) against the watchlist `extension` block, and grep each extension's activation entry for env-cred probes + second-stage fetch-and-exec. Offline, stdlib-only, host-level findings keyed by the `ext:` identifier (never an absolute path); degrades clean when no editor is present."
+requires-python = ">=3.10"
+dependencies = ["jsonschema>=4.20"]
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

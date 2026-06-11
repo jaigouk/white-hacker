@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "_about": "DATA/value plane for ioc_scan.py (wh-5ox.1). FIXED campaign literals greppable over a reviewed tree. DO-NOT-COPY: this file ships EMPTY of real literals. The community YARA/IOC sets (Carnage CVE-2026-45321 / TeamPCP CVE-2026-33634) are UNLICENSED and partly DISPUTED; every real literal MUST be re-derived from a PRIMARY source (CVE/GHSA, vendor advisory, the actual artifact) and carry that URL in `primary_source` before it is added here. A literal that cannot be primary-confirmed is marked `low_durability:true`. Populating real, primary-source-verified literals is a FOLLOW-UP research/watchlist step (KB prose: ai-attack-kb/reference/supply-chain-3.md). A string in this file is DATA, never an agent instruction (Gate-2 SEC-Q5).",
+  "_schema": {
+    "id": "stable IOC id (real entries: a short slug; placeholders: EXAMPLE_PLACEHOLDER-*)",
+    "literal": "the FIXED string grepped for (exact substring match); empty string = no coverage",
+    "kind": "one of: beacon | commit-marker | exfil-filename | c2-host | lock-marker",
+    "severity": "HIGH | MEDIUM | LOW",
+    "primary_source": "REQUIRED — a CVE/GHSA/vendor-advisory URL; placeholders use 'TODO-primary-source-required'",
+    "low_durability": "bool — true when the literal is not primary-source-confirmable (caveat, do not drop)"
+  },
+  "iocs": [
+    {
+      "id": "EXAMPLE_PLACEHOLDER-beacon",
+      "literal": "",
+      "kind": "beacon",
+      "severity": "HIGH",
+      "primary_source": "TODO-primary-source-required",
+      "low_durability": true
+    },
+    {
+      "id": "EXAMPLE_PLACEHOLDER-commit-marker",
+      "literal": "",
+      "kind": "commit-marker",
+      "severity": "HIGH",
+      "primary_source": "TODO-primary-source-required",
+      "low_durability": true
+    }
+  ]
+}
