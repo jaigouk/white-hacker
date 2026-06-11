@@ -23,6 +23,7 @@ signals corroborate; a lone S1/S3 is informational only (never a finding). Each 
 from __future__ import annotations
 
 import json
+import os
 import re
 import unicodedata
 import xml.etree.ElementTree as ET
@@ -1159,6 +1160,13 @@ def _kernel_build_files(root: Path) -> list[Path]:
     return [p for p in files if not (p in seen or seen.add(p))]
 
 
+def _repo_rel(path: str, project_dir: str) -> str:
+    """Path relative to the scanned project root (POSIX separators). finding-schema.json
+    requires repo-relative `file` — an absolute/home path would leak the host's machine
+    layout into a committed report (same hardening as the schema's `^[^/~]` guard)."""
+    return os.path.relpath(path, project_dir).replace(os.sep, "/")
+
+
 def scan_kernel_module_sources(project_dir: str) -> list[dict]:
     """Flag UNPINNED out-of-tree kernel-module / DKMS source fetches (ADR-006).
 
@@ -1176,7 +1184,7 @@ def scan_kernel_module_sources(project_dir: str) -> list[dict]:
         unpinned = _unpinned_fetch_lines(text)
         if not unpinned:
             continue  # every source in this file is pinned → clean
-        findings.append(_make_kernel_finding(str(path), unpinned))
+        findings.append(_make_kernel_finding(_repo_rel(str(path), project_dir), unpinned))
     return findings
 
 
@@ -1256,7 +1264,7 @@ def scan(project_dir: str, scan_plan: dict | None = None,
     adapter, lang, manifest_name = detected
     norm = adapter(project_dir)  # type: ignore[operator]
     allowlist = load_allowlist() if allowlist is None else list(allowlist)
-    manifest_path = str(Path(project_dir) / manifest_name)
+    manifest_path = _repo_rel(str(Path(project_dir) / manifest_name), project_dir)
 
     # collect per-dep signal hits
     s1 = signal_s1(norm)
@@ -1314,7 +1322,7 @@ def scan(project_dir: str, scan_plan: dict | None = None,
     # 2) project-level dangerous-install-script finding (reported once, keyed to the
     # script path), independent of any dep — a HIGH script is a candidate on its own.
     for spath, pats in script_high_files.items():
-        findings.append(_make_script_finding(idx, spath, pats, manifest_path))
+        findings.append(_make_script_finding(idx, _repo_rel(spath, project_dir), pats, manifest_path))
         idx += 1
 
     # 3) wh-7rk: out-of-tree kernel-module / DKMS unpinned-source candidates (ADR-006),

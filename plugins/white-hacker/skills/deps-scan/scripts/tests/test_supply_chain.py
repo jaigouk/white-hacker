@@ -557,3 +557,32 @@ def test_kernel_module_finding_does_not_break_existing_npm_path(tmp_path):
     # ids are unique across the merged finding set
     assert vf.duplicate_ids(doc) == []
     assert vf.validate(doc) == []
+
+
+# --------------------------------------------------------------------------- #
+# repo-relative paths — public-repo invariant (finding-schema `^[^/~]`)
+# --------------------------------------------------------------------------- #
+def test_findings_emit_repo_relative_paths_not_absolute(tmp_path):
+    # Scanning an ABSOLUTE project_dir must NOT leak that path into file / first_link /
+    # prose — finding-schema rejects a leading '/' or '~'. Rule 9: pin BOTH directions
+    # (relative kept == expected AND the absolute root != emitted anywhere).
+    proj = _write(
+        tmp_path / "proj",
+        {"name": "app", "dependencies": {"expresss": "1.0.0"},  # S4/S5 typosquat of express
+         "scripts": {"postinstall": "node scripts/postinstall.js"}},
+        scripts_files={"scripts/postinstall.js": _INERT_DANGEROUS_POSTINSTALL},
+    )
+    doc = sc.scan(str(proj))
+    findings = _emitted(doc)
+    assert findings, "expected >=1 finding (typosquat + dangerous postinstall)"
+    abs_root = str(proj)
+    for f in findings:
+        assert not f["file"].startswith(("/", "~")), f"absolute file leaked: {f['file']}"
+        assert abs_root not in f["file"], f"absolute project_dir leaked: {f['file']}"
+        assert abs_root not in f.get("first_link", ""), "absolute path leaked in first_link"
+        assert abs_root not in f.get("exploit_scenario", ""), "absolute path leaked in prose"
+    # the manifest-keyed finding is the bare repo-relative name, not an absolute path
+    assert any(f["file"] == "package.json" for f in findings)
+    # the script-keyed finding keeps its repo-relative subpath
+    assert any(f["file"] == "scripts/postinstall.js" for f in findings)
+    assert vf.validate(doc) == []
