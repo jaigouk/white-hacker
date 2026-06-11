@@ -15,6 +15,7 @@ Design invariants (ADR-003, ADR-015):
 """
 from __future__ import annotations
 
+import os
 import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -89,6 +90,39 @@ AI_FRAMEWORK_SIGNALS: dict[str, tuple[set[str], tuple[str, ...]]] = {
             ("modelcontextprotocol", "@modelcontextprotocol/sdk", "fastmcp",
              '"mcp"', "mcp==", "mcp>=", "mcp~=", "mcp[")),
 }
+
+# --- AI-agent-infra advisory constants (wh-7u7) ---------------------------
+# Directories pruned from the bounded tree walk (resource discipline: a dev
+# machine may run on-access EDR; every touched file is scanned — see CLAUDE.md).
+_PRUNE_DIRS: frozenset[str] = frozenset({
+    ".venv", "node_modules", ".git", "__pycache__",
+    "dist", "build", ".pytest_cache", ".mypy_cache",
+})
+
+# Manifest file names that may carry nested AI-SDK declarations.
+# (Derived from AI_FRAMEWORK_SIGNALS keys — keep in sync.)
+_AI_NESTED_MANIFEST_NAMES: frozenset[str] = frozenset(
+    fname
+    for files, _tokens in AI_FRAMEWORK_SIGNALS.values()
+    for fname in files
+)
+
+# All token strings extracted from AI_FRAMEWORK_SIGNALS (lowercased at match time).
+_AI_NESTED_TOKENS: tuple[str, ...] = tuple(
+    tok
+    for _files, tokens in AI_FRAMEWORK_SIGNALS.values()
+    for tok in tokens
+)
+
+# Depth cap for the bounded walk (relative to root).  Keeps the walk from
+# descending into deeply-nested build artefacts not covered by _PRUNE_DIRS.
+_AI_INFRA_MAX_DEPTH: int = 5
+
+# Maximum bytes read from a nested manifest when scanning for AI-SDK tokens.
+# AI-SDK tokens appear near the top of requirements.txt / pyproject.toml /
+# package.json, so 64 KiB is more than sufficient.  Capping the read protects
+# against DoS via multi-GB committed manifests (CWE-400, F-1, wh-7u7 Phase-5).
+_AI_MANIFEST_READ_CAP: int = 65536  # 64 KiB
 
 # Backend/web frameworks → the API appendix (OWASP API Top 10) is applicable.
 WEB_FRAMEWORKS: frozenset[str] = frozenset(
@@ -181,6 +215,11 @@ class ScanPlan:
     # ADVISORY trust-boundary markers (spike-10 T-A, ADR-018): informational
     # metadata that drives an agent advisory note — NOT a finding, no CVSS.
     kernel_adjacency: list[str] = field(default_factory=list)
+    # ADVISORY AI-agent-infra markers (wh-7u7): informational metadata for repos
+    # that carry AI-agent infrastructure (agent configs, nested AI-SDK manifests,
+    # MCP config, skill files) but whose ROOT manifests have no AI-SDK dep — so
+    # manifest-driven ai_pass stays False.  NOT a finding, no CVSS.
+    ai_agent_infra: list[str] = field(default_factory=list)
 
     @property
     def degraded(self) -> bool:
@@ -201,6 +240,12 @@ class ScanPlan:
             "fallback": "read-grep-glob heuristic pass (confidence capped)",
             # Always emitted; empty list when no kernel-adjacent markers found.
             "kernel_adjacency": self.kernel_adjacency,
+            # Always emitted; empty list when no AI-agent-infra markers found.
+            "ai_agent_infra": self.ai_agent_infra,
+            # Derived advisory: True only when ai_pass is False but AI-agent infra
+            # IS present (e.g. .claude/ dir, nested AI-SDK manifest, skill files).
+            # When ai_pass is already True the AI pass already runs — no advisory.
+            "ai_pass_advisory": (not self.ai_pass) and bool(self.ai_agent_infra),
         }
 
 
@@ -283,6 +328,88 @@ def detect_kernel_adjacency(root: Path) -> list[str]:
                 continue
             if any(tok in text for tok in _PRIVILEGED_CONTAINER_TOKENS):
                 markers.add("privileged-container")
+
+    return sorted(markers)
+
+
+def detect_ai_agent_infra(root: Path) -> list[str]:
+    """Sorted marker classes for AI-agent-infrastructure signals.
+
+    ADVISORY only (wh-7u7): deterministic file-presence + bounded, pruned tree
+    walk.  Returns a sorted subset of:
+      ``{".claude", "agents", "mcp.json", "skill", "nested-ai-manifest"}``
+
+    This is informational SCAN-PLAN metadata that drives ``ai_pass_advisory``
+    in ``to_dict()`` — NOT a finding (no CVSS, never a VULN-FINDINGS.json entry).
+    ``ai_pass`` itself (manifest-driven, root-only) is **unchanged**.
+
+    Markers:
+    - ``.claude``: a ``.claude/`` directory at repo root (agent-config repo).
+    - ``agents``: an ``agents/`` directory at repo root.
+    - ``mcp.json``: an ``mcp.json`` file at repo root.
+    - ``skill``: any ``*.skill`` file found in the bounded tree walk.
+    - ``nested-ai-manifest``: a NESTED (non-root) ``pyproject.toml``,
+      ``requirements.txt``, ``Pipfile``, or ``package.json`` whose lowercased text
+      contains at least one AI-SDK token from ``AI_FRAMEWORK_SIGNALS``.  Root
+      manifests are already handled by ``ai_pass``; this class is specifically for
+      sub-directory manifests (e.g. a monorepo service or a plugin).
+
+    Resource discipline: the walk uses ``os.walk`` with in-place pruning of
+    ``_PRUNE_DIRS`` (never descends into ``.venv``, ``node_modules``, etc.) and a
+    depth cap of ``_AI_INFRA_MAX_DEPTH`` relative to root.  An AI SDK installed
+    inside ``.venv/`` is therefore never detected — only repo-committed manifests
+    count.
+    """
+    markers: set[str] = set()
+
+    # --- simple root-level presence checks (no walk needed) ---
+    if (root / ".claude").is_dir():
+        markers.add(".claude")
+    if (root / "agents").is_dir():
+        markers.add("agents")
+    if (root / "mcp.json").is_file():
+        markers.add("mcp.json")
+
+    # --- bounded, pruned tree walk for skill files + nested AI manifests ---
+    for dirpath_str, dirnames, filenames in os.walk(root):
+        dirpath = Path(dirpath_str)
+        # Depth relative to root (root itself is depth 0).
+        try:
+            rel_parts = dirpath.relative_to(root).parts
+        except ValueError:
+            continue
+        current_depth = len(rel_parts)
+
+        # Prune unwanted directories in-place; cap recursion depth.
+        if current_depth >= _AI_INFRA_MAX_DEPTH:
+            dirnames[:] = []
+        else:
+            dirnames[:] = [d for d in dirnames if d not in _PRUNE_DIRS]
+
+        is_root_level = current_depth == 0
+
+        for filename in filenames:
+            # skill-file detection (any depth, pruned).
+            if filename.endswith(".skill"):
+                markers.add("skill")
+
+            # Nested AI-manifest detection: skip root level (handled by ai_pass).
+            if is_root_level:
+                continue
+            if filename in _AI_NESTED_MANIFEST_NAMES:
+                filepath = dirpath / filename
+                # F-1 / CWE-400 guard: is_file() returns False for FIFOs,
+                # character devices, broken symlinks, and directories — all
+                # of which would block or misbehave on open()/read().
+                if not filepath.is_file():
+                    continue
+                try:
+                    with filepath.open(encoding="utf-8", errors="ignore") as fh:
+                        text = fh.read(_AI_MANIFEST_READ_CAP).lower()
+                except (OSError, ValueError):
+                    continue
+                if any(tok.lower() in text for tok in _AI_NESTED_TOKENS):
+                    markers.add("nested-ai-manifest")
 
     return sorted(markers)
 
@@ -386,6 +513,7 @@ def build_scan_plan(root: Path, which=shutil.which) -> ScanPlan:
         degraded_categories=degraded,
         reference_appendices=reference_appendices(languages, frameworks, infra, ai_pass),
         kernel_adjacency=detect_kernel_adjacency(root),
+        ai_agent_infra=detect_ai_agent_infra(root),
     )
 
 

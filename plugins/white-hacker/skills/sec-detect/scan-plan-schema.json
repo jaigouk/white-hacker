@@ -72,6 +72,16 @@
       "description": "ADVISORY trust-boundary markers (kernel-adjacent / privileged-container code present). Informational only — drives an agent advisory note, NOT a finding (no CVSS, never a VULN-FINDINGS.json entry). Optional, so legacy SCAN-PLAN artifacts without it still validate.",
       "items": {"type": "string"},
       "uniqueItems": true
+    },
+    "ai_agent_infra": {
+      "type": "array",
+      "description": "ADVISORY AI-agent-infra markers (wh-7u7). Sorted subset of {\".claude\",\"agents\",\"mcp.json\",\"skill\",\"nested-ai-manifest\"}. Informational only — drives ai_pass_advisory, NOT a finding (no CVSS). Optional, so legacy SCAN-PLAN artifacts without it still validate.",
+      "items": {"type": "string"},
+      "uniqueItems": true
+    },
+    "ai_pass_advisory": {
+      "type": "boolean",
+      "description": "Derived advisory (wh-7u7): True only when ai_pass is False but ai_agent_infra is non-empty — signals that an AI-agent-infra repo was detected but root manifests had no AI-SDK dep. When ai_pass is True the AI pass already runs — no advisory needed. Optional, so legacy SCAN-PLAN artifacts without it still validate."
     }
   }
 }

@@ -87,6 +87,23 @@ drift.
 `sec-threat-model → **sec-detect** → sec-vuln-scan (recall) → sec-triage (precision) → sec-report`.
 See `docs/ARCHITECTURE.md` and the white-hacker agent definition.
 
+### 6. AI-agent-infra advisory (wh-7u7)
+`scripts/detect_tools.py::detect_ai_agent_infra` does a **bounded, pruned tree walk** (depth cap 5;
+prunes `.venv`, `node_modules`, `.git`, `__pycache__`, `dist`, `build`) and emits sorted marker classes:
+
+| Marker | Signal |
+|--------|--------|
+| `.claude` | `.claude/` directory at root |
+| `agents` | `agents/` directory at root |
+| `mcp.json` | `mcp.json` file at root |
+| `skill` | any `*.skill` file in the bounded walk |
+| `nested-ai-manifest` | non-root `pyproject.toml`/`requirements.txt`/`Pipfile`/`package.json` containing an AI-SDK token |
+
+These populate `ai_agent_infra` on `ScanPlan` and `to_dict()`.  A derived `ai_pass_advisory` boolean
+is emitted in `to_dict()` only: `(not ai_pass) and bool(ai_agent_infra)`.  **`ai_pass` itself is
+unchanged** (manifest-driven, root-only).  Neither field is a finding — ADVISORY altitude only,
+no CVSS.
+
 ## Verification criteria (definition of done for this skill)
 - [x] `description` ≤ 1,536 chars (ADR-005).
 - [x] Ported PoC tests pass (≥12) + framework/`ai_pass`/appendix tests — `uv run --with jsonschema --with pytest pytest .claude/skills/sec-detect/scripts/`.

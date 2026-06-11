@@ -420,3 +420,212 @@ def test_scan_plan_kernel_adjacency_default_empty(tmp_path: Path):
     d = plan.to_dict()
     assert d["kernel_adjacency"] == []
     assert isinstance(d["kernel_adjacency"], list)
+
+
+# === wh-7u7: AI-agent-infra advisory ======================================
+# ADVISORY altitude: deterministic file-presence + bounded depth-capped tree walk.
+# Returns a sorted subset of {".claude","agents","mcp.json","skill","nested-ai-manifest"}.
+# NOT a finding (no CVSS). Drives ai_pass_advisory (derived in to_dict() only).
+# Rule 9: each invariant pins == expected AND != the wrong value.
+
+# --- detect_ai_agent_infra unit tests ---
+
+def test_detect_ai_agent_infra_dot_claude_dir(tmp_path: Path):
+    (tmp_path / ".claude").mkdir()
+    result = dt.detect_ai_agent_infra(tmp_path)
+    assert ".claude" in result                   # == expected
+    assert "nested-ai-manifest" not in result    # != the wrong class
+
+
+def test_detect_ai_agent_infra_agents_dir(tmp_path: Path):
+    (tmp_path / "agents").mkdir()
+    result = dt.detect_ai_agent_infra(tmp_path)
+    assert "agents" in result                    # == expected
+    assert ".claude" not in result               # != the wrong class
+
+
+def test_detect_ai_agent_infra_mcp_json_file(tmp_path: Path):
+    (tmp_path / "mcp.json").write_text('{"mcpServers": {}}')
+    result = dt.detect_ai_agent_infra(tmp_path)
+    assert "mcp.json" in result                  # == expected
+    assert "nested-ai-manifest" not in result    # != the wrong class
+
+
+def test_detect_ai_agent_infra_skill_file_in_subdir(tmp_path: Path):
+    subdir = tmp_path / "plugins" / "some-skill"
+    subdir.mkdir(parents=True)
+    (subdir / "my.skill").write_text("skill content")
+    result = dt.detect_ai_agent_infra(tmp_path)
+    assert "skill" in result                     # == expected
+    assert ".claude" not in result               # != the wrong class
+
+
+def test_detect_ai_agent_infra_nested_ai_manifest(tmp_path: Path):
+    # AI-SDK manifest in a SUBDIR (not root) must be detected.
+    subdir = tmp_path / "services" / "ml-api"
+    subdir.mkdir(parents=True)
+    (subdir / "requirements.txt").write_text("langchain==0.3.0\nhttpx\n")
+    result = dt.detect_ai_agent_infra(tmp_path)
+    assert "nested-ai-manifest" in result        # == expected
+    assert ".claude" not in result               # != the wrong class
+
+
+def test_detect_ai_agent_infra_root_manifest_not_nested(tmp_path: Path):
+    # Root-level AI manifest is already handled by ai_pass — must NOT trigger
+    # nested-ai-manifest (that would be a false double-count).
+    (tmp_path / "requirements.txt").write_text("langchain==0.3.0\n")
+    result = dt.detect_ai_agent_infra(tmp_path)
+    assert "nested-ai-manifest" not in result    # root is NOT nested
+    assert result == []                          # nothing else either
+
+
+def test_detect_ai_agent_infra_non_ai_nested_repo(tmp_path: Path):
+    # Non-AI nested manifest must NOT trigger.
+    subdir = tmp_path / "services" / "web"
+    subdir.mkdir(parents=True)
+    (subdir / "requirements.txt").write_text("flask==3.0\ngunicorn\n")
+    result = dt.detect_ai_agent_infra(tmp_path)
+    assert result == []                          # no over-trigger
+    assert "nested-ai-manifest" not in result    # != wrong value
+
+
+def test_detect_ai_agent_infra_venv_exclusion(tmp_path: Path):
+    # AI-SDK manifest INSIDE .venv/ must NOT be detected (binding resource AC).
+    venv_lib = tmp_path / ".venv" / "lib" / "python3.12" / "site-packages"
+    venv_lib.mkdir(parents=True)
+    (venv_lib / "requirements.txt").write_text("langchain==0.3.0\n")
+    result = dt.detect_ai_agent_infra(tmp_path)
+    assert "nested-ai-manifest" not in result    # pruned, not detected
+    assert result == []                          # no false positive
+
+
+def test_detect_ai_agent_infra_returns_sorted(tmp_path: Path):
+    (tmp_path / ".claude").mkdir()
+    (tmp_path / "agents").mkdir()
+    (tmp_path / "mcp.json").write_text("{}")
+    result = dt.detect_ai_agent_infra(tmp_path)
+    assert result == sorted(result)              # always sorted
+    assert len(result) == 3                      # all three markers present
+
+
+def test_detect_ai_agent_infra_empty_repo(tmp_path: Path):
+    assert dt.detect_ai_agent_infra(tmp_path) == []
+
+
+# --- advisory integration: build_scan_plan + to_dict ----------------------
+
+def test_advisory_false_when_ai_pass_true(tmp_path: Path):
+    # Root AI-SDK dep → ai_pass True → no advisory needed.
+    (tmp_path / "requirements.txt").write_text("langchain==0.3.0\n")
+    plan = dt.build_scan_plan(tmp_path, _which_only())
+    assert plan.ai_pass is True                              # == expected (unchanged)
+    assert plan.to_dict()["ai_pass_advisory"] is False       # != True (no advisory)
+
+
+def test_advisory_true_for_nested_ai_repo(tmp_path: Path):
+    # AI-SDK manifest only in a SUBDIR (root has none) — THE FIX for F-008.
+    subdir = tmp_path / "services" / "ml-api"
+    subdir.mkdir(parents=True)
+    (subdir / "requirements.txt").write_text("langchain==0.3.0\n")
+    plan = dt.build_scan_plan(tmp_path, _which_only())
+    assert plan.ai_pass is False                                   # unchanged
+    assert "nested-ai-manifest" in plan.ai_agent_infra             # == expected
+    assert plan.to_dict()["ai_pass_advisory"] is True              # THE FIX
+
+
+def test_advisory_true_for_dot_claude_repo(tmp_path: Path):
+    # .claude/ agent-config dir present, no AI-SDK manifest anywhere.
+    (tmp_path / ".claude").mkdir()
+    plan = dt.build_scan_plan(tmp_path, _which_only())
+    assert plan.ai_pass is False                                   # unchanged
+    assert ".claude" in plan.ai_agent_infra                        # == expected
+    assert plan.to_dict()["ai_pass_advisory"] is True              # advisory fires
+
+
+def test_advisory_false_for_plain_repo(tmp_path: Path):
+    # Non-AI nested dep, no .claude/agents/mcp.json → no over-trigger.
+    subdir = tmp_path / "services" / "web"
+    subdir.mkdir(parents=True)
+    (subdir / "requirements.txt").write_text("flask==3.0\n")
+    plan = dt.build_scan_plan(tmp_path, _which_only())
+    assert plan.ai_agent_infra == []                               # no markers
+    assert plan.to_dict()["ai_pass_advisory"] is False             # no over-trigger
+
+
+def test_advisory_venv_exclusion_binding(tmp_path: Path):
+    # Binding resource AC: AI inside .venv/ must NOT trigger the advisory.
+    venv_lib = tmp_path / ".venv" / "lib" / "python3.12" / "site-packages"
+    venv_lib.mkdir(parents=True)
+    (venv_lib / "requirements.txt").write_text("langchain==0.3.0\n")
+    plan = dt.build_scan_plan(tmp_path, _which_only())
+    assert "nested-ai-manifest" not in plan.ai_agent_infra         # pruned
+    assert plan.to_dict()["ai_pass_advisory"] is False             # no false positive
+
+
+def test_to_dict_always_has_ai_agent_infra_and_advisory_keys(tmp_path: Path):
+    # Both keys always present regardless of detected infra (like kernel_adjacency).
+    (tmp_path / "go.mod").write_text("module x\n")
+    d = dt.build_scan_plan(tmp_path, _which_only()).to_dict()
+    assert "ai_agent_infra" in d                                   # always present
+    assert "ai_pass_advisory" in d                                  # always present
+    assert isinstance(d["ai_agent_infra"], list)                   # correct type
+    assert isinstance(d["ai_pass_advisory"], bool)                 # correct type
+    assert d["ai_agent_infra"] != "MISSING"                        # != wrong value
+
+
+# --- F-1 fix: is_file() guard + bounded 64 KiB read (wh-7u7 Phase-5) ------
+# CWE-400 / DoS: untrusted repos can commit symlinks-to-devices or multi-GB
+# manifests; the read must be capped and special files must be skipped.
+
+def test_detect_ai_agent_infra_token_within_read_cap_detected(tmp_path: Path):
+    # Normal manifest with AI token near the top — still detected after the fix.
+    subdir = tmp_path / "svc"
+    subdir.mkdir()
+    (subdir / "requirements.txt").write_text("langchain==0.3.0\nhttpx\n")
+    result = dt.detect_ai_agent_infra(tmp_path)
+    assert "nested-ai-manifest" in result    # == expected (token in cap window)
+    assert ".claude" not in result           # != wrong class
+
+
+def test_detect_ai_agent_infra_token_beyond_read_cap_not_detected(tmp_path: Path):
+    # AI token placed ONLY beyond the 64 KiB read cap must NOT be detected.
+    # RED before fix (unbounded read finds it); GREEN after fix (capped read skips it).
+    subdir = tmp_path / "svc"
+    subdir.mkdir()
+    padding = "# " + "x" * 65535 + "\n"  # pushes token past 64 KiB offset
+    (subdir / "requirements.txt").write_text(padding + "langchain==0.3.0\n")
+    result = dt.detect_ai_agent_infra(tmp_path)
+    assert "nested-ai-manifest" not in result  # beyond cap → NOT detected
+    assert result == []                        # no false positive
+
+
+def test_detect_ai_agent_infra_special_file_skipped(tmp_path: Path):
+    # A FIFO masquerading as requirements.txt must be skipped — NOT read (hangs).
+    # is_file() returns False for FIFOs, broken symlinks, and character devices.
+    import os as _os
+    import pytest as _pytest
+    if not hasattr(_os, "mkfifo"):
+        _pytest.skip("os.mkfifo not available on this platform")
+    subdir = tmp_path / "svc"
+    subdir.mkdir()
+    fifo_path = subdir / "requirements.txt"
+    _os.mkfifo(str(fifo_path))
+    # If the is_file() guard is missing this call hangs; with the fix it returns.
+    result = dt.detect_ai_agent_infra(tmp_path)
+    assert "nested-ai-manifest" not in result  # == expected (FIFO skipped)
+    assert result == []                        # != any marker accidentally set
+
+
+# --- DEFECT-1: advisory suppression when ai_pass=True and infra present ----
+# Mutation guard: `(not ai_pass) and bool(infra)` → `bool(infra)` would make
+# advisory True even when the AI pass is already running — this test catches it.
+
+def test_advisory_suppressed_when_ai_pass_true_and_infra_present(tmp_path: Path):
+    # Root AI-SDK dep flips ai_pass=True; .claude/ also detected.
+    # Advisory must be False — the AI pass already runs, no advisory needed.
+    (tmp_path / "requirements.txt").write_text("langchain==0.3.0\n")
+    (tmp_path / ".claude").mkdir()
+    plan = dt.build_scan_plan(tmp_path, _which_only())
+    assert plan.ai_pass is True                              # == expected
+    assert ".claude" in plan.ai_agent_infra                 # infra also detected
+    assert plan.to_dict()["ai_pass_advisory"] is False      # suppressed (mutation guard)
