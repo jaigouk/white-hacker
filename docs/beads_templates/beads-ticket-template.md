@@ -24,22 +24,22 @@ Describe the user/system problem and the outcome needed.
 
 ## Workflow (Red / Green / Refactor)
 
+Per-package, stdlib-first (the Read/Grep/Glob floor — ADR-015). Replace `<skill>` with the
+package you touch (e.g. `sec-detect`, `deps-scan`, `hooks`). Always `uv run`, never bare `pytest`.
+
 1. **RED** - Write failing tests first
 
-   - Add/update tests that define expected behavior
-   - Run `uv run pytest tests/ -v` - tests should FAIL
-   - Commit: `test: Add failing tests for <feature>`
+   - Add/update tests that define expected behavior (pin BOTH `== expected` AND `!= wrong` — Policy 9)
+   - Run `nice -n 10 uv run --project plugins/white-hacker/skills/<skill>/scripts --with pytest pytest plugins/white-hacker/skills/<skill>/scripts/tests -q` - tests should FAIL
 
 2. **GREEN** - Make tests pass with minimal code
 
-   - Implement minimum changes to satisfy expectations
-   - Run `uv run pytest tests/ -v` - tests should PASS
-   - Commit: `feat: Implement <feature>`
+   - Implement the minimum change to satisfy expectations (Policy 2 — nothing speculative)
+   - Re-run the package test command above - tests should PASS
 
 3. **REFACTOR** - Improve code quality
-   - Clean up code, improve naming, reduce duplication
+   - Clean up code, improve naming, reduce duplication (surgical — Policy 3, never bundle an unrelated refactor)
    - Ensure all quality gates pass (see below)
-   - Commit: `refactor: Clean up <feature>`
 
 ## Steps (with description)
 
@@ -55,24 +55,31 @@ Describe the user/system problem and the outcome needed.
 
 ## Quality Gates (must pass before `bd close`)
 
-Only close the task when all gates pass **and** QA is complete (see QA Before Push).
-
-> **Note:** Requires dev dependencies: `uv sync --extra dev`
+The white-hacker gates are **pytest + manifest + plugin validate — NOT ruff / mypy / coverage**
+(`.claude/CLAUDE.md` Policy 12; `.claude/commands/launch-team.md` § Quality Gates). Only close the
+task when every gate is green **and** QA is complete (see QA Before Push). Resource discipline
+(`CLAUDE.md`): prefix heavy runs with `nice -n 10`, cap parallelism at `-n 4`, never "all cores".
 
 ```bash
-# 1. Linting
-uv run ruff check src/ tests/
+# 1. Per touched package (repeat for each skill/package you changed)
+nice -n 10 uv run --project plugins/white-hacker/skills/<skill>/scripts --with pytest \
+  pytest plugins/white-hacker/skills/<skill>/scripts/tests -q
 
-# 2. Type checking
-PYTHONPATH=src uv run mypy src/
+# 2. Plugin / marketplace layout
+uv run python packaging/validate_manifest.py .
 
-# 3. All tests with coverage (must be >= 80%)
-uv run pytest tests/ -v --cov=src --cov-fail-under=80
+# 3. Official plugin validation
+claude plugin validate ./plugins/white-hacker
+
+# 4. Outer-loop changes ONLY (KB / registry / eval corpus): score then gate, never auto-merge
+#    uv run python evals/score.py --findings <FINDINGS.json> --corpus evals/corpus/cases
+#    uv run python evals/keep_or_revert.py --baseline evals/baseline.json --candidate <CANDIDATE.json>
 ```
 
-- [ ] Lint passes
-- [ ] Type check passes
-- [ ] All tests pass with >= 80% coverage
+- [ ] Each touched package's tests pass (`uv run`, bounded `-n 4` / `nice`)
+- [ ] `validate_manifest.py` green
+- [ ] `claude plugin validate` green
+- [ ] Outer-loop edits scored + gated (N/A for inner-loop code) — Policy 12: a non-zero gate keeps the task `in_progress`
 
 ## QA Before Push
 
