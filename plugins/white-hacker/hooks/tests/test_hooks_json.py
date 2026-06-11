@@ -69,6 +69,35 @@ def test_registers_gate_kb_edit_guardrail():
     assert "gate_kb_edit.sh" in referenced, f"gate_kb_edit not registered; got: {referenced}"
 
 
+def test_registers_gate_data_edit_guardrail():
+    """The Gate-2 DATA write-lane gate (wh-hxt.6; ADR-026 §3) must be wired, not just present as
+    logic+tests: a write to the named watchlist DATA file is admitted only by a content-bound,
+    one-shot `evals/data-verdict.json` KEEP — NOT the eval-J KB verdict (false-merit-merge closure).
+    Registered in the existing PreToolUse Bash|Write|Edit group, AFTER gate_kb_edit.sh."""
+    manifest = _load()
+    cmds = _commands(manifest)
+    referenced = {os.path.basename(c) for c in cmds}
+    assert "gate_data_edit.sh" in referenced, f"gate_data_edit not registered; got: {referenced}"
+    # ordering: gate_data_edit.sh after gate_kb_edit.sh in the same PreToolUse group (spec step 4).
+    bases = [os.path.basename(c) for c in cmds]
+    assert "gate_kb_edit.sh" in bases and "gate_data_edit.sh" in bases
+    assert bases.index("gate_data_edit.sh") > bases.index("gate_kb_edit.sh")
+
+
+def test_gate_data_edit_resolves_to_executable_script():
+    """The registered gate_data_edit.sh resolves (after ${CLAUDE_PLUGIN_ROOT} substitution) to an
+    existing, executable script (HARD-ORDERING SEC-Q3: it must be live before any watchlist file)."""
+    manifest = _load()
+    targets = [c for c in _commands(manifest) if os.path.basename(c) == "gate_data_edit.sh"]
+    assert targets, "gate_data_edit.sh not registered"
+    for cmd in targets:
+        assert "${CLAUDE_PLUGIN_ROOT}" in cmd
+        resolved = cmd.replace("${CLAUDE_PLUGIN_ROOT}", str(PLUGIN_ROOT))
+        p = Path(resolved)
+        assert p.exists(), f"gate_data_edit hook script does not exist: {resolved}"
+        assert os.access(p, os.X_OK), f"gate_data_edit hook script not executable: {resolved}"
+
+
 def _sessionstart_commands(manifest: dict) -> list[str]:
     cmds: list[str] = []
     for group in manifest["hooks"].get("SessionStart", []):

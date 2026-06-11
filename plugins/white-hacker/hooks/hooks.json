@@ -23,6 +23,11 @@
             "type": "command",
             "command": "${CLAUDE_PLUGIN_ROOT}/hooks/gate_kb_edit.sh",
             "timeout": 600
+          },
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/gate_data_edit.sh",
+            "timeout": 600
           }
         ]
       }

@@ -11,17 +11,45 @@ Protocol (spike-06): stdin event JSON; exit 2 = block.
 from __future__ import annotations
 
 import json
+import os
 import re
 import sys
 from pathlib import Path
 
 GATED_SEGMENTS = ("/ai-attack-kb/", "/_shared/reference/")
+# Gate-2 DATA paths (wh-hxt.6; ADR-026 §3): these named DATA files inside /_shared/reference/ are
+# governed by the content-bound, one-shot `evals/data-verdict.json` (gate_data_edit.py), NOT by this
+# corpus-scored eval-J KEEP — reusing the KB verdict for a DATA row would be a false-merit merge
+# (ADR-024 §5). They are excluded here (checked by exact path SUFFIX, BEFORE the GATED_SEGMENTS
+# substring test) so a DATA write is not double-gated by the KB verdict. Deliberately DUPLICATED
+# from gate_data_edit.DATA_SEGMENTS — independent PreToolUse hooks, no cross-import coupling
+# (ADR-026 §3); revisit only at a 3rd DATA consumer.
+DATA_PATHS = ("/_shared/reference/known-compromised.osv.json",)
 _REDIR_RE = re.compile(r"""(?:^|\s)(?:\d+|&)?>>?\s*("[^"]*"|'[^']*'|[^\s|;&<>]+)""")
 
 
+def _norm(p: str) -> str:
+    """Canonical forward-slash path with a single leading '/'. normpath FIRST (HIGH-1: the OS write
+    + confine_self_writes use realpath, collapsing `//`, `/./`, trailing `/` — without this a
+    `…/_shared//reference/known-compromised.osv.json` variant would dodge BOTH the DATA-skip and the
+    GATED_SEGMENTS substring test and escape every gate)."""
+    p = p.strip().strip("'\"").replace("\\", "/")
+    p = os.path.normpath(p).replace(os.sep, "/")
+    return p if p.startswith("/") else "/" + p
+
+
+def _is_data_path(p: str) -> bool:
+    """True iff `p` (normpath-collapsed) ends with a Gate-2 DATA suffix (exact suffix, not substring
+    — a sibling `…known-compromised.osv.json.tmp` is NOT a DATA path and stays KB-gated)."""
+    n = _norm(p)
+    return any(n.endswith(seg) for seg in DATA_PATHS)
+
+
 def _is_gated_path(p: str) -> bool:
-    p = p.strip().strip("'\"")
-    return any(seg in "/" + p for seg in GATED_SEGMENTS)
+    n = _norm(p)
+    if any(n.endswith(seg) for seg in DATA_PATHS):  # DATA paths → gate_data_edit's lane, not KB
+        return False
+    return any(seg in n for seg in GATED_SEGMENTS)
 
 
 def _edits_kb(event: dict) -> bool:
