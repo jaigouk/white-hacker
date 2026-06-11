@@ -1,0 +1,13 @@
+{
+  "schema_version": "watchlist-1.0",
+  "id": "GHSA-5mg7-485q-xm76",
+  "target": "dependency",
+  "modified": "2026-06-10",
+  "affected": [
+    { "package": { "ecosystem": "PyPI", "name": "litellm" }, "versions": ["1.82.7", "1.82.8"] }
+  ],
+  "references": [
+    { "type": "ADVISORY", "url": "https://github.com/advisories/GHSA-5mg7-485q-xm76" }
+  ],
+  "database_specific": { "retrieved": "2026-06-10", "watchlist_confidence": "high" }
+}

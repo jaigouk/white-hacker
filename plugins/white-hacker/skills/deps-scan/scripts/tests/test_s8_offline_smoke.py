@@ -15,6 +15,10 @@ Fully offline, stdlib-only, NO network (the inputs are SYNTHETIC inert OSV metad
 package NAMES only, never real malware). Rule 9: every invariant pins BOTH `== expected`
 AND `!= wrong`.
 
+This smoke test targets the SNAPSHOT path only, so every `load_malware_db` call pins
+`curated_path=None` to opt out of the bundled curated watchlist (wh-k6l) — otherwise the
+`set(db) == {...}` exact-equality probe would fold the canonical seed once it lands.
+
 Run: `uv run --project plugins/white-hacker/skills/deps-scan/scripts --with pytest \
     pytest plugins/white-hacker/skills/deps-scan/scripts/tests/test_s8_offline_smoke.py -q`
 """
@@ -79,7 +83,7 @@ def _scenarios(doc: dict) -> list[str]:
 # --------------------------------------------------------------------------- #
 def test_loader_builds_db_from_ossf_shaped_snapshot(tmp_path):
     osv_dir = _write_ossf_snapshot(tmp_path / "malicious-packages")
-    db = mdb.load_malware_db(osv_dir)
+    db = mdb.load_malware_db(osv_dir, curated_path=None)
 
     assert db[_BAD_EXPLICIT] == {"1.2.3"}          # explicit list → exactly those versions
     assert db[_BAD_WILDCARD] == {"*"}              # range-only → whole package bad
@@ -95,7 +99,7 @@ def test_loader_builds_db_from_ossf_shaped_snapshot(tmp_path):
 # --------------------------------------------------------------------------- #
 def test_s8_fires_end_to_end_from_on_disk_snapshot(tmp_path):
     osv_dir = _write_ossf_snapshot(tmp_path / "malicious-packages")
-    db = mdb.load_malware_db(osv_dir)              # the REAL loader, not a hand-built dict
+    db = mdb.load_malware_db(osv_dir, curated_path=None)              # the REAL loader, not a hand-built dict
     proj = _write_project(
         tmp_path / "app",
         {_BAD_EXPLICIT: "1.2.3", _BAD_WILDCARD: "0.0.1", _CLEAN: "18.2.0"},
@@ -126,7 +130,7 @@ def test_s8_fires_end_to_end_from_on_disk_snapshot(tmp_path):
 # --------------------------------------------------------------------------- #
 def test_s8_version_mismatch_does_not_flag(tmp_path):
     osv_dir = _write_ossf_snapshot(tmp_path / "malicious-packages")
-    db = mdb.load_malware_db(osv_dir)
+    db = mdb.load_malware_db(osv_dir, curated_path=None)
     # _BAD_EXPLICIT is bad ONLY at {"1.2.3"}; _BAD_WILDCARD is bad at any version ("*").
     # Pin _BAD_EXPLICIT to 9.9.9 (a SAFE version not in its set) — under version-aware
     # matching it must NOT flag — while _BAD_WILDCARD in the same project still flags.
@@ -170,7 +174,7 @@ def test_snapshot_presence_is_the_only_difference(tmp_path):
     proj = _write_project(tmp_path / "app", {_BAD_EXPLICIT: "1.2.3"})
 
     without = sc.scan(str(proj))
-    with_db = sc.scan(str(proj), malware_db=mdb.load_malware_db(osv_dir))
+    with_db = sc.scan(str(proj), malware_db=mdb.load_malware_db(osv_dir, curated_path=None))
 
     fired_without = any(f"{_BAD_EXPLICIT} @" in s for s in _scenarios(without))
     fired_with = any(f"{_BAD_EXPLICIT} @" in s for s in _scenarios(with_db))
