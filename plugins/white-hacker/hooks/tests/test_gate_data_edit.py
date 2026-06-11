@@ -16,8 +16,6 @@ import hashlib
 import io
 import json
 
-import pytest
-
 import gate_data_edit as gd
 
 # The ONLY DATA path initially in scope (QA-#2 — no sidecar placeholder; wh-hxt.4 adds its own).
@@ -351,10 +349,8 @@ def test_bash_blocked_reason_is_clear(tmp_path):
 
 # === Channel coverage: plain redirect (`>`/`>>`) + Write + Edit ================================
 # SCOPE-HONEST (Policy 9): this exercises the channels the heuristic DOES cover — plain `>`/`>>`
-# redirects (incl. // and /./ path forms), Write, and Edit. It does NOT claim "every channel": the
-# Bash tripwire has a KNOWN residual (`>|` noclobber-override, `xargs` launder) made VISIBLE by the
-# two strict-xfail tests below — that gap is tracked in wh-hxt.15 (structural token-match hardening,
-# a wh-k6l blocker) and mooted pre-wh-k6l by confine realpath + the ADR-012 human-PR gate.
+# redirects (incl. // and /./ path forms), Write, and Edit. wh-hxt.15 additionally closes the
+# `>|`/xargs/python-c/ed write-channel residuals via a structural token-scan (the next section).
 
 def test_plain_redirect_write_and_edit_channels_blocked(tmp_path):
     forms = [
@@ -371,27 +367,119 @@ def test_plain_redirect_write_and_edit_channels_blocked(tmp_path):
     assert not gd.decide(ev)[0]
 
 
-# Known Bash-heuristic residuals (ADR-016 tripwire family) made VISIBLE, not masked. Each asserts the
-# gate SHOULD block; it currently does NOT, so strict-xfail. When wh-hxt.15 lands the structural
-# token-match these flip to a FAILING xpass (strict=True), forcing whoever does wh-hxt.15 to un-xfail
-# them. Mooted pre-wh-k6l by confine realpath + the ADR-012 human-PR gate; tracked as a wh-k6l blocker.
-_RESIDUAL_REASON = (
-    "Bash heuristic tripwire residual — >|/xargs; structural fix tracked in wh-hxt.15; "
-    "mooted pre-wh-k6l by confine realpath + ADR-012 human-PR gate"
-)
+# === wh-hxt.15: structural token-scan closes the Bash write-channel residuals ===================
+# A Bash command that WRITES (a `>`/`>>`/`>|`/`&>` redirect or a write/launder verb) or LAUNDERS
+# through an interpreter (`python -c`, `eval`, `xargs`, `ed`, …) has NO benign reason to NAME the
+# watchlist DATA path -> fail-closed BLOCK. The first two cases below were strict-xfail residuals in
+# wh-hxt.6 (`>|` noclobber-override, `xargs` arg-laundering); wh-hxt.15 un-xfails them so they assert
+# BLOCK and PASS. The scan is SUBSTRING (catches a path inside a quoted `-c "open('…','w')"`) but
+# SCOPED to write/interpreter verbs so a bare `cat <watchlist>` READ is NOT blocked (Policy 9, both
+# directions). The remaining ADR-016 residual — a bare-basename relative write from inside the
+# reference dir (agent cwd is normally repo root) — is documented in the hook header, out of scope.
 
-
-@pytest.mark.xfail(reason=_RESIDUAL_REASON, strict=True)
-def test_pipe_noclobber_redirect_evades_heuristic(tmp_path):
-    # `>|` (noclobber override) is not matched by _REDIR_RE -> target not extracted -> SHOULD block.
+def test_pipe_noclobber_redirect_is_blocked(tmp_path):
+    # `>|` (noclobber override): _SEPARATOR_RE no longer splits the bare `|` after `>`, _REDIR_RE now
+    # accepts `>|`, and the structural scan is a second net. SHOULD block (was a wh-hxt.6 xfail).
     assert not gd.decide(_bash(tmp_path, f"echo POISON >| {DATA_REL}"))[0]
 
 
-@pytest.mark.xfail(reason=_RESIDUAL_REASON, strict=True)
-def test_xargs_launder_evades_heuristic(tmp_path):
-    # the watchlist arrives as an xargs-substituted arg ({}), not a literal target -> SHOULD block.
+def test_xargs_launder_is_blocked(tmp_path):
+    # the watchlist arrives as an xargs-substituted arg ({}), not a lexical redirect target; the
+    # structural scan catches the DATA path token in an `xargs` (launder) command. SHOULD block.
     cmd = f"echo {DATA_REL} | xargs -I{{}} cp /tmp/p {{}}"
     assert not gd.decide(_bash(tmp_path, cmd))[0]
+
+
+def test_python_c_write_to_watchlist_is_blocked(tmp_path):
+    # the path is INSIDE a quoted `python3 -c` program (open('…','w')), not a lexical target. The
+    # SUBSTRING token-scan catches it; an exact-token match would miss. SHOULD block.
+    cmd = f"python3 -c \"open('{DATA_REL}','w').write('POISON')\""
+    assert not gd.decide(_bash(tmp_path, cmd))[0]
+
+
+def test_ed_line_editor_write_to_watchlist_is_blocked(tmp_path):
+    # `ed` is an interpreter/launder verb that rewrites a file in place; naming the watchlist as its
+    # target in a write-context command -> fail-closed BLOCK.
+    cmd = f"printf '1c\\nPOISON\\n.\\nw\\nq\\n' | ed {DATA_REL}"
+    assert not gd.decide(_bash(tmp_path, cmd))[0]
+
+
+def test_cat_read_of_watchlist_is_not_blocked(tmp_path):
+    # the != direction (Policy 9): the structural scan is SCOPED to write/interpreter verbs, so a
+    # bare `cat <watchlist>` READ is NOT blocked (reads go via the Read tool); a `>|` WRITE of the
+    # SAME path IS blocked. The scope distinguishes read from write.
+    assert gd.decide(_bash(tmp_path, f"cat {DATA_REL}"))[0]            # READ -> allowed
+    assert not gd.decide(_bash(tmp_path, f"echo X >| {DATA_REL}"))[0]  # WRITE -> blocked
+
+
+def test_structural_scan_does_not_overmatch_tmp_sibling(tmp_path):
+    # the boundary check must not let the suffix substring-match a `…json.tmp` sibling: a `>|` to the
+    # `.tmp` sibling is OUT of DATA scope -> allowed here (other hooks confine it).
+    assert gd.decide(_bash(tmp_path, f"echo X >| {DATA_REL}.tmp"))[0]
+
+
+# === FINDING-1 (wh-hxt.15 round-1): normpath-parity gap in the structural token-scan ============
+# white-hacker PoC (inode-confirmed): _token_names_data did a RAW substring match while its sibling
+# _is_data_path runs normpath FIRST, so separator-variant spellings (`//`, `/./`, `/../`) of the
+# canonical path slipped the SOLE net for interpreter writes (which have no redirect target) and
+# landed poison on the canonical inode from a normal repo-root cwd. The fix separator-COLLAPSES each
+# token before the boundary scan. Pin WH's exact vectors, BOTH directions (Policy 9).
+
+# spellings that os.path.normpath collapses onto the canonical watchlist inode.
+_SEP_VARIANTS = [
+    "plugins/white-hacker/skills/_shared//reference/known-compromised.osv.json",       # //
+    "plugins/white-hacker/skills/_shared/./reference/known-compromised.osv.json",      # /./
+    "plugins/white-hacker/skills/_shared/reference/../reference/known-compromised.osv.json",  # /../
+]
+
+
+def test_python_c_separator_variant_paths_are_blocked(tmp_path):
+    # the 3 separator-variants inside a `python3 -c` open() must BLOCK (were ALLOW(0) bypasses). The
+    # canonical control already BLOCKs (test_python_c_write_to_watchlist_is_blocked).
+    for v in _SEP_VARIANTS:
+        cmd = f"python3 -c \"open('{v}','w').write('POISON')\""
+        assert not gd.decide(_bash(tmp_path, cmd))[0], f"python3 -c admitted {v}"
+
+
+def test_perl_e_double_slash_write_is_blocked(tmp_path):
+    # the same separator-collapse closes a `perl -e` open() with a `//` path variant.
+    v = "plugins/white-hacker/skills/_shared//reference/known-compromised.osv.json"
+    cmd = f"perl -e \"open(F,'>','{v}')\""
+    assert not gd.decide(_bash(tmp_path, cmd))[0]
+
+
+def test_collapse_does_not_overblock_interp_reads_or_tmp_sibling(tmp_path):
+    # the != direction (no regression): bare `cat`/`grep` READs of the canonical path are allowed
+    # (not write/interp verbs -> not scanned); a `python3 -c` open() of the `…osv.json.tmp` sibling
+    # is OUT of DATA scope (suffix followed by `.` ∈ _PATH_CONT survives the collapse) -> allowed.
+    assert gd.decide(_bash(tmp_path, f"cat {DATA_REL}"))[0]            # READ -> allowed
+    assert gd.decide(_bash(tmp_path, f"grep x {DATA_REL}"))[0]         # READ -> allowed
+    cmd = f"python3 -c \"open('{DATA_REL}.tmp','w')\""
+    assert gd.decide(_bash(tmp_path, cmd))[0]                          # .tmp sibling -> allowed
+
+
+def test_collapse_path_seps_normpath_parity():
+    # unit: the textual collapse mirrors normpath for the variant spellings WITHOUT corrupting the
+    # surrounding code. Pin BOTH: variants collapse onto the canonical suffix; clean forms unchanged.
+    seg = "/_shared/reference/known-compromised.osv.json"
+    assert gd._collapse_path_seps("open('a/_shared//reference/known-compromised.osv.json','w')") \
+        == f"open('a{seg}','w')"
+    assert gd._collapse_path_seps("a/_shared/./reference/known-compromised.osv.json") == f"a{seg}"
+    assert gd._collapse_path_seps("a/_shared/reference/../reference/known-compromised.osv.json") \
+        == f"a{seg}"
+    assert gd._collapse_path_seps(f"a{seg}") == f"a{seg}"             # clean form unchanged
+
+
+def test_token_names_data_after_collapse_both_directions():
+    # unit (Policy 9): every separator spelling embedded in code MATCHES; the `.tmp` sibling and an
+    # unrelated sibling json do NOT (boundary check survives the collapse).
+    seg = "/_shared/reference/known-compromised.osv.json"
+    assert gd._token_names_data("open('a/_shared//reference/known-compromised.osv.json','w')")
+    assert gd._token_names_data("open('a/_shared/./reference/known-compromised.osv.json','w')")
+    assert gd._token_names_data("a/_shared/reference/../reference/known-compromised.osv.json")
+    assert gd._token_names_data(f"a{seg}")                            # == canonical
+    assert not gd._token_names_data(f"a{seg}.tmp")                    # != sibling (boundary)
+    assert not gd._token_names_data("open('a/_shared/reference/other.json','w')")  # != unrelated
 
 
 # === MED-3: fail-open on a malformed verdict ===================================================

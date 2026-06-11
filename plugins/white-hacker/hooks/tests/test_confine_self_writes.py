@@ -41,6 +41,16 @@ def test_denies_traversal_into_frozen(tmp_path):
     assert deny("echo x > evals/traces/../corpus/c1/label.json", tmp_path)
 
 
+def test_denies_pipe_noclobber_redirect_outside_lane(tmp_path):  # wh-hxt.15: >| grammar fix
+    # `>|` (noclobber override) must be parsed as a redirect, not shredded by the bare-`|` separator
+    # split (the `(?<!>)\|` lookbehind keeps the `|` of `>|` attached). A `>|` write outside the
+    # self-improvement lane is DENIED (was a confinement bypass pre-wh-hxt.15).
+    assert deny("echo x >| evals/corpus/c1/label.json", tmp_path)
+    assert deny("echo x >| evals/keep_or_revert.py", tmp_path)
+    # the != direction: a `>|` write INTO the allowed KB lane is still ALLOWED.
+    assert allow("echo x >| .claude/skills/ai-attack-kb/reference/new.md", tmp_path)
+
+
 def test_denies_corpus_write(tmp_path):  # T-9.1 VC3 (-k corpus)
     assert deny("echo x > evals/corpus/cases/c1/label.json", tmp_path)
     assert deny("cp evil.md evals/corpus/cases/c1/vulnerable_variant.py", tmp_path)

@@ -25,7 +25,10 @@ GATED_SEGMENTS = ("/ai-attack-kb/", "/_shared/reference/")
 # from gate_data_edit.DATA_SEGMENTS — independent PreToolUse hooks, no cross-import coupling
 # (ADR-026 §3); revisit only at a 3rd DATA consumer.
 DATA_PATHS = ("/_shared/reference/known-compromised.osv.json",)
-_REDIR_RE = re.compile(r"""(?:^|\s)(?:\d+|&)?>>?\s*("[^"]*"|'[^']*'|[^\s|;&<>]+)""")
+# wh-hxt.15: `>>?\|?` — _REDIR_RE accepts a `>|` noclobber-override. This hook has NO _SEPARATOR_RE
+# (it runs _REDIR_RE.finditer on the WHOLE command at :61), so the REDIR arm alone closes `>|` — no
+# lookbehind is needed (and `>>?` requires a literal `>`, so `\|?` can't false-match a plain pipe).
+_REDIR_RE = re.compile(r"""(?:^|\s)(?:\d+|&)?>>?\|?\s*("[^"]*"|'[^']*'|[^\s|;&<>]+)""")
 
 
 def _norm(p: str) -> str:

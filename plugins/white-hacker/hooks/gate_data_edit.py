@@ -19,6 +19,18 @@ ever exists (wh-k6l / the feeder) — otherwise a premature watchlist file would
 WRONG verdict kind (the absent / unrelated eval-J KEEP). This module gates; it does NOT create the
 data file.
 
+BASH CHANNEL (wh-hxt.15): a shell write/launder/interpreter command that NAMES the watchlist path is
+never a sanctioned mint, so the Bash branch fail-closed BLOCKs it via TWO nets — a per-form redirect/
+launder target extractor (`_bash_write_targets`) AND a structural token-scan (`_bash_structural_hit`)
+that collapses the `>|`/xargs/python-c/ed evasion class to one rule. The token-scan SEPARATOR-COLLAPSES
+each token (FINDING-1, round-1) so `//`/`/./`/`/../` LITERAL spellings reach parity with
+`_is_data_path`'s normpath. Both are heuristic tripwires (ADR-016, ARD.md:186-188), NOT the boundary.
+Known residuals (NO false-green): (1) a bare-basename relative write from INSIDE the reference dir
+(`>| known-compromised.osv.json`, cwd=reference dir) — the scan keys on the full DATA path and the
+agent cwd is normally the repo root; (2) a RUNTIME-CONSTRUCTED path with no literal in any token
+(string concat `'…/'+'known-…json'`, a base64/hex-decoded path, a path read from an external file/env)
+— there is no literal for the scan to match. The layer-1 human-PR gate (ADR-012) covers these.
+
 Policy 5: pure deterministic checks (hashlib + path normalization) — no LLM / RNG / network.
 Protocol (spike-06): stdin event JSON; exit 2 = block, exit 0 = allow.
 """
@@ -45,10 +57,28 @@ _VERDICT_REL = ("evals", "data-verdict.json")
 # the hooks stay independent (no cross-import). A shell `>`/`>>` (or a cp/mv/tee/dd/sed -i launder)
 # to the watchlist is NEVER a sanctioned mint (the only legitimate path is the validator + a
 # content-bound Write under a DATA verdict), so any such target on a DATA path → fail-closed block.
-_SEPARATOR_RE = re.compile(r"\|\||&&|;|\||&|\n")
-_REDIR_RE = re.compile(r"""(?:^|\s)(?:\d+|&)?>>?\s*("[^"]*"|'[^']*'|[^\s|;&<>]+)""")
+# wh-hxt.15: `(?<!>)\|` — a `|` immediately preceded by `>` is NOT a separator (keep the `|` of a
+# `>|` noclobber-override attached to the redirect); `>>?\|?` — _REDIR_RE accepts the optional `|`.
+# Without the lookbehind the bare-`|` arm splits `echo X >| w` BEFORE _REDIR_RE runs and shreds it.
+_SEPARATOR_RE = re.compile(r"\|\||&&|;|(?<!>)\||&|\n")
+_REDIR_RE = re.compile(r"""(?:^|\s)(?:\d+|&)?>>?\|?\s*("[^"]*"|'[^']*'|[^\s|;&<>]+)""")
 _LAUNDER = {"cp", "mv", "install", "ln", "rsync", "tee"}
 _WRAPPERS = {"timeout", "time", "nice", "nohup", "stdbuf", "env", "sudo", "command", "xargs", "\\"}
+
+# Structural catch-all (wh-hxt.15): a Bash command that WRITES (any `>`/`>>`/`>|`/`&>` redirect, or a
+# write/launder verb) or LAUNDERS through an interpreter has NO benign reason to NAME the watchlist
+# DATA path. `_bash_write_targets` is a per-form extractor (a tripwire — ADR-016, ARD.md:186-188);
+# this is the structural net that collapses the `>|`/xargs/python-c/ed evasion class to one rule.
+# Scoped to write/interpreter verbs so a bare `cat <watchlist>` READ is NOT blocked (reads go via the
+# Read tool). `_token_names_data` SEPARATOR-COLLAPSES each token (FINDING-1) for normpath parity with
+# `_is_data_path`. Residuals (bare-basename-from-reference-dir + runtime-CONSTRUCTED paths) are
+# enumerated honestly in the module header (ADR-016); not chased here — out of scope.
+_WRITE_VERBS = {"tee", "cp", "mv", "install", "ln", "rsync", "dd", "truncate"}
+_INTERP_VERBS = {"python", "python3", "perl", "ruby", "node", "sh", "bash", "eval", "xargs", "ed"}
+# The DATA suffix must end at a token boundary: substring-match catches a path inside a quoted
+# `-c "open('…','w')"` (next char a quote), but a `…known-compromised.osv.json.tmp` sibling (next
+# char `.`, a path-continuation char) must NOT match — mirrors `_is_data_path`'s exact-suffix scope.
+_PATH_CONT = frozenset("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._-/")
 
 
 def _norm(p: str) -> str:
@@ -106,6 +136,75 @@ def _bash_write_targets(command: str) -> list[str]:
     return [t.strip().strip("'\"") for t in targets if t.strip().strip("'\"")]
 
 
+def _is_write_or_interp_command(command: str) -> bool:
+    """True iff `command` WRITES (a `>`/`>>`/`>|`/`&>` redirect, or a write/launder verb such as
+    cp/mv/tee/dd/truncate) or LAUNDERS through an interpreter (python -c, eval, xargs, ed, perl …).
+    Scopes the structural token-scan to WRITE contexts so a bare `cat <watchlist>` READ is NOT caught
+    (reads go via the Read tool). `sed` triggers only with an in-place `-i` flag (a bare `sed` reads)."""
+    if ">" in command:  # any redirect form: > >> >| &> (covers the >| noclobber-override)
+        return True
+    try:
+        toks = shlex.split(command)
+    except ValueError:
+        toks = command.split()
+    for idx, tok in enumerate(toks):
+        base = os.path.basename(tok.strip("'\""))
+        if base in _WRITE_VERBS or base in _INTERP_VERBS:
+            return True
+        if base == "sed" and any(t == "-i" or t.startswith("-i") for t in toks[idx + 1:]):
+            return True
+    return False
+
+
+def _collapse_path_seps(text: str) -> str:
+    """Textually collapse path-separator noise (`//`->`/`, `/./`->`/`, `/seg/../`->`/`) to bring the
+    structural token-scan to PARITY with `_norm`/`_is_data_path` (which run os.path.normpath FIRST,
+    the HIGH-1 fix). Applied to the WHOLE token text — NOT os.path.normpath, which would corrupt the
+    surrounding code in an embedded `-c "open('…','w')"` program. Iterates to a fixpoint so cascading
+    /nested variants (`/././`, `/a/../b/../`) fully resolve. Fail-closed bias: aggressive collapse can
+    only ADD a match on an adversarial path spelling, never drop the clean canonical suffix."""
+    prev = None
+    while prev != text:
+        prev = text
+        text = text.replace("//", "/").replace("/./", "/")
+        text = re.sub(r"/[^/]+/\.\./", "/", text)
+    return text
+
+
+def _token_names_data(token: str) -> bool:
+    """True iff `token` contains a DATA suffix that ENDS at a path boundary (end-of-token, or a
+    non-path char like a quote/paren). SUBSTRING (so a path inside a quoted `-c "open('…','w')"` is
+    caught) but boundary-checked (so a `…known-compromised.osv.json.tmp` sibling does NOT match).
+    The token is separator-COLLAPSED first (FINDING-1, wh-hxt.15 round-1) so `//`/`/./`/`/../`
+    spellings reach parity with `_is_data_path`'s normpath — an interp write has NO redirect target,
+    so this is the SOLE net for `python3 -c "open('…/_shared//reference/…osv.json','w')"`."""
+    collapsed = _collapse_path_seps(token)
+    for seg in DATA_SEGMENTS:
+        start = 0
+        while (i := collapsed.find(seg, start)) != -1:
+            end = i + len(seg)
+            if end >= len(collapsed) or collapsed[end] not in _PATH_CONT:
+                return True
+            start = i + 1
+    return False
+
+
+def _bash_structural_hit(command: str) -> str | None:
+    """The first DATA-naming token in a write/interpreter Bash command, else None. The real net for
+    the `>|`/xargs/python-c/ed evasion class. Fail-closed: an unparseable command in a write context
+    degrades to `.split()` (never throws), so a malformed write command still gets scanned."""
+    if not _is_write_or_interp_command(command):
+        return None
+    try:
+        toks = shlex.split(command)
+    except ValueError:
+        toks = command.split()
+    for tok in toks:
+        if _token_names_data(tok):
+            return tok
+    return None
+
+
 def _resolve(cwd: str, p: str) -> str:
     """Logical absolute path of `p` under `cwd` (normpath join; no realpath — the write target may
     not exist yet). Used to compare the verdict's `path` against the write target path."""
@@ -150,9 +249,14 @@ def decide(event: dict) -> tuple[bool, str]:
     # is NEVER a sanctioned mint (only the validator + a content-bound Write under a verdict is) —
     # do NOT try to content-bind a redirect; fail-closed block it outright.
     if tool == "Bash":
-        for tgt in _bash_write_targets(ti.get("command", "")):
+        command = ti.get("command", "")
+        for tgt in _bash_write_targets(command):
             if _is_data_path(tgt):
                 return False, "DATA edit blocked: shell write to the watchlist DATA path is never sanctioned (use the validator + a content-bound Write)"
+        # Structural net (wh-hxt.15): collapses the >|/xargs/python-c/ed evasion class — a write or
+        # interpreter/launder command that NAMES the watchlist path is never a sanctioned mint.
+        if _bash_structural_hit(command):
+            return False, "DATA edit blocked: shell write/launder command names the watchlist DATA path (never sanctioned; use the validator + a content-bound Write)"
         return True, ""
 
     if tool not in ("Write", "Edit"):

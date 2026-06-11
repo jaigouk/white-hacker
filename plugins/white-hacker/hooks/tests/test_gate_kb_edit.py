@@ -59,6 +59,18 @@ def test_blocks_bash_redirection_to_kb_without_keep(tmp_path):
     assert not gk.decide(ev)[0]
 
 
+def test_blocks_pipe_noclobber_redirect_to_kb_without_keep(tmp_path):  # wh-hxt.15: >| grammar fix
+    # `>|` (noclobber override) must be matched by _REDIR_RE (`>>?\|?`); gate_kb_edit has NO
+    # _SEPARATOR_RE (it runs _REDIR_RE.finditer on the whole command), so the REDIR arm alone closes
+    # it. A `>|` redirect to a KB path with no KEEP verdict is BLOCKED (was a bypass pre-wh-hxt.15).
+    ev = {"tool_name": "Bash",
+          "tool_input": {"command": "echo x >| .claude/skills/ai-attack-kb/reference/y.md"},
+          "cwd": str(tmp_path)}
+    assert not gk.decide(ev)[0]                 # no verdict -> blocked
+    _verdict(tmp_path, "KEEP")
+    assert gk.decide(ev)[0]                      # the != direction: a KEEP admits the same >| redirect
+
+
 def test_main_exit_codes(monkeypatch, tmp_path):
     import io
     _verdict(tmp_path, "REVERT")

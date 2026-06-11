@@ -52,8 +52,11 @@ FEED_HOSTS = {
     "owasp.org", "cheatsheetseries.owasp.org", "csrc.nist.gov", "www.nist.gov",
     "modelcontextprotocol.io", "embracethered.com", "simonwillison.net",
 }
-_SEPARATOR_RE = re.compile(r"\|\||&&|;|\||&|\n")
-_REDIR_RE = re.compile(r"""(?:^|\s)(?:\d+|&)?>>?\s*("[^"]*"|'[^']*'|[^\s|;&<>]+)""")
+# wh-hxt.15: `(?<!>)\|` — a `|` immediately preceded by `>` is NOT a separator (keep the `|` of a
+# `>|` noclobber-override attached to the redirect); `>>?\|?` — _REDIR_RE accepts the optional `|`.
+# Without the lookbehind the bare-`|` arm split `echo X >| w` BEFORE _REDIR_RE ran and shredded it.
+_SEPARATOR_RE = re.compile(r"\|\||&&|;|(?<!>)\||&|\n")
+_REDIR_RE = re.compile(r"""(?:^|\s)(?:\d+|&)?>>?\|?\s*("[^"]*"|'[^']*'|[^\s|;&<>]+)""")
 _URL_RE = re.compile(r"https?://([^/\s'\"]+)", re.IGNORECASE)
 LAUNDER = {"cp", "mv", "install", "ln", "rsync", "tee"}
 NET_VERBS = {"curl", "wget", "nc", "ncat", "scp", "sftp", "ssh", "telnet", "socat", "ftp"}
