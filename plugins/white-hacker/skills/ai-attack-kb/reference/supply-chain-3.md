@@ -75,6 +75,6 @@ summary) and reconcile the full package set into the watchlist once a union list
 
 [^revoke]: Do **not** route rotation/revocation through any third-party "safe-revocation endpoint."
     Such an endpoint is **C2-shaped** (it phones an external host with a live credential) and
-    violates our no-egress / CONTAIN posture (`docs/ARD.md` ADR-024 — the egress allowlist was the
+    violates the no-egress / CONTAIN posture (ADR-024 — the egress allowlist was the
     only control that stopped the analogous Mini Shai-Hulud worm in flight). Revoke directly at the
     provider console/API from a clean host instead.

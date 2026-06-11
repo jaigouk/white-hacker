@@ -83,11 +83,11 @@ REPLACEMENTS = [
      "Re-pin to a newer reviewed SHA on the project's KB-refresh cadence (`/sec-kb-refresh`). A",
      "Re-pin to a newer reviewed SHA on the project's KB-refresh cadence. A"),
     ("skills/sec-detect/SKILL.md",
-     "See `docs/ARCHITECTURE.md` and `.claude/agents/white-hacker.md`.",
-     "See `.claude/agents/white-hacker.md`."),
+     "See `docs/ARCHITECTURE.md` and the white-hacker agent definition.",
+     "See the white-hacker agent definition."),
     ("skills/sec-threat-model/SKILL.md",
-     "See `docs/ARCHITECTURE.md` and `.claude/agents/white-hacker.md`.",
-     "See `.claude/agents/white-hacker.md`."),
+     "See `docs/ARCHITECTURE.md` and the white-hacker agent definition.",
+     "See the white-hacker agent definition."),
 ]
 
 # Producer-only files pruned from a shipped consumer skill (manifest excludes whole skills, not files).

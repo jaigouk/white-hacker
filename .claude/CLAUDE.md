@@ -59,9 +59,11 @@ Apply on top of DDD + TDD. Bias: **caution over speed on non-trivial work.**
   go through the TL/Dev/QA/white-hacker flow; security-relevant fixes get a dogfood review.
 
 ## Architecture at a glance
-- **One agent** `.claude/agents/white-hacker.md` (the senior-security-engineer identity +
-  stage dispatch), reusable as a `/security-review` command, a delegated subagent, and an
-  agent-team teammate.
+- **One agent** — the shipped product `plugins/white-hacker/agents/white-hacker.md` (the
+  senior-security-engineer identity + stage dispatch), reusable as `/security-review`, a delegated
+  subagent, and an agent-team teammate. **Dogfood:** dev/team sessions load the plugin
+  (`--plugin-dir ./plugins/white-hacker`) so `subagent_type: white-hacker` resolves to it; the old
+  `.claude/agents/white-hacker.md` self-audit profile was consolidated in + deleted (ADR-029).
 - **Composable skills** `plugins/white-hacker/skills/sec-*` chained via on-disk JSON artifacts
   (`THREAT_MODEL.md → SCAN-PLAN.json → VULN-FINDINGS.json → TRIAGE.json → PATCHES/`).
   Discovery (recall) and triage (precision, fresh context, adversarial N-of-N) are **separate**.

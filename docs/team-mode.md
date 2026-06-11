@@ -1,7 +1,7 @@
 # white-hacker in a team (TL / QA / Dev / white-hacker)
 
 How to run the security review in the two supported execution modes, and how it gates a team's
-merge. The agent definition `.claude/agents/white-hacker.md` (§Team-workflow) is the behavioral
+merge. The agent definition `plugins/white-hacker/agents/white-hacker.md` (§Team-workflow) is the behavioral
 source of truth; this doc is the operator guide + spawn prompts.
 
 ## Mode matrix

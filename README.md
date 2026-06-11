@@ -340,7 +340,7 @@ on project-scope skills. See `docs/plan/PLAN.md` §7.1.
 | Doc | What it is | Status |
 |-----|------------|--------|
 | `.claude/CLAUDE.md` | Project conventions + the key concept | Written |
-| `.claude/agents/white-hacker.md` | The agent definition — behavior source of truth | Written |
+| `plugins/white-hacker/agents/white-hacker.md` | The agent definition — behavior source of truth | Written |
 | `docs/ARD.md` | Architecture Decision Records (ADR-001…028) — the *why* | Written |
 | `docs/plan/PLAN.md` | Foundation plan: gap analysis, skills, tooling, phased rollout | Written |
 | `docs/research/` | Spikes (`spike-01..04`), PoCs (`poc-tool-detection`, `poc-trivy-sca`, `poc-floor-review`, `poc-iac-scan`), foundation (`fnd-*`) + self-improvement (`si-*`) takeaways | Written |

@@ -2,7 +2,7 @@
 
 > Living document. Maintained, not write-once. Today: 2026-06-09. Owner: ping@jaigouk.kim.
 > Companions: `docs/ARD.md` (the *why* — ADR-001..023), `docs/plan/PLAN.md` (the build plan),
-> `.claude/agents/white-hacker.md` (behavior source of truth). This PRD does not contradict them;
+> `plugins/white-hacker/agents/white-hacker.md` (behavior source of truth). This PRD does not contradict them;
 > where it restates a decision, ADR-NNN is cited.
 
 ---
@@ -291,7 +291,7 @@ Each FR carries a one-line **Verification criterion (VC)** — checkable accepta
 
 ### 5.7 Resource-aware execution (concurrency planning)
 Run tasks in parallel only when the host can take it; under pressure go sequential, skip/defer the heavy
-ones, or ask — never blindly fan out into an OOM-freeze. Source of truth: `.claude/agents/white-hacker.md`
+ones, or ask — never blindly fan out into an OOM-freeze. Source of truth: `plugins/white-hacker/agents/white-hacker.md`
 § "Execution budget"; continuous with the tool-degradation posture (ADR-003, FR-13).
 - **FR-22 — Measure the host, don't guess.** Before any fan-out, probe the host *deterministically* —
   CPU count, free memory, load average — cross-platform (`getconf`/`nproc`/`sysctl`, `free`/`vm_stat`,
@@ -434,7 +434,7 @@ Each NFR carries a one-line **Verification criterion (VC)**.
 | ADR-010 (patch by capability-removal) | FR-06, NFR-05 |
 | ADR-012 (living KB, dated/sourced) | FR-16, NFR-09, NFR-10 |
 | ADR-015 (capability layer, self-updating registry) | NG1, FR-12, FR-14, NFR-02 |
-| `.claude/agents/white-hacker.md` (incl. § "Execution budget") | FR-01..27, NFR-04, NFR-05, NFR-11 |
+| `plugins/white-hacker/agents/white-hacker.md` (incl. § "Execution budget") | FR-01..27, NFR-04, NFR-05, NFR-11 |
 | `docs/research/si-07-threat-feeds.md` | FR-16, M3 |
 
 > Maintenance note: when an ADR changes or a skill is added/renamed, update the matching FR/NFR and

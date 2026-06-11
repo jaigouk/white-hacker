@@ -103,6 +103,11 @@ appendices on demand.
   no reliable code fix); **MCP** token-passthrough / tool-description poisoning / confused-
   deputy; RAG/vector poisoning & cross-tenant leakage; unbounded token/iteration consumption;
   excessive agency. Ground these in the **living KB** (`ai-attack-kb/reference/`).
+- **Agent-as-target** (`reference/agent-self-review.md`) — when the reviewed repo IS an AI agent /
+  coding assistant / MCP server / autonomous framework: its OWN confinement (self-write/exec limits +
+  PreToolUse tripwire + write allowlist), injection defenses (auto-injected-context allowlist, discovery/
+  triage context-starvation, KB/RAG-as-untrusted-data), self-improvement gating (no self-grading,
+  draft-PR-only, immutable eval corpus), Rule-of-Two per phase, and the confinement-bypass red-team classes.
 - **API** (`reference/api.md`, OWASP API Top 10 **2023** — there is no 2025/26 edition):
   BOLA/BFLA/BOPLA, broken auth, unrestricted consumption, SSRF, unsafe third-party consumption.
 - **Per-language** (`reference/lang-{go,python,typescript,java}.md`) and **IaC/CI**

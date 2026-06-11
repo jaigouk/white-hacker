@@ -85,7 +85,7 @@ drift.
 
 ## Where it sits in the loop
 `sec-threat-model → **sec-detect** → sec-vuln-scan (recall) → sec-triage (precision) → sec-report`.
-See `docs/ARCHITECTURE.md` and `.claude/agents/white-hacker.md`.
+See `docs/ARCHITECTURE.md` and the white-hacker agent definition.
 
 ## Verification criteria (definition of done for this skill)
 - [x] `description` ≤ 1,536 chars (ADR-005).

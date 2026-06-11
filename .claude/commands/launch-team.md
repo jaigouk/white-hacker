@@ -44,9 +44,11 @@ Within a wave, file ownership MUST be disjoint — otherwise it isn't a valid wa
 the next wave, or document a coordination handoff in the epic Risks). Ask the user to resolve.
 
 ### Step 4 — Assign team roles
-Fixed roles (the `.claude/agents/` profiles): **tech-lead** (coordinator, contracts, final gates),
-**qa-engineer** (4-tier QA, eval scoring, reports), **white-hacker** (dogfood security review of the
-diff). One **developer** per ticket, named `dev-<ticket-id>` (e.g. `dev-wh-4ym.4`).
+Fixed roles: **tech-lead** (coordinator, contracts, final gates), **qa-engineer** (4-tier QA, eval
+scoring, reports) — these are `.claude/agents/` profiles; **white-hacker** (dogfood security review of
+the diff) is the **shipped product** `plugins/white-hacker/agents/white-hacker.md`, available when the
+session loads the plugin (`--plugin-dir ./plugins/white-hacker`; ADR-029). One **developer** per ticket,
+named `dev-<ticket-id>` (e.g. `dev-wh-4ym.4`).
 
 ### Step 5 — Extract settled design decisions
 From the tickets + code: the artifact-chain JSON contracts (field names/shapes), capability-interface
