@@ -629,3 +629,77 @@ def test_advisory_suppressed_when_ai_pass_true_and_infra_present(tmp_path: Path)
     assert plan.ai_pass is True                              # == expected
     assert ".claude" in plan.ai_agent_infra                 # infra also detected
     assert plan.to_dict()["ai_pass_advisory"] is False      # suppressed (mutation guard)
+
+
+# --- wh-e1d: _read_manifest_text is_file() guard + bounded 64 KiB read ------
+# Same DoS class as wh-7u7 F-1 (CWE-400), but for the ROOT-level manifest reader
+# shared by _match_signals (frameworks) and detect_kernel_adjacency
+# (Makefile/go.mod). One guard hardens every caller. The read MUST be capped and
+# non-regular paths (FIFO/device/dir) MUST be skipped, never blocking/raising.
+
+def test_read_manifest_text_caps_at_read_cap(tmp_path: Path):
+    # A manifest larger than the cap is read ONLY up to _AI_MANIFEST_READ_CAP,
+    # lowercased. Pin both directions (Policy 9): == capped prefix, != full text.
+    head = "Django==5.1\n"
+    body = "x" * (dt._AI_MANIFEST_READ_CAP + 4096)
+    (tmp_path / "requirements.txt").write_text(head + body)
+    text = dt._read_manifest_text(tmp_path, "requirements.txt")
+    full = (head + body).lower()
+    assert text == full[: dt._AI_MANIFEST_READ_CAP]    # == capped prefix
+    assert text != full                                # != unbounded read
+    assert len(text) == dt._AI_MANIFEST_READ_CAP       # exactly the cap
+
+
+def test_frameworks_token_within_cap_detected(tmp_path: Path):
+    # django token near the top (within the cap window) → still detected after fix.
+    (tmp_path / "requirements.txt").write_text("django==5.1\n" + "x" * 70000)
+    assert "django" in dt.detect_frameworks(tmp_path)   # == expected (in cap)
+
+
+def test_frameworks_token_beyond_cap_not_detected(tmp_path: Path):
+    # django token placed ONLY beyond the 64 KiB cap → NOT detected.
+    # RED before fix (unbounded read finds it); GREEN after (capped read skips it).
+    padding = "# " + "x" * dt._AI_MANIFEST_READ_CAP + "\n"
+    (tmp_path / "requirements.txt").write_text(padding + "django==5.1\n")
+    assert "django" not in dt.detect_frameworks(tmp_path)  # beyond cap → miss
+    assert dt.detect_frameworks(tmp_path) == []            # no false positive
+
+
+def test_read_manifest_text_skips_fifo_without_hanging(tmp_path: Path):
+    # A FIFO masquerading as a manifest must return '' instantly, never block.
+    # is_file() is False for FIFOs; without the guard read_text() blocks forever.
+    import os as _os
+    import threading
+    import pytest as _pytest
+    if not hasattr(_os, "mkfifo"):
+        _pytest.skip("os.mkfifo not available on this platform")
+    _os.mkfifo(str(tmp_path / "go.mod"))
+
+    result: dict[str, str] = {}
+
+    def _call() -> None:
+        result["text"] = dt._read_manifest_text(tmp_path, "go.mod")
+
+    # Watchdog thread + join-timeout: a missing guard FAILS FAST here instead of
+    # hanging the whole suite (the daemon thread is abandoned at process exit).
+    worker = threading.Thread(target=_call, daemon=True)
+    worker.start()
+    worker.join(timeout=5.0)
+    assert not worker.is_alive(), "read blocked on a FIFO (missing is_file guard)"
+    assert result["text"] == ""    # == expected (special file skipped)
+
+
+def test_read_manifest_text_skips_directory(tmp_path: Path):
+    # A directory named like a manifest is not a regular file → ''.
+    (tmp_path / "go.mod").mkdir()
+    assert dt._read_manifest_text(tmp_path, "go.mod") == ""   # == expected
+
+
+def test_read_manifest_text_small_manifest_unchanged(tmp_path: Path):
+    # Regression: a normal small manifest is read in full and lowercased.
+    (tmp_path / "go.mod").write_text(
+        "module X\nrequire github.com/Gin-Gonic/gin v1\n"
+    )
+    text = dt._read_manifest_text(tmp_path, "go.mod")
+    assert text == "module x\nrequire github.com/gin-gonic/gin v1\n"  # full + lower
+    assert "gin-gonic/gin" in text                                    # token kept

@@ -417,8 +417,15 @@ def detect_ai_agent_infra(root: Path) -> list[str]:
 def _read_manifest_text(root: Path, filename: str) -> str:
     """Lowercased contents of a manifest, or '' if absent/unreadable."""
     p = root / filename
+    # F-1 / CWE-400 guard (mirrors detect_ai_agent_infra): is_file() returns
+    # False for FIFOs, character devices, broken symlinks, and directories — all
+    # of which would block or misbehave on open()/read(); the bounded read caps a
+    # multi-GB committed manifest at 64 KiB (tokens sit near the top).
+    if not p.is_file():
+        return ""
     try:
-        return p.read_text(encoding="utf-8", errors="ignore").lower()
+        with p.open(encoding="utf-8", errors="ignore") as fh:
+            return fh.read(_AI_MANIFEST_READ_CAP).lower()
     except (OSError, ValueError):
         return ""
 
