@@ -37,8 +37,10 @@ grooming, baked in here:
    - **RAG / ingestion / memory** (vector poisoning, cross-tenant retrieval, indirect injection),
    - **output sinks** (the LLM05 sinks — *highest priority*),
    - **MCP surface** (token passthrough, confused deputy, audience binding),
-   - **agent loop / agency** (high-impact tools without a human gate, unbounded consumption).
-2. **Sweep each partition** against `_shared/reference/ai-llm.md` (§1–§8). For the matched
+   - **agent loop / agency** (high-impact tools without a human gate, unbounded consumption),
+   - **target AI-assistant config files** (on-disk bootstrap config poisoning — `.claude/setup.mjs`,
+     `.vscode/tasks.json`, `.cursorrules`, etc.; enumerated in `ai-llm.md` §9, KB `AISEC-SUPPLY-CHAIN-003`).
+2. **Sweep each partition** against `_shared/reference/ai-llm.md` (§1–§9). For the matched
    technique class, **load the `ai-attack-kb/reference/<class>.md` entry on demand** (progressive
    disclosure) and use its `detections` patterns. For each candidate trace **source → sink**.
 3. **Trifecta pass.** For each agent/tool path, apply the lethal-trifecta / Rule-of-Two test
