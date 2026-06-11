@@ -5,6 +5,11 @@
 - **Verifies:** the generic agent runs the inner loop **on the Read/Grep/Glob floor alone**
   (zero external scanners), flags planted vulns across languages, spares safe look-alikes,
   degrades gracefully (`tools_unavailable`), and writes nothing (posture/ADR-010).
+- **Naming note (pre-canonical):** this early (Phase-0) PoC uses `run/discovery.json` and
+  `run/triage.json` / `run/triage.deduped.json` for what the shipped chain now names
+  `VULN-FINDINGS.json` and `TRIAGE.json` (see the canonical chain in `docs/DDD.md` §7). The files keep
+  their original names because they are load-bearing fixtures (`sec-report` `test_ci_gate.py` +
+  `sec-report/SKILL.md`); only the *names* predate the finalized artifact chain — the flow is identical.
 
 ## Fixtures (paired vuln / clean look-alike per language)
 | Sub-fixture | Planted vuln | Sink (file:line) | Category / OWASP |

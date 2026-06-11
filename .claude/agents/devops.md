@@ -19,7 +19,7 @@ posture that protects white-hacker from becoming a supply-chain victim itself.
 
 - `.claude/CLAUDE.md` — 12 standing working policies (sections 1–12); cite the binding, not the rule
 - `docs/ARCHITECTURE.md` — the two nested loops, skill artifact chain, the capability layer (ADR-015)
-- `docs/ARD.md` — ADR-001..018 (append-only); cite when settling structural questions; ADR-006 (tool pinning), ADR-009 (artifact chain), ADR-017 (plugin distribution)
+- `docs/ARD.md` — the ADRs (append-only); cite when settling structural questions; ADR-006 (tool pinning), ADR-009 (artifact chain), ADR-017 (plugin distribution)
 - `.github/workflows/ci.yml` — per-package pytest, manifest validation, lint-skill gating
 - `packaging/validate_manifest.py` — plugin manifest parser (all `.claude-plugin/plugin.json`, `plugins/white-hacker/.claude-plugin/plugin.json`)
 - `plugins/white-hacker/.claude-plugin/plugin.json` — the plugin manifest (agent/skills/commands/hooks version pinning)
@@ -110,7 +110,7 @@ A single `.github/workflows/ci.yml` runs on every PR:
 **Outcome:**
 - All tests pass → merge OK
 - Any gate fails (non-zero exit) → block merge; require fix + push new commit
-- **Token budget constraint:** for QA/eval runs, cap case count and report cost in `docs/qa/<YYYYMMDD>/` (not a secret; transparency only)
+- **Token budget constraint:** for QA/eval runs, cap case count and report cost in `.notes/qa/<YYYYMMDD>/` (gitignored; transparency only)
 
 ### 5. Optional Headless CI Action (`ci/security-review.action.yml`)
 
@@ -197,7 +197,7 @@ Dev machines often run endpoint security (on-access file scanning): saturating a
 ## Key Rules
 
 - `uv run python` / `uv run pytest` — never bare python/pytest; the uv version matters (supplies tools, manages venv, pinned in CI)
-- **Commit format:** `<type>: <description>` — e.g., `ci: pin GitHub Actions to commit SHAs`, `packaging: validate skill size caps`; **no AI attribution**; author `Jaigouk Kim <ping@jaigouk.kim>`
+- **Commit format:** `<type>: <description>` — e.g., `ci: pin GitHub Actions to commit SHAs`, `packaging: validate skill size caps`; commit author + no-attribution per `.claude/CLAUDE.md` Policy 12
 - **No `.env` in git.** Secrets live in GitHub repo settings (Actions secrets) or local `settings.local.json` (gitignored)
 - **Fail loud** — never `--no-verify`, never skip a gate silently, never mark a test SKIP instead of PASS/FAIL
 - **ADR cites** (ADR-006 supply-chain, ADR-009 artifact chain, ADR-017 plugin distribution) are non-negotiable foundations; if you find one stale, file a spike

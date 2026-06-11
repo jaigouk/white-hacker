@@ -63,7 +63,7 @@ Everything else — *especially* specific scanner tools — is secondary and swa
 **Artifact chain** (the inner loop's plain-text spine):
 
 ```
-THREAT_MODEL.md → SCAN-PLAN.json → VULN-FINDINGS.json → TRIAGE.json → PATCHES/ → SECURITY-REPORT.md
+THREAT_MODEL.md → SCAN-PLAN.json → VULN-FINDINGS.json → TRIAGE.json → SECURITY-REPORT.md → PATCHES/ (opt-in)
 ```
 
 ---
@@ -135,7 +135,7 @@ It runs the inner loop in an isolated context and returns the `TRIAGE.json` summ
 - **Team mode (opt-in):** set `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` (Claude Code ≥ v2.1.32).
   TL = lead; spawns Dev / QA / white-hacker teammates with non-overlapping file ownership.
   white-hacker routes findings to the **tech-lead** (not the dev) via `SendMessage`. Reserve
-  for work needing adversarial cross-check. See `docs/plan/PLAN.md` §7.
+  for work needing adversarial cross-check.
 
 The agent **proposes** fixes; it **does not push or apply** — the write capability is *removed*,
 not merely instructed (ADR-010). Patches land in `./PATCHES/` only.
@@ -331,7 +331,7 @@ entirely by `agents/white-hacker.md` + the skills (ADR-017). The repo `CLAUDE.md
 Caveat: a subagent's `skills` / `mcpServers` frontmatter does **not** apply when it runs as a
 team teammate (teammates load skills/MCP from project + user settings); plugin subagents ignore
 `permissionMode` / `mcpServers` / `hooks`. Put operational detail in the spawn prompt and rely
-on project-scope skills. See `docs/plan/PLAN.md` §7.1.
+on project-scope skills.
 
 ---
 
@@ -341,13 +341,11 @@ on project-scope skills. See `docs/plan/PLAN.md` §7.1.
 |-----|------------|--------|
 | `.claude/CLAUDE.md` | Project conventions + the key concept | Written |
 | `plugins/white-hacker/agents/white-hacker.md` | The agent definition — behavior source of truth | Written |
-| `docs/ARD.md` | Architecture Decision Records (ADR-001…028) — the *why* | Written |
-| `docs/plan/PLAN.md` | Foundation plan: gap analysis, skills, tooling, phased rollout | Written |
+| `docs/ARD.md` | Architecture Decision Records (ADR-001…030) — the *why* | Written |
 | `docs/research/` | Spikes (`spike-01..04`), PoCs (`poc-tool-detection`, `poc-trivy-sca`, `poc-floor-review`, `poc-iac-scan`), foundation (`fnd-*`) + self-improvement (`si-*`) takeaways | Written |
 | `docs/PRD.md` | Product requirements (FR/NFR + verification criteria) | Written |
 | `docs/DDD.md` | Domain model (ubiquitous language, bounded contexts) | Written |
 | `docs/ARCHITECTURE.md` | The *what/how* (companion to ARD) | Written |
-| `docs/plan/phase-0..9` | Phased plan, 53 tasks, each with verification criteria | Written |
 
 > This is a **living document** — keep it in sync with the agent definition and the ADRs as
 > the rollout progresses. ADRs are append-only; do not contradict them here.

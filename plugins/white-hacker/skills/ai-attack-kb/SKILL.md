@@ -39,7 +39,7 @@ a class that grows splits to `reference/<class>-<n>.md`, still one level deep â€
 `reference/ai-llm.md` does **not** live here â€” the inner-loop **checklist** is a stable
 `_shared/reference/ai-llm.md` (yearly cadence); this `ai-attack-kb/reference/` tier is the
 **fast** AI-threat tier (monthly cadence, refreshed by `sec-kb-refresh`). See the README
-layout reconcile and `docs/plan/phase-4-ai-llm-api.md`.
+layout reconcile.
 
 ## Entry format (the contract)
 

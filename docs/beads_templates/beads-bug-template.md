@@ -99,8 +99,7 @@ Set `--priority` to match impact (design-ticket.md bug check 4):
 fix: <description>          # bug fixes use `fix:`
 ```
 
-Author `Jaigouk Kim <ping@jaigouk.kim>`; **no AI attribution**; **never the corporate email**
-(`.claude/CLAUDE.md` Policy 12). A security-relevant fix gets a dogfood review (QA flow).
+Commit conventions per `.claude/CLAUDE.md` Policy 12. A security-relevant fix gets a dogfood review (QA flow).
 
 ## Rollback
 

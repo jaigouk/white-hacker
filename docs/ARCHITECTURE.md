@@ -1,7 +1,7 @@
 # ARCHITECTURE — white-hacker
 
 > The *what & how* of the white-hacker agent. Companion to `docs/ARD.md` (the *why* —
-> ADR-001..028) and `docs/plan/PLAN.md` (the build plan). Living document; maintained, not
+> the ADRs); planning lives in beads epics/tickets. Living document; maintained, not
 > write-once. Last consistency pass: 2026-06-10 (against ADR-024..028 — CONTAIN primary,
 > admissibility, Gate-2, the diversified tool set, manual-install posture; diagrams in Mermaid).
 

@@ -60,4 +60,4 @@ claude plugin validate
   inside it (the validator above asserts this).
 
 ## 5. Living docs + statuses updated
-- `README.md` status table, `docs/plan/*` task statuses, `docs/ARD.md` (append-only) reflect the release.
+- `README.md` status table, beads tickets, `docs/ARD.md` (append-only) reflect the release.

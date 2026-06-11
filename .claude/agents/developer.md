@@ -19,7 +19,7 @@ within one package; surgical, citable changes only; run the per-package quality 
   goal-driven verification, model-only-for-judgment, budgets, surface-conflicts, read-before-write w/ file:line,
   tests-verify-intent, checkpoint, match-conventions, fail-loud)
 - `docs/ARCHITECTURE.md` — the two nested loops (inner: threat-model → discover → triage → patch; outer: trace → reflect → gate)
-- `docs/plan/` — task assumptions and verification criteria (gates to flip Status→done)
+- the claimed **beads ticket** — task assumptions + Verification criteria (the success boxes; `bd show <id>`)
 - `scripts/` — package layout (each skill/capability = `scripts/{<mod>.py, pyproject.toml, conftest.py, tests/}`)
 
 ## Primary Responsibilities
@@ -40,7 +40,7 @@ within one package; surgical, citable changes only; run the per-package quality 
    those are your success boxes. Groom assumptions right before starting.
 2. **Read first** — exports, callers, patterns in the files you own. Cite the file:line you read.
 3. **Write tests** (RED) → code (GREEN) → refactor (all green).
-4. **Checkpoint:** flip `docs/plan/` Status at each transition (In Progress → In Review).
+4. **Checkpoint:** `bd comment <id>` + `bd update <id> --status` at each transition (in_progress → done).
 5. **Run the gate** — `uv run --project <pkg> pytest <pkg>/tests -q` + `uv run python packaging/validate_manifest.py .`.
 6. **Verification:** every box in the ticket's Verification section is `[x]` or `[ ] DEFERRED — <reason>`.
    Flip Status→`done` only when every gate passes.

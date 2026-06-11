@@ -68,6 +68,48 @@ type template under [`docs/beads_templates/`](docs/beads_templates/):
   `/design-ticket`). A `bd update <id> --description=…` with the template-shaped body is the mechanism;
   never `bd edit` (it opens `$EDITOR` and blocks agents).
 
+## Self-improvement loop (operator-gated) — the team improves its OWN process
+
+The team gets better over time by improving the **process artifacts it runs on** — the role profiles
+(`.claude/agents/*.md`), the workflow commands (`.claude/commands/*.md`), the ticket templates
+(`docs/beads_templates/*`), and the quality gates. **Only the operator applies such a change; never an
+agent on its own.** This is the team's **PROCESS** loop. (Improvements to the project's own CODE/tests
+that a retro surfaces flow the normal way — a follow-up ticket via `/design-ticket` + TDD — not this
+text-edit-and-confirm loop.)
+
+> **This is NOT `/sec-learn`.** `/sec-learn` + `/sec-kb-refresh` are the *product* outer loop (ADR-001):
+> they edit ONLY the shipped reviewer's Context surface — the AI-attack KB, `_shared/reference/`
+> checklists, `tool-registry.md` — and are **hard-confined OUT of process artifacts** by
+> `plugins/white-hacker/hooks/confine_self_writes.py` (`ALLOW_SEGMENTS` = `ai-attack-kb` / `_shared/reference`
+> / `PATCHES` / `evals/traces` only). Routing an "improve `.claude/agents/tech-lead.md`" item to `/sec-learn`
+> is a dead end — it structurally cannot write there. Process improvements go through THIS loop instead.
+
+**Inputs (the only two):**
+- **Retros** — every wave's `/handoff` ends with a mandatory Retro; its items whose target is a role
+  profile, command, ticket template, or gate feed this loop.
+- **Operator feedback** — a correction or preference you give an agent in-session.
+
+**Who proposes:** the **tech-lead** (the in-wave coordinator + closer). A worker (developer, QA,
+researcher, white-hacker) that hits a role/process gap **raises it to the tech-lead** — it does not edit
+a profile itself. (The **project-manager** owns *pre-wave* planning/grooming/wave-assignment, not in-wave
+process edits or closing.)
+
+**Protocol — propose, then confirm:**
+1. The tech-lead drafts the **exact edit**: which file, the precise **old → new** text, and the
+   **source** (the retro item or your feedback, quoted).
+2. It **presents the proposal and WAITS.** No `.claude/agents/*`, command, template, or gate changes
+   without your explicit confirmation **in-session**.
+3. On approval the edit is applied to the working tree; **you review + commit** it — git is
+   operator-gated.
+4. Decline/amend → the agent records the decision and moves on; it does not re-propose unprompted.
+
+**Provenance:** an applied edit is recorded in that wave's `.notes/handoff-<slug>.md` Retro under
+**"Applied this wave (operator-confirmed)"** — which artifact changed + the driving retro item/feedback,
+quoted. The trail survives there without cluttering the role files.
+
+**Fail loud (Policy 12):** a process-artifact edit with no operator confirmation and no recorded source
+is a process violation, not an improvement. When in doubt, propose and wait — never self-apply.
+
 ## Build & Test
 
 _Add your build and test commands here_

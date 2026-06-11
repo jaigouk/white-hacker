@@ -1,7 +1,7 @@
 # PRD — white-hacker: a generic, self-improving white-hat security agent
 
 > Living document. Maintained, not write-once. Today: 2026-06-09. Owner: ping@jaigouk.kim.
-> Companions: `docs/ARD.md` (the *why* — ADR-001..023), `docs/plan/PLAN.md` (the build plan),
+> Companions: `docs/ARD.md` (the *why*), beads epics/tickets (the build plan),
 > `plugins/white-hacker/agents/white-hacker.md` (behavior source of truth). This PRD does not contradict them;
 > where it restates a decision, ADR-NNN is cited.
 
@@ -439,4 +439,4 @@ Each NFR carries a one-line **Verification criterion (VC)**.
 
 > Maintenance note: when an ADR changes or a skill is added/renamed, update the matching FR/NFR and
 > this table in the same PR. This PRD is the *what/why-for-users* view; `docs/ARCHITECTURE.md` (the
-> *how*) and `docs/plan/PLAN.md` (the *build order*) are its companions.
+> *how*) and beads epics/tickets (the *build order*) are its companions.

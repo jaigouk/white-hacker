@@ -9,6 +9,7 @@
 .claude/scheduled_tasks.lock
 
 # Security scan artifacts (generated per-run; never commit findings)
+THREAT_MODEL.md
 THREAT_MODEL.md.bak
 SCAN-PLAN.json
 VULN-FINDINGS.json

@@ -85,7 +85,7 @@ Report findings per file, by category.
 
 #### G. Commit Hygiene
 - [ ] Each commit does ONE thing; refactor separate from fix/feature; message explains WHY
-- [ ] Author `Jaigouk Kim <ping@jaigouk.kim>`; **NO AI attribution**; **never the corporate email**
+- [ ] Commit author + no-attribution + no-corporate-email per `.claude/CLAUDE.md` Policy 12
 - [ ] No machine data in committed files (paths/usernames/tool locations) — repo-relative POSIX only (`finding-schema` rejects an absolute `file`)
 
 #### H. Basic hygiene (a code-review baseline — the in-wave white-hacker already did the security depth)

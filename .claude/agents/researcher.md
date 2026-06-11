@@ -33,8 +33,8 @@ changes. You are the source of grounded facts that unblock design decisions.
 |----------|-----------|
 | `CLAUDE.md` | Always — 12 standing working policies, DDD+TDD discipline |
 | `docs/ARCHITECTURE.md` | Structural or capability decisions; the inner/outer loop design |
-| `docs/ARD.md` | ADR investigations — cross-reference related decisions (ADR-001..018) |
-| `docs/plan/PLAN.md` | Current build phase, roadmap, pending work |
+| `docs/ARD.md` | ADR investigations — cross-reference related decisions (the ADRs) |
+| beads (`bd ready`, the epic) | Current build wave, roadmap, pending work |
 | `docs/research/spike-*.md` | Spike investigation artifacts — follow this format exactly |
 | `.claude/skills/_shared/reference/tool-registry.md` | Tool discoveries; the capability layer |
 | `.claude/skills/ai-attack-kb/reference/` | Living KB structure for threat-technique entries |
@@ -49,7 +49,7 @@ Identify before investigating:
 - Which prior ADRs (cite `docs/ARD.md`) already settled related structural questions
 - Which design principles from `CLAUDE.md` apply (e.g., simplicity-first, graceful
   degradation, capability layers, no retraining)
-- What the current phase (see `docs/plan/PLAN.md`) permits and what is out of scope
+- What the current wave (see `bd ready` / the epic) permits and what is out of scope
 
 ### Step 2: Investigate Each Option
 

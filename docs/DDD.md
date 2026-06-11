@@ -5,7 +5,7 @@
 > `.claude/` (agent, skills, references, hooks) speaks one consistent vocabulary.
 > Where this model and a file on disk disagree, the file's behaviour is the source of
 > truth — open a diff to reconcile. Companion to `docs/ARD.md` (the *why*),
-> `docs/ARCHITECTURE.md` (the *what/how*), and `docs/plan/PLAN.md` (the *build order*).
+> `docs/ARCHITECTURE.md` (the *what/how*), and beads epics/tickets (the *build order*).
 
 The whole product is **two nested loops over plain-text artifacts behind open
 interfaces** (Agent Skills, MCP):
@@ -325,47 +325,44 @@ chain is both the data-flow and the resumability/CI-gating mechanism. Knowledge 
 Tooling feed *into* Review at read-time; Review feeds *back into* Knowledge only as
 recorded traces (the dotted, deferred edge — the outer loop).
 
-```
-                                ┌──────────────────────────────────────────────┐
-                                │                 TEAM context                  │
-                                │  Engagement · AgentIdentity (1 def, 3 carriers)│
-                                │  sequential/subagent (default) | agent-team    │
-                                └───────────────┬───────────────────────────────┘
-                                                │ Handoff (diff in →
-                                                │ TRIAGE summary + report path out)
-                                                ▼
-   ┌───────────────────────────  REVIEW context (INNER LOOP)  ───────────────────────────┐
-   │                                                                                      │
-   │  threat-model ─► THREAT_MODEL.md                                                      │
-   │       │                                                                               │
-   │  detect ──────► SCAN-PLAN.json ◄──────── ScanPlan needs Capabilities ───────┐         │
-   │       │                                                                      │         │
-   │       ├─ secrets-scan ─┐                                                     │         │
-   │       ├─ deps-scan ────┤                                                     │         │
-   │  discovery (RECALL) ───┼─► VULN-FINDINGS.json                               (reads)    │
-   │       └─ ai-llm-review ─┘        ▲                                            │         │
-   │             (reads KB) ──────────┼──────── KnowledgeBaseEntry / Technique ───┼──┐      │
-   │       │                          │                                           │  │      │
-   │  triage (PRECISION, fresh ctx) ─► TRIAGE.json ◄── Exclusions ────────────────┼──┤      │
-   │       │   adversarial N-of-N · dedup · precondition severity                 │  │      │
-   │  report ─────► SECURITY-REPORT.md (+ CI JSON gate: counts.high==0)           │  │      │
-   │       │                                                                      │  │      │
-   │  patch (opt-in) ─► PATCHES/  (re-attack; writes ONLY here)                   │  │      │
-   │                                                                              │  │      │
-   └──────────────────────────────────┬───────────────────────────────────────────┼──┼────┘
-                                       │ trace (hooks → JSONL)                     │  │
-                                       ▼  (deferred — the OUTER LOOP)              │  │
-   ┌──────────────  KNOWLEDGE context (OUTER LOOP)  ─────────────┐    ┌────────────┴──┴──────┐
-   │  KnowledgeBase (fast tier: AI-threats / stable: checklists) │    │  TOOLING context     │
-   │  EvalCorpus (frozen, agent-unwritable)  ExclusionRuleSet    │    │  Capability ↔ Tool   │
-   │                                                             │    │  Floor · Degradation │
-   │  Feeds ─► sec-kb-refresh ─┐                                 │    │  ToolRegistry        │
-   │  traces ─► sec-learn ─────┼─► reflect ─► self-critique ─►   │    │                      │
-   │                            │   GATE (Youden's J,            │    │  registry entries    │
-   │                            │   keep-or-revert) ─► PR        │◄───┤  curated by the same │
-   │  serves entries/exclusions │   (human Apply/Edit/Skip)      │    │  outer-loop PR gate  │
-   │  to REVIEW  ───────────────┘                                │    │                      │
-   └─────────────────────────────────────────────────────────────┘    └──────────────────────┘
+```mermaid
+flowchart TB
+  subgraph TEAM["TEAM context"]
+    TM["Engagement · AgentIdentity<br/>1 definition · 3 carriers<br/>(subagent · /command · agent-team)"]
+  end
+
+  subgraph REVIEW["REVIEW context — inner loop · the Artifact chain"]
+    direction TB
+    A1["threat-model → THREAT_MODEL.md"]
+    A2["detect → SCAN-PLAN.json"]
+    A3["discovery / recall → VULN-FINDINGS.json<br/>secrets · deps · ai-llm-review"]
+    A4["triage / precision, fresh ctx → TRIAGE.json<br/>adversarial N-of-N · dedup"]
+    A5["report → SECURITY-REPORT.md<br/>CI gate: counts.high == 0"]
+    A6["patch (opt-in) → PATCHES/ · re-attack"]
+    A1 --> A2 --> A3 --> A4 --> A5 --> A6
+  end
+
+  subgraph KNOW["KNOWLEDGE context — outer loop"]
+    direction TB
+    K1["KnowledgeBase · ExclusionRuleSet<br/>EvalCorpus (frozen · agent-unwritable)"]
+    K2["sec-kb-refresh / sec-learn →<br/>reflect → GATE (Youden's J ·<br/>keep-or-revert) → PR (human)"]
+    K1 --> K2
+  end
+
+  subgraph TOOL["TOOLING context"]
+    O1["Capability ↔ Tool · ToolRegistry<br/>Floor · graceful Degradation"]
+  end
+
+  TEAM -- "Handoff: diff in → TRIAGE + report out" --> REVIEW
+  KNOW -- "entries / exclusions (read)" --> REVIEW
+  TOOL -- "capabilities (read)" --> REVIEW
+  REVIEW -. "traces (hooks → JSONL) · deferred" .-> KNOW
+  TOOL -- "registry curated by the PR gate" --> KNOW
+
+  style TEAM fill:#eef2ff,stroke:#6366f1
+  style REVIEW fill:#eff6ff,stroke:#3b82f6
+  style KNOW fill:#fffbeb,stroke:#f59e0b
+  style TOOL fill:#f0fdf4,stroke:#22c55e
 ```
 
 Relationship types (DDD strategic patterns):
@@ -411,7 +408,7 @@ file's behaviour, not this table, is the source of truth where they differ.)
 | **EvalCorpus / keep-or-revert gate** (Knowledge) | BUILT — `evals/` (corpus, `score.py`, `keep_or_revert.py`; the gate is fail-closed — no `gate-verdict.json` ⇒ KB writes blocked) |
 | **CAPTURE hooks + PreToolUse guardrails** (Harness) | guardrails BUILT+WIRED — `plugins/white-hacker/hooks/` (`hooks.json`); capture scripts built, registration pending human-auth (T-8.3) ⇒ `evals/traces/` is empty today |
 | **Settings / permissions / size-cap lint** (Harness) | `.claude/settings.local.json`; `lint_skill.py` + `validate_kb.py` BUILT — `plugins/white-hacker/skills/ai-attack-kb/scripts/` (ADR-005) |
-| **Conventions & the key concept** | `.claude/CLAUDE.md` (dev-only); decisions in `docs/ARD.md`; build order in `docs/plan/PLAN.md` |
+| **Conventions & the key concept** | `.claude/CLAUDE.md` (dev-only); decisions in `docs/ARD.md`; build order in beads epics/tickets |
 
 ---
 

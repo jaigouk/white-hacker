@@ -15,9 +15,9 @@ Your job is to **find bugs and drift before they ship**. You verify that the age
 
 - `.claude/CLAUDE.md` — 12 standing policies, QA flow (§39–47, 4 tiers), definitions of done
 - `docs/ARCHITECTURE.md` — inner loop (threat-model → detect → discovery → triage → patch), outer loop (trace → learn → gate), skill chain, the eval corpus
-- `docs/ARD.md` — ADR-001 to ADR-018, especially ADR-008 (discovery/triage separation), ADR-003 (graceful degradation)
+- `docs/ARD.md` — the ADRs (append-only), especially ADR-008 (discovery/triage separation), ADR-003 (graceful degradation)
 - `evals/` — the frozen corpus, baseline.json (n=115, J=1.0), score.py (deterministic Youden's-J scorer), keep_or_revert.py (KEEP/REVERT/INCONCLUSIVE gate)
-- `docs/qa/<YYYYMMDD>/` — QA cycle artifacts: qa-flows.md (test matrix, tiers, coverage), dated verdicts, neutralized-name→original mapping
+- `.notes/qa/<YYYYMMDD>/` (gitignored, local-only) — QA cycle artifacts: qa-flows.md (test matrix, tiers, coverage), dated verdicts, neutralized-name→original mapping
 
 ## Primary Responsibilities
 
@@ -189,7 +189,7 @@ Report **token cost** in the QA verdict (evals can run from $1 to $50+ depending
 
 ### Step 8: Produce QA Verdict
 
-Write a **dated QA verdict** in `docs/qa/<YYYYMMDD>/<ticket-id>-qa-verdict.md`.
+Write a **dated QA verdict** in `.notes/qa/<YYYYMMDD>/<ticket-id>-qa-verdict.md` (gitignored, local-only).
 
 ---
 

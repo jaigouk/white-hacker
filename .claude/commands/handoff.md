@@ -1,6 +1,6 @@
 ---
 name: handoff
-description: Write an end-of-wave handoff to .notes/handoff-<slug>.md — the team's record (tickets, files, findings, follow-ups, next entry point) PLUS a retro that feeds the outer-loop self-improvement
+description: Write an end-of-wave handoff to .notes/handoff-<slug>.md — the team's record (tickets, files, findings, follow-ups, next entry point) PLUS a retro that drives the operator-gated PROCESS self-improvement of our .claude/agents, commands, templates, and gates
 allowed-tools: Bash, Read, Grep, Glob, Write, SendMessage
 ---
 
@@ -10,8 +10,11 @@ Write a session-summary handoff to `.notes/handoff-<slug>.md`. This is **Phase 7
 — the last checkpoint of a multi-agent wave — but it also works for a solo session. The handoff is
 the team's shared record, not one agent's notes: it captures what every teammate reported over
 `SendMessage`, so the next session resumes without re-reading the transcript. It ALSO carries a
-**Retro** — what to improve in the tickets / templates / agents / skills — so each wave feeds the
-project's outer-loop self-improvement (`/sec-learn`).
+**Retro** — what to improve in our `.claude/agents/*` role profiles, the `.claude/commands/*`, the
+ticket templates, and the gates — so each wave drives the team's **operator-gated PROCESS
+self-improvement** (root `CLAUDE.md` § Self-improvement loop). That is a DIFFERENT loop from
+`/sec-learn` (the shipped reviewer's KB, which is hard-confined out of process artifacts) — see the
+Retro section for the routing.
 
 ## When to Use
 
@@ -132,10 +135,15 @@ Test-count delta: <before> → <after> (+<N>).
 
 - <bd-id> — <title> (filed via `/design-ticket --type=<…>` — launch-team Rule 8; NOT an ad-hoc bd create)
 
-## Retro — process improvement (feeds the outer loop)
+## Retro — team & process self-improvement (operator-gated)
 
-The wave's lessons, so the next one is smoother and the agent/templates/skills get better. Be specific
-and actionable — a vague "went well" helps nobody. This is a structured trace for `/sec-learn`.
+The wave's lessons, so the next one is smoother and our **agent profiles / commands / templates / gates**
+get better. Be specific and actionable — a vague "went well" helps nobody. Route by target:
+- **Process-artifact items** (`.claude/agents/*`, `.claude/commands/*`, `docs/beads_templates/*`, a gate)
+  go to the **operator-gated process loop** (root `CLAUDE.md` § Self-improvement loop): the tech-lead
+  proposes the exact edit and WAITS for operator confirmation — **NOT `/sec-learn`**, which can only edit
+  the shipped reviewer's KB/checklists and is structurally blocked from `.claude/`.
+- **Reviewer FP/miss/technique signals** from the dogfood go to `/sec-learn` (see Dogfood signal below).
 
 ### What worked (keep doing)
 - <a template / command / agent behavior that measurably helped — e.g. "groom caught the stale path before launch">
@@ -144,14 +152,29 @@ and actionable — a vague "went well" helps nobody. This is a structured trace 
 - <stale ticket needing re-groom · missing/wrong template section · ambiguous or flaky gate · coordination
   gap · a missing tool · an ambiguous AC · a dev blocked on a file outside its ownership>
 
-### Improvements to make (actionable — where + action)
-| # | Improvement | Where (file / command / agent / skill) | Action |
-|---|---|---|---|
-| 1 | <e.g. groom didn't flag X> | `.claude/commands/groom.md` | filed wh-… / edited |
+### Improvements to make (actionable — owner + action)
+Each item carries an **Owner** = who applies it. Role profiles, commands, templates, and gates change
+ONLY via the operator (the tech-lead proposes; root `CLAUDE.md` § Self-improvement loop). The tech-lead
+may add a test/gate probe directly.
 
-### Dogfood signal (the shipped white-hacker on our own diff)
-- <what the product found reviewing OUR code; a product GAP is fixed IN the product, never forked (ADR-029)>
-- <feeds `/sec-learn` (FPs/misses → KB/skill diffs) and `/sec-kb-refresh` (new techniques/tools)>
+| # | Area | Improvement | Where (file) | Owner | Action |
+|---|---|---|---|---|---|
+| 1 | Agent profile | <e.g. TL broadcast contracts late, devs idled> | `.claude/agents/tech-lead.md` | operator | TL proposes edit → operator confirms |
+| 2 | Workflow command | <e.g. groom didn't flag X> | `.claude/commands/groom.md` | operator | TL proposes edit → operator confirms |
+| 3 | Quality gate | <e.g. an edge case slipped the gate> | <gate / test path> | tech-lead | add the BICEP case / a new probe |
+
+**Top improvement (do this first):** <the single highest-leverage change>
+
+**Applied this wave (operator-confirmed):** <process-artifact edits the operator confirmed + applied,
+each with its source — e.g. "`.claude/agents/tech-lead.md` § Key Rules ← retro: 'TL broadcast contracts
+late, devs idled'">, or "none — proposals pending operator confirmation". This line is the **provenance
+trail**: role profiles / commands / templates / gates change ONLY via the operator-gated loop, so an
+applied edit must name its source here.
+
+### Dogfood signal → the PRODUCT loop (`/sec-learn` — distinct from the process loop above)
+- <what the shipped white-hacker found reviewing OUR code; a product GAP is fixed IN the product, never forked (ADR-029)>
+- This is the ONE retro channel that routes to `/sec-learn` (FPs/misses → KB/checklist diffs) and
+  `/sec-kb-refresh` (new techniques/tools) — those edit the reviewer's KB, which is exactly what these signals are about.
 
 ## Next-Session Entry Point
 
@@ -164,7 +187,7 @@ and actionable — a vague "went well" helps nobody. This is a structured trace 
 
 1. **Facts over memory.** Every ticket status, file path, and line count comes from `bd show` / `git diff --stat`, not recollection.
 2. **Capture the team, not just yourself.** The Team Record reflects actual `SendMessage` reports. If one is missing, ask for it before writing.
-3. **The Retro is mandatory and actionable.** A handoff with an empty or hand-wavy Retro is incomplete — name a concrete improvement and where it lands. The Retro is how a wave improves the next wave (outer loop).
+3. **The Retro is mandatory, actionable, and correctly routed.** A handoff with an empty or hand-wavy Retro is incomplete — name a concrete improvement, where it lands, and its **owner**. Process-artifact items (`.claude/agents/*`, commands, templates, gates) go to the **operator-gated process loop** (the TL proposes, the operator confirms; record applied edits in "Applied this wave"). Only genuine reviewer FP/miss/technique signals go to `/sec-learn` — don't route a process edit there, it can't apply it (root `CLAUDE.md` § Self-improvement loop).
 4. **No silent skips (Policy 12).** If a gate FAILED or a test was SKIPPED, say so plainly and set Status `PARTIAL` — never report green when it isn't. SKIP is never PASS.
 5. **Name the next step.** A handoff with no "Next-Session Entry Point" is incomplete. For a blocking chain, name the ticket the just-closed work unblocked.
 6. **Operator-gated git.** The handoff records git state; it NEVER commits/pushes (`.claude/CLAUDE.md`; the operator owns git).
@@ -174,5 +197,6 @@ and actionable — a vague "went well" helps nobody. This is a structured trace 
 
 - [`.claude/commands/launch-team.md`](launch-team.md) — Phase 7 invokes this; the SendMessage routing the Team Record reflects
 - [`.claude/commands/design-ticket.md`](design-ticket.md) — how follow-ups in this handoff must be filed (templates, not ad-hoc)
-- `plugins/white-hacker/skills/sec-learn/` — the outer-loop reflection arm the Retro feeds (FPs/misses → proposed text diffs, gated)
+- `CLAUDE.md` § Self-improvement loop — the **operator-gated PROCESS loop** for `.claude/agents/*` / commands / templates / gates (where process-retro items go; the TL proposes, the operator confirms)
+- `plugins/white-hacker/skills/sec-learn/` — the **product** outer-loop reflection arm (reviewer FP/miss → KB/checklist diffs, gated); ONLY the Dogfood-signal items route here
 - `.claude/CLAUDE.md` § QA flow / Security posture — dogfood, no-machine-data-in-committed-files, operator-gated git
