@@ -50,3 +50,6 @@ jobs:
             echo "::endgroup::"
           done
           exit "$fail"
+
+      - name: Vendor-lane scrub guard (install/)
+        run: uv run --with pytest pytest install/tests/ -q
