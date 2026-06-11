@@ -49,6 +49,24 @@ bd close <id>         # Complete work
 - If push fails, resolve and retry until it succeeds
 <!-- END BEADS INTEGRATION -->
 
+## Ticket creation & grooming (templates are mandatory)
+
+Every beads ticket MUST be **designed via `/design-ticket --type=<task|bug|spike>`** and conform to its
+type template under [`docs/beads_templates/`](docs/beads_templates/):
+
+| Type | Template | Load-bearing sections |
+|------|----------|-----------------------|
+| `task` | `beads-ticket-template.md` | Goal · Steps · Files to Modify · Acceptance Criteria · Quality Gates · Rollback |
+| `bug` | `beads-bug-template.md` | Reproduction · Expected vs Actual · Root-cause `file:line` · regression-test AC · Severity↔Priority |
+| `spike` | `beads-spike-template.md` | Problem · Research questions · Exit criteria · Time box |
+
+- **Real quality gates** (in every template) are **pytest on the touched package + `validate_manifest.py` +
+  `claude plugin validate` — NOT ruff / mypy / coverage** (Policy 12; `.claude/commands/launch-team.md`).
+- **Never** hand-author a ticket body or `bd create` a one-line description — including follow-ups a
+  team files mid-wave (route them through `/design-ticket`; `.claude/commands/launch-team.md` Rule 8).
+- **Re-groom off-template tickets to the template before launch** (`/groom`, or re-design via
+  `/design-ticket`). A `bd update <id> --description=…` with the template-shaped body is the mechanism;
+  never `bd edit` (it opens `$EDITOR` and blocks agents).
 
 ## Build & Test
 

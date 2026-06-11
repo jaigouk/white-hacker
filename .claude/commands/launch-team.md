@@ -89,16 +89,35 @@ Phase 2 — Devs implement in parallel via TDD (RED tests fail first → GREEN �
           reporting. Report completion to qa-engineer + white-hacker (NOT the TL).
 Phase 3 — QA (4-tier: unit/artifact/live/adversarial, BICEP edge cases) + white-hacker (untrusted-
           input + confinement review) review independently; report findings to the TL (NOT devs).
-Phase 4 — TL triages findings, assigns fixes to specific devs.
+Phase 4 — TL triages findings, assigns in-scope fixes to specific devs. **Out-of-scope / stale-neighbour
+          findings (Policy 3) become NEW tickets filed via `/design-ticket --type=<task|bug|spike>`** —
+          conforming to the type template (`docs/beads_templates/`), NEVER an ad-hoc `bd create` with a
+          one-line body. A bug follow-up (the common case — a dogfood/QA defect outside the diff) uses
+          `beads-bug-template.md`: repro · expected/actual · root-cause `file:line` · regression-test AC ·
+          severity↔priority. Set priority to match impact, not convenience.
 Phase 5 — Fix cycle: dev fixes → re-verify with QA + WH → TL confirms. Max 3 rounds/issue, then
           TL escalates to the user.
 Phase 6 — TL runs the FULL quality gates (below), then `bd close <id>` for each ticket. Watch the
           beads epic auto-close cascade — closing the last child auto-closes the parent epic; if the
           epic is operator-owned, reverse with `bd update <epic> --status open`. Re-export:
           `bd export -o .beads/issues.jsonl`. Update `.notes/order.md` (tick the wave, move ▶).
-Phase 7 — TL runs `/handoff <wave-or-ticket-id>` → writes `.notes/handoff-<slug>.md` (gitignored)
-          collecting each teammate's final report. Print the absolute path. Do NOT commit/push —
-          the operator handles git.
+Phase 7 — TL runs `/handoff <slug>` (`.claude/commands/handoff.md`) → writes `.notes/handoff-<slug>.md`
+          (gitignored): the team record (tickets / files / findings / follow-ups / next entry point) AND
+          a **mandatory Retro** — what to improve in the tickets, templates, agent profiles, gates, or
+          skills, with a concrete owner+action — which feeds the outer-loop self-improvement (`/sec-learn`).
+          Print the absolute path + the top retro improvement. Do NOT commit/push — operator-gated git.
+Phase 8 — **Stand down the team (MANDATORY — always close all agents at the end).** Once the handoff is
+          written, the TL/orchestrator terminates EVERY spawned teammate (`dev-*`, qa-engineer,
+          white-hacker) — `TaskStop` each running agent, or `TeamDelete` the whole team. Leave NO agent
+          running, idle, or "held" past the wave: a lingering agent burns context, can race the operator's
+          beads/working-tree edits, and acts on stale state. The ONLY thing that may stay open after this is
+          an operator decision recorded in the handoff / `.notes/` — never a live agent waiting on it.
+          Confirm "team stood down, N agents closed" in the final report.
+
+**After the wave** (operator or TL, once Phase 7's handoff is written): run `/review` on the wave's diff
+for a final **code-quality** pass — bugs, clarity, conventions, tests, the 12 policies
+(`.claude/commands/review.md`). This is a CODE review, NOT a security pass — the white-hacker (part of
+the wave, Phase 3) already did security, and QA already ran the tiers.
 
 ## Communication Rules
 - ALL communication via SendMessage — text output is invisible to teammates.
@@ -173,17 +192,31 @@ Copy the prompt below into a new session to launch the team.
 ## Rules
 1. **Never launch the team yourself** — only generate the prompt; the user decides when/where to paste.
 2. **Read actual code** — every file reference in the prompt must be verified by reading the file (cite file:line).
-3. **Flag undergroomed tickets** — warn if a ticket lacks ACs or file paths (`/groom` first).
+3. **Flag undergroomed / off-template tickets** — warn if a ticket lacks ACs or file paths, OR doesn't
+   conform to its type template (`docs/beads_templates/beads-{ticket,bug,spike}-template.md`). Re-groom it
+   to the template (`/groom`, or re-design via `/design-ticket`) BEFORE generating the launch prompt — a
+   dev in sequential mode can only execute a self-contained, template-shaped ticket.
 4. **Resolve file conflicts** — disjoint ownership within a wave is mandatory; stop and ask if it isn't.
 5. **No placeholders in output** — fill every `<...>` with real data, or say what's missing.
 6. **Always cite the Project Invariants** — teams that don't see them break capability interfaces, the
    artifact chain, or the no-push / model-for-judgment posture.
 7. **End every wave with `/handoff`** — Phase 7 writes `.notes/handoff-<slug>.md` (ticket id for a
    single-ticket wave, or a wave name like `wave-B` / `epic-wh-4ym`).
+8. **Follow-up tickets go through `/design-ticket`** — any ticket a team files mid-wave (Phase 4
+   out-of-scope / stale-neighbour findings) uses `/design-ticket --type=<task|bug|spike>` and its type
+   template, never an ad-hoc `bd create` one-liner. A bug uses `beads-bug-template.md` with a `file:line`
+   root cause + a regression-test AC.
+9. **Always close all agents at the end (Phase 8).** Every wave ends by standing the team DOWN —
+   `TaskStop`/`TeamDelete` every spawned `dev-*` / qa-engineer / white-hacker. No agent lingers, idles, or
+   stays "held": a live agent burns context and can race the operator's beads / working-tree edits. Park an
+   open decision in the handoff / `.notes/`, never in a waiting agent. The final report states "team stood
+   down, N agents closed."
 
 ## References
-- [`docs/beads_templates/beads-ticket-template.md`](../../docs/beads_templates/beads-ticket-template.md) — ticket body the devs execute
-- [`.claude/commands/design-ticket.md`](design-ticket.md) — designs self-contained tickets + wave placement
-- [`.claude/commands/groom.md`](groom.md) — re-validate a ticket against current state before launch
+- [`docs/beads_templates/`](../../docs/beads_templates/) — `beads-ticket-template.md` (task), `beads-bug-template.md` (bug), `beads-spike-template.md` (spike): the body shapes the devs execute (real gates, NOT ruff/mypy/coverage)
+- [`.claude/commands/design-ticket.md`](design-ticket.md) — designs/re-designs self-contained, template-conforming tickets + wave placement
+- [`.claude/commands/groom.md`](groom.md) — re-validate a ticket against current state before launch (template conformance, drift, persist the verdict)
+- [`.claude/commands/review.md`](review.md) — post-wave CODE-quality pass (run after the handoff; security was the white-hacker's in-wave job)
+- [`.claude/commands/handoff.md`](handoff.md) — Phase 7: the team record + a mandatory Retro that feeds the outer loop (`/sec-learn`)
 - [`.claude/agents/`](../agents/) — the tech-lead / developer / qa-engineer / white-hacker profiles this prompt assigns
 - `.notes/order.md` — the local wave pointer (current wave to launch)

@@ -7,8 +7,9 @@ allowed-tools: Agent, Bash, Read, Grep, Glob
 # /design-ticket <description> [--type=task|spike|bug] [--epic=<id>]
 
 Design a single beads ticket aligned with the templates under
-[`docs/beads_templates/`](../../docs/beads_templates/) (beads-ticket-template.md,
-beads-spike-template.md), with built-in validation. When `--epic <id>` is given,
+[`docs/beads_templates/`](../../docs/beads_templates/) — `beads-ticket-template.md` (task),
+`beads-bug-template.md` (bug), `beads-spike-template.md` (spike) — with built-in validation.
+When `--epic <id>` is given,
 the new ticket is placed in the correct execution wave of that epic and
 the epic's "Execution Waves" section is updated to reflect the addition.
 
@@ -57,7 +58,7 @@ right template.
 |---|---|---|---|
 | `task` | `tech-lead` | README, CLAUDE.md, similar skills under `plugins/white-hacker/skills/`, the artifact-chain schemas, existing patterns | Goal, Prerequisites, Steps, Files to Create/Modify, Verification, Acceptance Criteria, Rollback, Notes, References (`beads-ticket-template.md`) |
 | `spike` | `researcher` | Related docs, prior research under `docs/research/`, upstream docs via WebFetch | Problem statement, Research questions, Investigation plan, Exit criteria ("we will know we're done when…"), Time box, Likely outcomes (`beads-spike-template.md`) |
-| `bug` | `developer` + `qa-engineer` | git log around suspected files, recent commits, related tests, logs/metrics references | Reproduction (commands), Expected vs Actual, Suspected root cause, Files in scope, Acceptance Criteria (regression test), Rollback (`beads-ticket-template.md`) |
+| `bug` | `developer` + `qa-engineer` | git log around suspected files, recent commits, related tests, logs/metrics references | Reproduction (commands), Expected vs Actual, Suspected root cause (`file:line`), Files in scope, Acceptance Criteria (regression test), Severity↔Priority, Rollback (`beads-bug-template.md`) |
 
 Each agent must populate at least: **Goal**, **Steps** (or Reproduction
 for bugs), **Verification**, **Acceptance Criteria**, **Rollback**,
@@ -243,9 +244,9 @@ later analysis).
 
 1. **One ticket per `/design-ticket` invocation.** Quality drops when
    batching.
-2. **Templates are not optional.** Every ticket must conform to
-   `beads-ticket-template.md` (or `beads-spike-template.md` for spikes).
-   Mark `N/A` sections explicitly; don't drop them silently.
+2. **Templates are not optional.** Every ticket must conform to its type's template —
+   `beads-ticket-template.md` (task), `beads-bug-template.md` (bug), or
+   `beads-spike-template.md` (spike). Mark `N/A` sections explicitly; don't drop them silently.
 3. **Verify against the actual repo state.** Don't trust the user's
    description — read the files and check.
 4. **User approves before creation.** Never auto-create tickets.
@@ -285,7 +286,8 @@ self-contained.
 
 ## References
 
-- [`docs/beads_templates/beads-ticket-template.md`](../../docs/beads_templates/beads-ticket-template.md) — task and bug body structure
+- [`docs/beads_templates/beads-ticket-template.md`](../../docs/beads_templates/beads-ticket-template.md) — task body structure (real gates: pytest + manifest + plugin validate, NOT ruff/mypy/coverage)
+- [`docs/beads_templates/beads-bug-template.md`](../../docs/beads_templates/beads-bug-template.md) — bug body structure (repro · expected/actual · root-cause file:line · regression test · severity↔priority)
 - [`docs/beads_templates/beads-spike-template.md`](../../docs/beads_templates/beads-spike-template.md) — spike body structure
 - [`docs/beads_templates/beads-epic-template.md`](../../docs/beads_templates/beads-epic-template.md) — Execution Waves section format (kept aligned with this command's Phase 3)
 - [`.claude/commands/launch-team.md`](launch-team.md) — execution modes (sequential default vs team opt-in); informs the self-contained-execution requirement above
