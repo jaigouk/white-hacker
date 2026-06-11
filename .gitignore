@@ -22,6 +22,11 @@ PATCH-STATE.json
 .patch-state/
 *.sarif
 
+# PUBLIC REPO — QA evidence + run/investigation logs are LOCAL-ONLY (they leak machine paths,
+# installed-tool locations, and internal security posture). Keep producing under docs/qa/<date>/
+# for local reference; NEVER commit. (Claude memory: public-repo-no-personal-info)
+docs/qa/
+
 # Exception: the PoC run evidence under docs/research/ is DELIBERATE, sanitized fixture
 # output (planted-vuln findings — the eval-corpus seed), not live scans. Keep it tracked.
 # (Also un-ignores triage.json, which the case-insensitive TRIAGE.json pattern catches on macOS.)

@@ -58,15 +58,13 @@ The two credible vendors **directly contradict** on the most operationally loade
   treat the wiper as POSSIBLE** (isolate-before-rotate costs little; being wrong is catastrophic) while
   **labeling the claim DISPUTED** in any entry we ship.
 
-## 4. Our own exposure (we dogfood the agent — checked 2026-06-10)
-- **Poisoned-config artifacts:** NONE (`.claude/setup.mjs`, `.github/setup.js`, `.cursorrules`,
-  `.windsurfrules`, `.aider.conf.yml`, `.vscode/tasks.json` — absent from the tree).
-- **Lockfile/service IOCs:** NONE (`/tmp/.bun_ran`, `gh-token-monitor`, `update-monitor` — absent).
-- **Dependency overlap:** ZERO — our declared deps are `jsonschema` / `pyyaml` / `pytest` only
-  (stdlib-first by ADR-021); none of the Hades wheels are bioinformatics-adjacent to ours.
-- **Mitigation in place:** the minimal-dep posture (small attack surface) + the F-001 SessionStart
-  allowlist (`sessionstart_project_facts.py` — non-imperative facts only, resists config-injection) +
-  `confine_self_writes`. We are not exposed *today*; the gap is **knowing**, not being hit.
+## 4. Exposure assessment
+The relevant exposure surfaces for any consumer of this campaign are: poisoned AI-assistant config
+files (§1), the lockfile/service IOCs, and a lockfile resolving any Hades wheel. The design-level
+defenses are the minimal-dependency posture, the SessionStart factual-only allowlist, and the
+`confine_self_writes` boundary — the gap a defender should close is **knowing** (currency), not a
+specific in-the-wild hit. *(Any concrete machine/environment self-audit is kept in local working notes
+— not committed to this public repo.)*
 
 ## 5. System implications — the RCA, with the verified evidence (dogfood)
 We track the **parent** (`AISEC-SUPPLY-CHAIN-002`, TeamPCP / Mini Shai-Hulud, dated 2026-06-09) but
