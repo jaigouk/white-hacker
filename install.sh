@@ -163,6 +163,25 @@ vendor() {  # $1 = pinned clone, $2 = target
     warn "scrubber not found in clone (install/scrub_vendored.py) or uv absent — vendored payload NOT scrubbed; it may carry dev-repo references."
   fi
   warn "confinement hooks are plugin-lane-only (they resolve \${CLAUDE_PLUGIN_ROOT}) and are intentionally omitted here — with the outer-loop skills excluded there is nothing for them to confine. Use --plugin if you want them."
+  # Onboarding handoff (vendor lane only): land the user on a confirmed project profile by offering to
+  # run the sec-init onboarding now. NON-FATAL throughout (set -e safe, :24) — a missing claude, a
+  # declined prompt, or a nonzero claude exit must NOT fail the install (guarded with || true / explicit
+  # branches). Mirrors ensure_uv's /dev/tty pattern (:108-111); claude presence modelled on the plugin
+  # lane's `command -v claude` check. sec-init writes <target>/.white-hacker/project-profile.json (it is NOT reimplemented
+  # here — we only launch it; plugins/white-hacker/skills/sec-init/scripts/init_profile.py:332).
+  local onboard="run the white-hacker sec-init onboarding — detect this project's stack (language, package manager, build/test) and confirm the .white-hacker/project-profile.json companion with me."
+  if [ "$DRYRUN" = 1 ]; then
+    log "[dry-run] would offer to run onboarding"
+  elif command -v claude >/dev/null 2>&1 && [ "$UNATTENDED" != 1 ]; then
+    printf '   Run white-hacker onboarding now (detect stack + confirm the project profile)? [Y/n] '
+    read -r a </dev/tty 2>/dev/null || a=n   # no controlling tty -> default SKIP (print the manual step), never a doomed interactive spawn (ADR-007)
+    case "$a" in
+      n|N) log "skipped onboarding — run it later in Claude Code here";;
+      *)   claude "$onboard" </dev/tty || true;;
+    esac
+  else
+    log "to onboard: open Claude Code in $2 and ask to run the white-hacker sec-init onboarding — it detects your stack (language, package manager, build/test) and writes .white-hacker/project-profile.json."
+  fi
 }
 
 plugin() {  # $1 = pinned clone (used as a LOCAL pinned marketplace)
@@ -202,6 +221,9 @@ $(c '1;32' '✓') white-hacker vendored into $TARGET/.claude ($WH_REF).
    - skills: .claude/skills/*                 (inner loop: threat-model -> discovery -> triage ->
                                                 report; + secrets-scan / deps-scan / ai-llm-review;
                                                 opt-in sec-patch). No slash commands in this lane.
+   - onboard: run the sec-init onboarding (offered above, or anytime in Claude Code here) to detect
+              your stack and write .white-hacker/project-profile.json — the agent reads it to tailor
+              the review to your language / package manager / build + test.
 In a Claude Code session here, just ask, e.g.:
    "run a white-hacker security review on my working-tree diff"
 Claude delegates to the white-hacker subagent. Commit .claude/ to share it / run it in CI.
