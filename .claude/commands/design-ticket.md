@@ -103,6 +103,16 @@ per type:
 4. Severity matches priority? (Review pipeline broken / missed vuln = P0,
    blocks one flow = P2, cosmetic = P3.)
 
+**DO-NOT-COPY / primary-source-gated tickets (any type).** If the ticket
+hardcodes named literals an attacker also controls — dropper/IOC
+filenames, package names, YARA-style signatures, regex constants — every
+such literal in the body must be TAGGED `[primary-sourced: <url|file:line>]`
+or `[example-unverified]`. An `[example-unverified]` literal is
+illustrative ONLY and MUST NOT be hardcoded (the dev re-derives it from a
+primary source or drops it). This stops an unsourced example (e.g. a
+community-YARA filename) from reaching the code, where the gate would then
+have to strip it mid-wave.
+
 Output one of: **APPROVED**, **APPROVED WITH FIXES** (list them),
 **NEEDS REDESIGN** (explain).
 

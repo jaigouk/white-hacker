@@ -53,6 +53,11 @@ package you touch (e.g. `sec-detect`, `deps-scan`, `hooks`). Always `uv run`, ne
 - [ ] Criterion 2
 - [ ] Criterion 3
 
+> If a criterion covers parsing UNTRUSTED input (`json.loads` / `.decode()` / a recursive parser),
+> enumerate the DISTINCT exception branches it must degrade on — `ValueError` (parse) · `OSError` (I/O)
+> · `UnicodeDecodeError` (encoding) · **`RecursionError` (parse-DEPTH — a `RuntimeError` subclass NOT
+> caught by `ValueError`; a byte/size cap does NOT bound nesting depth)**. (See `beads-bug-template.md` AC.)
+
 ## Quality Gates (must pass before `bd close`)
 
 The white-hacker gates are **pytest + manifest + plugin validate — NOT ruff / mypy / coverage**

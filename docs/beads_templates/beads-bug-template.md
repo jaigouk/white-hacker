@@ -68,6 +68,10 @@ A concrete hypothesis tied to code — **`file:line` + the specific construct**,
 - [ ] Both directions pinned where relevant (`== expected` AND `!= the wrong value`).
 - [ ] No regression: the touched package's existing tests stay green.
 - [ ] (If security) the threat-model probe is closed — the malicious input no longer triggers the defect.
+- [ ] (If the fix parses UNTRUSTED input — `json.loads` / `.decode()` / any recursive parser) the
+      "degrades cleanly" AC enumerates the DISTINCT exception branches, not just one: `ValueError`
+      (parse) · `OSError` (I/O) · `UnicodeDecodeError` (encoding) · **`RecursionError` (parse-DEPTH — a
+      `RuntimeError` subclass NOT caught by `ValueError`; a byte/size cap does NOT bound nesting depth)**.
 
 ## Quality Gates (must pass before `bd close`)
 

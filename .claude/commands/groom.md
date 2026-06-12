@@ -100,6 +100,7 @@ For the package/skill the ticket plans to change:
 2. **Verify cross-references resolve** — artifact-chain JSON validates against `finding-schema.json`; `kb_refs` resolve; the capability interface the ticket names exists (ADR-015).
 3. **Would the package gates pass?** — the REAL gates (Policy 12; **NOT ruff / mypy / coverage**): `nice -n 10 uv run --project plugins/white-hacker/skills/<skill>/scripts --with pytest pytest plugins/white-hacker/skills/<skill>/scripts/tests -q` · `uv run python packaging/validate_manifest.py .` · `claude plugin validate ./plugins/white-hacker` (never bare python/pytest). If a `scripts/` package is in scope, run the package test now for a green baseline. Outer-loop tickets (KB/registry/eval corpus) also: `evals/score.py` + `evals/keep_or_revert.py`.
 4. **Check naming conventions** — findings `F-NNN` (`^F-[0-9]{3,}$`), KB ids `AISEC-<CLASS>-<NNN>`, skill frontmatter `name`/`description`, artifact filenames in the `THREAT_MODEL → SCAN-PLAN → VULN-FINDINGS → TRIAGE → PATCHES` chain.
+5. **DO-NOT-COPY literal tags** — if the ticket hardcodes attacker-controlled literals (dropper/IOC filenames, package names, signatures), confirm each is tagged `[primary-sourced: <url|file:line>]` or `[example-unverified]`, the primary-sourced ones resolve, and NO `[example-unverified]` literal is slated to be hardcoded (illustrative only — re-derive or drop). An untagged literal in a primary-source-gated ticket → NEEDS UPDATE.
 
 ### Phase 6 — Report
 
@@ -114,6 +115,7 @@ TEMPLATE / BODY:
   Cited file:line drift:  [ACCURATE | CORRECTED: <ref→ref> | DANGLING: <ref>]
   Falsified body claims:  [NONE | STRUCK: <claim> (source: <file:line>)]
   Bug priority vs rubric: [MATCHES | MISMATCH: <P? → P?> | N/A — not a bug]
+  DO-NOT-COPY literals:   [N/A | TAGGED — primary-sourced resolve | UNTAGGED/UNSOURCED: <literal>]
 
 REPO / PACKAGE STATE:
   Skill/package exists:   [OK | MISSING: <path>]

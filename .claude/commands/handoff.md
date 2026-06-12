@@ -76,7 +76,30 @@ Cite real paths, line counts, and ticket IDs — no placeholders.
 Use the Write tool with the template below. Fill EVERY section with real data. **One file per wave** —
 overwrite if re-run; don't fork copies.
 
-### Step 4 — Report
+### Step 4 — Verify the Retro (grounding gate — do this BEFORE you finalize)
+
+The writer is the one who hallucinates, so treat the Retro adversarially — this is a deliberate second
+pass, not a re-read of your own prose. For **EACH Improvement row**:
+
+1. **Open the `file:line` in its "Where" column** and confirm it EXISTS and actually says what the row
+   assumes. Read the surrounding construct (the function / hook / gate / ADR), not just the one line.
+2. **Confirm the proposed change does not contradict** the hook / gate / contract / convention living
+   there. A fix a PreToolUse hook would block, or one an ADR already settled the other way, is not an
+   improvement.
+3. **If the item rests on an UNTESTED assumption** — a tool's behavior, a hook's firing scope, a
+   convention nobody ran — you CANNOT verify it by reading. Do NOT record it as an Improvement; convert it
+   to a **spike question** and file it via `/design-ticket --type=spike`.
+4. **Annotate the row's verification** on the template's **"Retro verified (Step 4)"** line — the
+   `file:line` you re-read + what it confirmed (or `row N → spike <id>`). A row with no annotation is not
+   done. For a load-bearing process change, prefer an INDEPENDENT check (a fresh-context agent or the
+   operator), not only your own re-read.
+
+A Retro still carrying an unverified Improvement row is INCOMPLETE (Policy 12 — a skipped check is not a
+pass): verify it, drop it, or downgrade it to a spike before Step 5. (This gate exists because a past wave
+recorded a `--plugin-dir` "dogfood" item that one read of
+`plugins/white-hacker/hooks/confine_self_writes.py:48` would have refuted.)
+
+### Step 5 — Report
 
 Print the absolute path of the saved file and a 2-line summary (tickets closed, next entry point) so
 the user sees it without opening the file. Surface the Retro's top improvement explicitly.
@@ -157,6 +180,16 @@ Each item carries an **Owner** = who applies it. Role profiles, commands, templa
 ONLY via the operator (the tech-lead proposes; root `CLAUDE.md` § Self-improvement loop). The tech-lead
 may add a test/gate probe directly.
 
+**Ground every item before you write it (Policy 8 — read before you conclude).** A retro improvement is a
+*claim*, not a hunch: VERIFY it against the artifact it names BEFORE recording it — read the `file:line` the
+fix would touch and confirm the fix doesn't contradict an existing hook / gate / contract / convention. Put
+that `file:line` in the **Where** column. An item written from memory ("we should load X" / "we should add
+Y") that you have NOT checked is a **hallucinated retro item** — a process defect, held to the same bar as an
+uncited "verified" on a ticket. If you can't verify it in-session, file it as a **spike question**, not an
+Improvement row. (Worked failure: a `--plugin-dir` "true dogfood" item that, unchecked, would have blocked the
+wave's own edits — `confine_self_writes` (`plugins/white-hacker/hooks/confine_self_writes.py:48`) denies every
+Write/Edit outside the KB lane; reading the hook catches it before it's recorded.)
+
 | # | Area | Improvement | Where (file) | Owner | Action |
 |---|---|---|---|---|---|
 | 1 | Agent profile | <e.g. TL broadcast contracts late, devs idled> | `.claude/agents/tech-lead.md` | operator | TL proposes edit → operator confirms |
@@ -164,6 +197,11 @@ may add a test/gate probe directly.
 | 3 | Quality gate | <e.g. an edge case slipped the gate> | <gate / test path> | tech-lead | add the BICEP case / a new probe |
 
 **Top improvement (do this first):** <the single highest-leverage change>
+
+**Retro verified (Step 4):** <one entry per Improvement row — the `file:line` re-read + what it confirmed,
+or `row N → spike <id>` for an item that couldn't be verified by reading. Empty/"trust me" = the gate was
+skipped (Policy 12). e.g. "row 1 → read `launch-team.md` File Ownership §, fix is additive ✓; row 2 →
+unverifiable hook-scope assumption → spike wh-___">
 
 **Applied this wave (operator-confirmed):** <process-artifact edits the operator confirmed + applied,
 each with its source — e.g. "`.claude/agents/tech-lead.md` § Key Rules ← retro: 'TL broadcast contracts
@@ -192,6 +230,7 @@ applied edit must name its source here.
 5. **Name the next step.** A handoff with no "Next-Session Entry Point" is incomplete. For a blocking chain, name the ticket the just-closed work unblocked.
 6. **Operator-gated git.** The handoff records git state; it NEVER commits/pushes (`.claude/CLAUDE.md`; the operator owns git).
 7. **One file per wave; `.notes/` only.** Overwrite `.notes/handoff-<slug>.md` if re-run. Never commit it, never move it under `docs/` (it leaks machine/posture detail).
+8. **Retro items are grounded, not guessed (Policy 8).** Every Improvement row names a `file:line` the proposer actually READ, and a proposed fix is checked against the hooks / gates / contracts / conventions it would touch BEFORE it is recorded. An unverified plausible-sounding "we should do X" is a hallucinated retro item — drop it or downgrade it to a spike question. The same bar applies to a convention you cite as *justification*: if it's never been tested (e.g. "dev/team sessions load `--plugin-dir`" vs. what `confine_self_writes` actually blocks), say so and route it to a spike — don't repeat it as settled.
 
 ## References
 

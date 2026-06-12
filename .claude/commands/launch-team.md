@@ -107,7 +107,11 @@ Phase 6 — TL runs the FULL quality gates (below), then `bd close <id>` for eac
 Phase 7 — TL runs `/handoff <slug>` (`.claude/commands/handoff.md`) → writes `.notes/handoff-<slug>.md`
           (gitignored): the team record (tickets / files / findings / follow-ups / next entry point) AND
           a **mandatory Retro** — what to improve in our `.claude/agents/*` profiles, the `.claude/commands/*`,
-          the ticket templates, or the gates, each with a concrete **owner+action**. Process-artifact items
+          the ticket templates, or the gates, each with a concrete **owner+action**. Every retro item must be
+          **grounded** — verified against the `file:line` it names (and any hook / gate / convention the fix
+          would touch) BEFORE it's recorded; an unverified plausible "we should do X" is a hallucinated retro
+          item, not an improvement (Policy 8; `handoff.md` Rule 8 — if it can't be verified in-session, file a
+          spike question, don't record it). Process-artifact items
           feed the **operator-gated process loop** (root `CLAUDE.md` § Self-improvement loop): the TL drafts
           the exact edit and WAITS for operator confirmation — NOT `/sec-learn` (which only edits the shipped
           reviewer's KB and is confined out of `.claude/`). Reviewer FP/miss/technique signals from the
@@ -170,7 +174,13 @@ never mark an AC checked when its probe is SKIP not PASS; always `uv run`, never
 | File | Owner | Ticket |
 |------|-------|--------|
 | <file> | dev-<ticket-id> | <ticket-id> |
-DO NOT modify files outside your ownership row.
+The row is your **primary fix surface**. DO NOT modify files outside it — with ONE in-scope exception: a
+behavior change legitimately ripples to **same-package sibling tests that encode the OLD contract** (asserts
+that now fail BECAUSE your change is correct). Updating those to keep the suite green is in-scope, not a
+boundary violation — leaving them red violates Policy 12; preserve intent when you do (re-point or
+monkeypatch the changed assertion, never delete a test to make it pass — Policy 9). Still hard: never touch
+another dev's owned files or another package. If two devs' contract-ripples would collide on one test file,
+that's a wave-disjointness conflict — resolve it at File Ownership mapping (Rule 4 / Step 3), not mid-wave.
 
 ## Existing Code (DO NOT recreate)
 <files/packages that already exist and must not be overwritten>
@@ -218,6 +228,11 @@ Copy the prompt below into a new session to launch the team.
    stays "held": a live agent burns context and can race the operator's beads / working-tree edits. Park an
    open decision in the handoff / `.notes/`, never in a waiting agent. The final report states "team stood
    down, N agents closed."
+10. **Retro items are verified, not guessed (Policy 8).** Phase 7's Retro records only improvements the TL has
+   grounded in a `file:line` it actually read and checked against the hooks / gates / contracts / conventions
+   the fix would touch. An unverified plausible-sounding item — or a convention cited as justification that was
+   never tested against the code (e.g. `--plugin-dir` "dogfood" vs. what `confine_self_writes` blocks) — is a
+   hallucinated retro defect: drop it or downgrade it to a spike. See `handoff.md` Rule 8.
 
 ## References
 - [`docs/beads_templates/`](../../docs/beads_templates/) — `beads-ticket-template.md` (task), `beads-bug-template.md` (bug), `beads-spike-template.md` (spike): the body shapes the devs execute (real gates, NOT ruff/mypy/coverage)
