@@ -590,7 +590,8 @@ against the in-repo catalog. One definition, three carriers, multiple scopes (AD
   ./plugins/white-hacker`; validate with `claude plugin validate`. **Manual install elsewhere
   (ADR-028):** the `install.sh` vendor lane from a target repo, or register a clone locally —
   `claude plugin marketplace add <path-to-clone>` → `claude plugin install
-  white-hacker@white-hacker-marketplace [--scope user|project|local]`.
+  white-hacker@white-hacker-marketplace [--scope user|project|local]`. **Developer loading guide
+  (CLI `--plugin-dir` = live vs local-marketplace / desktop install = snapshot): `docs/plugin-loading.md`.**
 - **Plugin consequences:** skills become **namespaced** (`/white-hacker:security-review`) and hooks
   reference `${CLAUDE_PLUGIN_ROOT}` for portable paths (ADR-017).
 - **Carriers from one file:** `/security-review` slash command · delegated subagent
