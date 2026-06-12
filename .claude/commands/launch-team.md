@@ -48,7 +48,11 @@ Fixed roles: **tech-lead** (coordinator, contracts, final gates, **wave-end `bd 
 operator-gated process-improvement proposer** — root `CLAUDE.md` § Self-improvement loop), **qa-engineer**
 (4-tier QA, eval scoring, reports) — these are `.claude/agents/` profiles; **white-hacker** (dogfood
 security review of the diff) is the **shipped product** `plugins/white-hacker/agents/white-hacker.md`,
-available when the session loads the plugin (`--plugin-dir ./plugins/white-hacker`; ADR-029). One
+available when the session loads the plugin (`--plugin-dir ./plugins/white-hacker`; ADR-029). **If the
+session was NOT launched with `--plugin-dir`, the white-hacker subagent cannot be spawned** (it is not in
+the agent registry) — then mark its row **DEFERRED** in the Phase-7 handoff Team Record (a *named* deferral,
+never a silent skip — Policy 12), do NOT report the security tier green, and file a follow-up to run the
+dogfood in a plugin-loaded session. One
 **developer** per ticket, named `dev-<ticket-id>` (e.g. `dev-wh-4ym.4`). The **project-manager** is a
 *pre-wave* planning/grooming role (epics, waves, `.notes/order.md`) — it is NOT rostered into a
 wave-execution team; the tech-lead owns in-wave acceptance + close.
