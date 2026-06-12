@@ -1,0 +1,41 @@
+# Dependabot — automated dependency + GitHub Actions updates.
+# Docs: https://docs.github.com/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
+#
+# ADR-006 (pin AND verify): for the `github-actions` ecosystem, Dependabot bumps the pinned commit
+# SHA *and* its `# vX` comment together — so our SHA pins stay CURRENT rather than being unpinned.
+# That is the highest-value updater here. The `pip` updater is hygiene only: the skills are
+# stdlib-first and run isolated via `uv run --with` (no lockfiles), so it mostly tracks test deps.
+version: 2
+updates:
+  # --- GitHub Actions used by our workflows (keeps the SHA pins fresh) ---
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    groups:
+      github-actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: "ci"
+    labels: ["dependencies", "github-actions"]
+    open-pull-requests-limit: 5
+
+  # --- Python tooling / test deps declared across the repo's pyproject.toml files ---
+  #     (`directories` globbing covers every skill's scripts/ dir in one entry)
+  - package-ecosystem: "pip"
+    directories:
+      - "/evals"
+      - "/packaging"
+      - "/plugins/white-hacker/hooks"
+      - "/plugins/white-hacker/skills/*/scripts"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    groups:
+      python:
+        patterns: ["*"]
+    commit-message:
+      prefix: "deps"
+    labels: ["dependencies", "python"]
+    open-pull-requests-limit: 5

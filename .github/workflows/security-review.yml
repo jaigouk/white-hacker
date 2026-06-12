@@ -1,0 +1,98 @@
+# white-hacker security review — the wired, active CI workflow (corrected from the ci/ template).
+# Runs the SAME /security-review the local agent runs (ADR-009), read-only — proposes, never pushes
+# (ADR-010) — on the developer's OWN diff only, never a fork PR (Agents Rule of Two, ADR-001).
+#
+# GREEN BY DEFAULT: the model-running job is GUARDED on the ANTHROPIC_API_KEY secret. Without it the
+# review job SKIPS (a skipped job is not a failure), so this never reddens CI until you opt in by
+# adding the secret at Settings -> Secrets and variables -> Actions. Only THIS workflow needs a key;
+# Dependabot / CodeQL / Scorecard do not.
+#
+# ADR-006: third-party Actions SHA-pinned; the claude-code npm version + the model id pinned to
+# verified values (claude-code 2.1.167 verified on npm 2026-06-13).
+name: white-hacker-security-review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: white-hacker-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Secrets can't be read in a job-level `if:`, so surface "is the key configured?" as an output.
+  check-secret:
+    runs-on: ubuntu-latest
+    outputs:
+      has_key: ${{ steps.probe.outputs.has_key }}
+    steps:
+      - id: probe
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ -n "${ANTHROPIC_API_KEY:-}" ]; then
+            echo "has_key=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_key=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=white-hacker::ANTHROPIC_API_KEY not set — review skipped. Add the secret to enable the dogfood gate."
+          fi
+
+  security-review:
+    needs: check-secret
+    # Run ONLY when the key exists AND it is our own diff (manual dispatch, or a same-repo PR — never a fork).
+    if: >-
+      needs.check-secret.outputs.has_key == 'true' &&
+      (github.event_name == 'workflow_dispatch' ||
+       github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (full history for an accurate diff)
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3 (SHA verified 2026-06-06)
+        with:
+          fetch-depth: 0
+
+      - name: Install Claude Code (pinned) + the gate's runtime dep
+        run: |
+          npm install -g @anthropic-ai/claude-code@2.1.167   # pinned; never 'latest' (ADR-006)
+          python -m pip install --quiet 'jsonschema>=4.20'
+
+      - name: Run the white-hacker review on the diff (plugin loaded, read-only, floor-only)
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          # --plugin-dir loads the plugin so `/security-review` resolves (it is a plugin command);
+          # the model is pinned (the platform default drifts). /sec-patch is NEVER run in CI.
+          base="${{ github.base_ref }}"
+          range="${base:+origin/${base}...HEAD}"
+          range="${range:-HEAD~1...HEAD}"   # manual-dispatch fallback: the last commit
+          claude --plugin-dir ./plugins/white-hacker --model claude-opus-4-8 \
+            -p "/security-review ${range}" | tee review.log
+
+      - name: Gate on HIGH findings (fail deterministically when counts.high > 0)
+        run: python plugins/white-hacker/skills/sec-report/scripts/ci_gate.py TRIAGE.json
+
+  # Outer-loop merge gate: on a PR that touches the living KB / checklists, run keep-or-revert.
+  # Deterministic — NO API key. Green unless a KB change regresses recall/FPR (which it SHOULD fail on).
+  kb-keep-or-revert-gate:
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3 (SHA verified 2026-06-06)
+        with:
+          fetch-depth: 0
+      - name: Keep-or-revert gate on KB / checklist changes
+        run: |
+          changed="$(git diff --name-only "origin/${{ github.base_ref }}...HEAD" || true)"
+          if echo "$changed" | grep -qE 'plugins/white-hacker/skills/ai-attack-kb/|plugins/white-hacker/skills/_shared/reference/'; then
+            python -m pip install --quiet pytest jsonschema pyyaml
+            python -m pytest evals/tests/test_gate_ci.py -q
+          else
+            echo "no KB/checklist change; keep_or_revert gate skipped"
+          fi
