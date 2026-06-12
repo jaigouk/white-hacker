@@ -40,6 +40,7 @@ grooming, baked in here:
    - **agent loop / agency** (high-impact tools without a human gate, unbounded consumption),
    - **target AI-assistant config files** (on-disk bootstrap config poisoning — `.claude/setup.mjs`,
      `.vscode/tasks.json`, `.cursorrules`, etc.; enumerated in `ai-llm.md` §9, KB `AISEC-SUPPLY-CHAIN-003`).
+     Deterministic FLOOR pre-screen: `ide-hygiene/scripts/config_persist_scan.py` (auto-exec trigger [tasks.json `runOn:folderOpen` / `.claude` `SessionStart`] → primary-sourced dropper ref).
 2. **Sweep each partition** against `_shared/reference/ai-llm.md` (§1–§9). For the matched
    technique class, **load the `ai-attack-kb/reference/<class>.md` entry on demand** (progressive
    disclosure) and use its `detections` patterns. For each candidate trace **source → sink**.
