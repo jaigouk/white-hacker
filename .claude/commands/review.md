@@ -1,7 +1,7 @@
 ---
 name: review
-description: Structured CODE review of a completed wave's diff — bugs, clarity, the 12 policies, capability interfaces, artifact chain, model-for-judgment-only, tests-verify-intent. Run AFTER wave work is done. Code quality, NOT security (the white-hacker did that in-wave).
-allowed-tools: Read, Grep, Glob, Bash
+description: Structured CODE review of a completed wave's diff — bugs, clarity, the 12 policies, capability interfaces, artifact chain, model-for-judgment-only, tests-verify-intent. Run AFTER wave work is done. Code quality, NOT security (the white-hacker did that in-wave). Saves the report to the shared wave folder .notes/waves/<YYYYMMDD>/<slug>/review.md.
+allowed-tools: Read, Grep, Glob, Bash, Write
 ---
 
 # /review <target>
@@ -120,6 +120,12 @@ Report findings per file, by category.
 ### Recommendations
 1. <actionable, file:line> 2. <actionable, file:line>
 ```
+
+**Save the report to the wave folder, then present it.** `Write` the report above to
+`.notes/waves/<YYYYMMDD>/<slug>/review.md` — the SAME shared folder as the wave's `launch.md` /
+`handoff.md` / `qa-verdict.md`. `<slug>` is the deterministic rule from `/launch-team` Step 7 / `/handoff`
+(1 ticket verbatim · 2–3 sorted + `+` · 4+ `<lead>+<N>more`); locate the folder via
+`ls -d .notes/waves/*/<slug>/` (`<YYYYMMDD>` is the wave's launch date, not today). `.notes/` is gitignored.
 
 ### Severity Definitions
 

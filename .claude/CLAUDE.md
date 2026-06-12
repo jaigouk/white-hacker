@@ -42,6 +42,12 @@ Apply on top of DDD + TDD. Bias: **caution over speed on non-trivial work.**
   it leaks machine paths / tool inventory / internal posture; NEVER under the repo `docs/`, NEVER committed).
   One dated folder per cycle (`qa-flows.md`, run findings, the neutralized-name→original mapping, a `README.md`).
   `evals/` is the eval *infrastructure* (sanitized, committed baseline); `.notes/qa/` is the QA *evidence*.
+- **Per-wave artifacts share ONE gitignored folder `.notes/waves/<YYYYMMDD>/<slug>/`** — `launch.md`
+  (`/launch-team`) · `handoff.md` (`/handoff`) · `review.md` (`/review`) · `qa-verdict.md` (qa-engineer).
+  `<YYYYMMDD>` = the wave's LAUNCH date; `<slug>` = the ticket-id set, **sorted + deterministic** (1 ticket
+  verbatim · 2–3 joined with `+` · 4+ `<lead>+<N>more`) so every writer lands in the same folder (locate via
+  `ls -d .notes/waves/*/<slug>/`). The QA-**cycle** evidence above stays in `.notes/qa/<YYYYMMDD>/`; only the
+  per-wave **verdict** goes in the wave folder.
 - **Dogfood — improve the product by using it.** Review our own ticket changes by running the **shipped**
   white-hacker (`plugins/white-hacker/agents/white-hacker.md` + the `sec-*` skills + `hooks/`), not only a
   hand-written reviewer; record what we learn. Never expose local PII / machine data while doing so (see above).

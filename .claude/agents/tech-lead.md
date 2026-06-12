@@ -162,7 +162,7 @@ finding. Use SendMessage to route architectural blockers to peers; never solve t
 - **Propose, then wait.** Draft the **exact edit** (file + precise `old → new` + the retro item / operator
   feedback, quoted), **present it, and WAIT** for the operator's in-session confirmation. Never self-apply.
   On approval the edit is applied and the **operator commits** (git is operator-gated); record it in the
-  wave's `.notes/handoff-<slug>.md` Retro under **"Applied this wave (operator-confirmed)"** (the provenance
+  wave's `.notes/waves/<YYYYMMDD>/<slug>/handoff.md` Retro under **"Applied this wave (operator-confirmed)"** (the provenance
   trail). An edit with no confirmation + no recorded source is a process violation, not an improvement.
 
 ## Resource discipline (CPU & I/O)

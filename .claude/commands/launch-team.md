@@ -1,7 +1,7 @@
 ---
 name: launch-team
-description: Generate a team launch prompt from one wave of beads tickets (TL + devs + QA + white-hacker)
-allowed-tools: Agent, Bash, Read, Grep, Glob
+description: Generate a team launch prompt from one wave of beads tickets (TL + devs + QA + white-hacker), and SAVE it to the shared wave folder .notes/waves/<YYYYMMDD>/<slug>/launch.md (gitignored) before presenting it.
+allowed-tools: Agent, Bash, Read, Grep, Glob, Write
 ---
 
 # /launch-team <ticket-id> [ticket-id...]
@@ -108,8 +108,8 @@ Phase 6 — TL runs the FULL quality gates (below), then `bd close <id>` for eac
           beads epic auto-close cascade — closing the last child auto-closes the parent epic; if the
           epic is operator-owned, reverse with `bd update <epic> --status open`. Re-export:
           `bd export -o .beads/issues.jsonl`. Update `.notes/order.md` (tick the wave, move ▶).
-Phase 7 — TL runs `/handoff <slug>` (`.claude/commands/handoff.md`) → writes `.notes/handoff-<slug>.md`
-          (gitignored): the team record (tickets / files / findings / follow-ups / next entry point) AND
+Phase 7 — TL runs `/handoff <slug>` (`.claude/commands/handoff.md`) → writes `.notes/waves/<date>/<slug>/handoff.md`
+          (gitignored, same wave folder as `launch.md`): the team record (tickets / files / findings / follow-ups / next entry point) AND
           a **mandatory Retro** — what to improve in our `.claude/agents/*` profiles, the `.claude/commands/*`,
           the ticket templates, or the gates, each with a concrete **owner+action**. Every retro item must be
           **grounded** — verified against the `file:line` it names (and any hook / gate / convention the fix
@@ -190,10 +190,28 @@ that's a wave-disjointness conflict — resolve it at File Ownership mapping (Ru
 <files/packages that already exist and must not be overwritten>
 ````
 
-### Step 7 — Present to user
-Show the prompt in a fence, prefixed:
+### Step 7 — Persist, then present
+**Create the wave folder and save the prompt there FIRST.** All of a wave's artifacts — launch / handoff
+/ review / qa-verdict — live together in ONE gitignored folder (the canonical `.notes/waves/` convention;
+`.claude/CLAUDE.md` § QA flow):
+
+    .notes/waves/<YYYYMMDD>/<slug>/launch.md
+
+- **`<YYYYMMDD>`** — the wave's LAUNCH date, from `date +%Y%m%d` (NEVER hardcode). This date is the wave's
+  identity for its whole life: `/handoff`, `/review`, and the qa-verdict all write into THIS same folder,
+  even when they run days later (they locate it by `ls -d .notes/waves/*/<slug>/`, date-agnostic).
+- **`<slug>`** — the wave's ticket-id set, **deterministic + sorted** so every writer computes the SAME folder:
+  - **1 ticket** → the id verbatim, dots kept: `wh-evr`, `wh-5ox.3`
+  - **2–3 tickets** → sorted ids joined with `+`: `wh-5ox.9+wh-evr`
+  - **4+ tickets** → `<lead>+<N>more` (lead = first sorted id, N = total): `wh-5ox.2+5more`
+  - Separator is `+` — it never appears in a ticket id (which contain `-` and `.`), so the slug splits
+    back unambiguously; sorting makes it order-independent.
+
+`.notes/` is gitignored scratch — never committed. `Write` the full prompt to `launch.md`, then show the
+prompt in a fence, prefixed:
 ```
 TEAM LAUNCH PROMPT
+Saved: .notes/waves/<YYYYMMDD>/<slug>/launch.md
 Wave: <epic-id> / <wave name>    Tickets: <list>
 Team size: <N> (TL + <N> devs + QA + white-hacker)
 Files touched: <N>    Conflicts: <none | list>
@@ -221,8 +239,8 @@ Copy the prompt below into a new session to launch the team.
 5. **No placeholders in output** — fill every `<...>` with real data, or say what's missing.
 6. **Always cite the Project Invariants** — teams that don't see them break capability interfaces, the
    artifact chain, or the no-push / model-for-judgment posture.
-7. **End every wave with `/handoff`** — Phase 7 writes `.notes/handoff-<slug>.md` (ticket id for a
-   single-ticket wave, or a wave name like `wave-B` / `epic-wh-4ym`).
+7. **End every wave with `/handoff`** — Phase 7 writes `.notes/waves/<date>/<slug>/handoff.md` into the
+   SAME wave folder `/launch-team` created (Step 7's deterministic slug; located via `ls -d .notes/waves/*/<slug>/`).
 8. **Follow-up tickets go through `/design-ticket`** — any ticket a team files mid-wave (Phase 4
    out-of-scope / stale-neighbour findings) uses `/design-ticket --type=<task|bug|spike>` and its type
    template, never an ad-hoc `bd create` one-liner. A bug uses `beads-bug-template.md` with a `file:line`
@@ -237,6 +255,10 @@ Copy the prompt below into a new session to launch the team.
    the fix would touch. An unverified plausible-sounding item — or a convention cited as justification that was
    never tested against the code (e.g. `--plugin-dir` "dogfood" vs. what `confine_self_writes` blocks) — is a
    hallucinated retro defect: drop it or downgrade it to a spike. See `handoff.md` Rule 8.
+11. **Always persist the launch script (Step 7).** `Write` the prompt to
+   `.notes/waves/<YYYYMMDD>/<slug>/launch.md` (the shared wave folder; date + deterministic slug rule in
+   Step 7) BEFORE presenting it. `/handoff`, `/review`, and the qa-verdict write `handoff.md` /
+   `review.md` / `qa-verdict.md` into the SAME folder. Never just print the prompt without saving it.
 
 ## References
 - [`docs/beads_templates/`](../../docs/beads_templates/) — `beads-ticket-template.md` (task), `beads-bug-template.md` (bug), `beads-spike-template.md` (spike): the body shapes the devs execute (real gates, NOT ruff/mypy/coverage)

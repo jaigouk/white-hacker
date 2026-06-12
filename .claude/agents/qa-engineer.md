@@ -17,7 +17,7 @@ Your job is to **find bugs and drift before they ship**. You verify that the age
 - `docs/ARCHITECTURE.md` — inner loop (threat-model → detect → discovery → triage → patch), outer loop (trace → learn → gate), skill chain, the eval corpus
 - `docs/ARD.md` — the ADRs (append-only), especially ADR-008 (discovery/triage separation), ADR-003 (graceful degradation)
 - `evals/` — the frozen corpus, baseline.json (n=115, J=1.0), score.py (deterministic Youden's-J scorer), keep_or_revert.py (KEEP/REVERT/INCONCLUSIVE gate)
-- `.notes/qa/<YYYYMMDD>/` (gitignored, local-only) — QA cycle artifacts: qa-flows.md (test matrix, tiers, coverage), dated verdicts, neutralized-name→original mapping
+- `.notes/qa/<YYYYMMDD>/` (gitignored, local-only) — QA **cycle** artifacts ONLY: qa-flows.md (test matrix, tiers, coverage), neutralized-name→original mapping, probe scripts. The per-**wave** verdict instead goes in the shared wave folder `.notes/waves/<YYYYMMDD>/<slug>/qa-verdict.md` (next to launch.md/handoff.md/review.md), NOT here.
 
 ## Primary Responsibilities
 
@@ -189,7 +189,12 @@ Report **token cost** in the QA verdict (evals can run from $1 to $50+ depending
 
 ### Step 8: Produce QA Verdict
 
-Write a **dated QA verdict** in `.notes/qa/<YYYYMMDD>/<ticket-id>-qa-verdict.md` (gitignored, local-only).
+Write the wave's **QA verdict** to the shared wave folder `.notes/waves/<YYYYMMDD>/<slug>/qa-verdict.md`
+(gitignored, local-only) — next to `launch.md` / `handoff.md` / `review.md`. `<slug>` is the deterministic
+rule (`/launch-team` Step 7 / `/handoff`): 1 ticket verbatim · 2–3 sorted ids joined with `+` · 4+
+`<lead>+<N>more`; `<YYYYMMDD>` is the wave's launch date — locate the folder via `ls -d .notes/waves/*/<slug>/`.
+(Broader QA-**cycle** evidence — qa-flows.md, coverage matrix, eval runs, probe scripts — stays in
+`.notes/qa/<YYYYMMDD>/`.)
 
 ---
 

@@ -1,12 +1,12 @@
 ---
 name: handoff
-description: Write an end-of-wave handoff to .notes/handoff-<slug>.md — the team's record (tickets, files, findings, follow-ups, next entry point) PLUS a retro that drives the operator-gated PROCESS self-improvement of our .claude/agents, commands, templates, and gates
+description: Write an end-of-wave handoff to .notes/waves/<YYYYMMDD>/<slug>/handoff.md (the shared wave folder) — the team's record (tickets, files, findings, follow-ups, next entry point) PLUS a retro that drives the operator-gated PROCESS self-improvement of our .claude/agents, commands, templates, and gates
 allowed-tools: Bash, Read, Grep, Glob, Write, SendMessage
 ---
 
 # /handoff <slug>
 
-Write a session-summary handoff to `.notes/handoff-<slug>.md`. This is **Phase 7 of `/launch-team`**
+Write a session-summary handoff to `.notes/waves/<YYYYMMDD>/<slug>/handoff.md` (the shared wave folder). This is **Phase 7 of `/launch-team`**
 — the last checkpoint of a multi-agent wave — but it also works for a solo session. The handoff is
 the team's shared record, not one agent's notes: it captures what every teammate reported over
 `SendMessage`, so the next session resumes without re-reading the transcript. It ALSO carries a
@@ -22,12 +22,20 @@ Retro section for the routing.
   each teammate's final report.
 - **End of a solo session** — run it yourself as the "Hand off" step.
 
-## Slug
+## Slug + output path
 
-- Single-ticket wave → the ticket ID (`wh-k6l`).
-- Multi-ticket wave → a short wave name (`batch-1`, `wave-b1-hades`, `epic-wh-5ox`).
+The handoff goes in the **shared wave folder** `/launch-team` created — same `<slug>`, so launch /
+handoff / review / qa-verdict sit together:
 
-Output path is always `<repo-root>/.notes/handoff-<slug>.md`.
+    .notes/waves/<YYYYMMDD>/<slug>/handoff.md
+
+- **`<slug>`** — the wave's ticket-id set, **deterministic + sorted**: **1 ticket** → the id verbatim
+  (`wh-k6l`, `wh-5ox.3`); **2–3** → sorted ids joined with `+` (`wh-5ox.9+wh-evr`); **4+** →
+  `<lead>+<N>more` (`wh-5ox.2+5more`). Separator `+` (it never appears in a ticket id); sorted →
+  order-independent, so every writer computes the same folder.
+- **`<YYYYMMDD>`** — the wave's LAUNCH date, NOT today. **Find the folder** with
+  `ls -d .notes/waves/*/<slug>/` (date-agnostic); if none exists (a solo session with no prior
+  `/launch-team`), create `.notes/waves/$(date +%Y%m%d)/<slug>/`.
 
 > **`.notes/` is gitignored and LOCAL-ONLY for a reason** — a handoff records machine paths, the tool
 > inventory, gate output, and internal posture. It must NEVER be committed or moved under `docs/`. Keep
@@ -71,7 +79,7 @@ bd list --status open | grep -iE "<relevant keywords>"
 
 Cite real paths, line counts, and ticket IDs — no placeholders.
 
-### Step 3 — Write `.notes/handoff-<slug>.md`
+### Step 3 — Write `.notes/waves/<YYYYMMDD>/<slug>/handoff.md`
 
 Use the Write tool with the template below. Fill EVERY section with real data. **One file per wave** —
 overwrite if re-run; don't fork copies.
@@ -229,7 +237,7 @@ applied edit must name its source here.
 4. **No silent skips (Policy 12).** If a gate FAILED or a test was SKIPPED, say so plainly and set Status `PARTIAL` — never report green when it isn't. SKIP is never PASS.
 5. **Name the next step.** A handoff with no "Next-Session Entry Point" is incomplete. For a blocking chain, name the ticket the just-closed work unblocked.
 6. **Operator-gated git.** The handoff records git state; it NEVER commits/pushes (`.claude/CLAUDE.md`; the operator owns git).
-7. **One file per wave; `.notes/` only.** Overwrite `.notes/handoff-<slug>.md` if re-run. Never commit it, never move it under `docs/` (it leaks machine/posture detail).
+7. **One file per wave; `.notes/` only.** Overwrite `.notes/waves/<YYYYMMDD>/<slug>/handoff.md` if re-run. Never commit it, never move it under `docs/` (it leaks machine/posture detail).
 8. **Retro items are grounded, not guessed (Policy 8).** Every Improvement row names a `file:line` the proposer actually READ, and a proposed fix is checked against the hooks / gates / contracts / conventions it would touch BEFORE it is recorded. An unverified plausible-sounding "we should do X" is a hallucinated retro item — drop it or downgrade it to a spike question. The same bar applies to a convention you cite as *justification*: if it's never been tested (e.g. "dev/team sessions load `--plugin-dir`" vs. what `confine_self_writes` actually blocks), say so and route it to a spike — don't repeat it as settled.
 
 ## References
