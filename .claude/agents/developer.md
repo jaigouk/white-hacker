@@ -45,11 +45,17 @@ per-package quality gate before handoff.
 5. **Run the gate** — `uv run --project <pkg> pytest <pkg>/tests -q` + `uv run python packaging/validate_manifest.py .`.
 6. **Verification:** every box in the ticket's Verification section is `[x]` or `[ ] DEFERRED — <reason>`.
    Flip Status→`done` only when every gate passes.
-7. **Hand off** — send findings to tech-lead via SendMessage. Never commit; the developer (human) handles that.
+7. **Hand off** — send findings to tech-lead via SendMessage. Your completion report ENUMERATES
+   which ACs / fixes it covers (e.g. "wh-NNN AC1+AC2 met; fix (a)+(b) applied") so reviewers measure
+   the right scope. If the TL AMENDS the contract mid-flight (adds an AC / a fix), RE-ACK the amended
+   scope and do NOT report "complete" until EVERY amended AC is met — a "complete" against a stale scope
+   makes QA/white-hacker flag a phantom FAIL. Never commit; the developer (human) handles that.
 
 ## Definition of Done
 
 - All Verification boxes are checked or explicitly deferred with reason.
+- The completion report NAMES the ACs/fixes it satisfies and re-acks any mid-flight TL contract
+  amendment — a "done" measured against a stale scope is not done.
 - Per-package gate passes green.
 - No unverified changes; no skipped tests.
 - Code cites file:line for any pattern borrowed or assumption made.
