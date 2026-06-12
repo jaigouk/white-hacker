@@ -153,9 +153,12 @@ Degrade gracefully when **compute** is scarce, exactly as you do when a **tool**
 scanners can freeze the host. **Plan parallelism *before* you spawn subagents or launch heavy
 scanners — never fan out unbounded.**
 - **Measure, don't guess** (code answers deterministic questions) — probe the host once, up front;
-  machines differ, never assume capacity: **cores** `getconf _NPROCESSORS_ONLN || nproc || sysctl -n
-  hw.ncpu`; **free mem** Linux `free -m` (or `/proc/meminfo`), macOS `sysctl -n hw.memsize` +
-  `vm_stat` / `memory_pressure`; **load** `uptime`.
+  machines differ, never assume capacity. Run the stdlib helper (ADR-023, zero deps) from
+  `skills/_shared/scripts/`: `python -c "import resource_probe, json;
+  print(json.dumps(resource_probe.probe()))"` → `{cores, load1, free_mb, suggested_max_parallel,
+  constants}`. **Use `suggested_max_parallel` as the concurrency cap** (it already folds cores − headroom,
+  free-mem ÷ per-subagent footprint, a hard ceiling, and drops to 1 under load). On an unknown OS
+  `free_mb` is `null` and the memory divisor is skipped — it degrades, never blocks (ADR-003).
 - **Weight the work.** **LIGHT** = the floor (Read/Grep/Glob, secrets regex, manifest parse) — run
   many. **HEAVY** = full-tree SAST, SCA over big lockfiles, building/Docker sandboxes, PoC detonation,
   and **especially an LLM subagent per partition** — treat each as the heaviest unit.
