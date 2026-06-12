@@ -703,3 +703,44 @@ def test_read_manifest_text_small_manifest_unchanged(tmp_path: Path):
     text = dt._read_manifest_text(tmp_path, "go.mod")
     assert text == "module x\nrequire github.com/gin-gonic/gin v1\n"  # full + lower
     assert "gin-gonic/gin" in text                                    # token kept
+
+
+# --- wh-qu0: detect_kernel_adjacency unbounded YAML read (CWE-400 OOM DoS) -----
+# The YAML walk at detect_tools.py:326 used an unbounded read_text() — a multi-GB
+# YAML would balloon alloc. The fix caps the read at _AI_MANIFEST_READ_CAP (64 KiB),
+# mirroring the pattern at detect_tools.py:408/428.
+# Policy 9: pin BOTH directions — within-cap token matched, beyond-cap token absent.
+
+def test_kernel_adjacency_yaml_token_within_cap_matched(tmp_path: Path):
+    """privileged: token near the top (within 64 KiB) MUST still be detected.
+
+    == expected: "privileged-container" in markers (token sits within the read window)
+    != wrong: markers is empty (regression — cap must NOT swallow close tokens)
+    """
+    # Token is in the first 100 bytes — well within the 64 KiB cap.
+    content = "services:\n  app:\n    privileged: true\n" + "x" * 1024
+    (tmp_path / "docker-compose.yml").write_text(content)
+    markers = dt.detect_kernel_adjacency(tmp_path)
+    assert "privileged-container" in markers          # == expected (within cap)
+    assert markers != []                              # != wrong (should not be empty)
+
+
+def test_kernel_adjacency_yaml_token_beyond_cap_not_matched(tmp_path: Path):
+    """privileged: token placed ONLY beyond 64 KiB MUST NOT trigger the marker.
+
+    Before the fix (unbounded read) this FAILS — the token is found.
+    After the fix (bounded read) this PASSES — the token is beyond the read window.
+
+    == expected: "privileged-container" NOT in markers (token past cap, not read)
+    != wrong: "privileged-container" in markers (would mean unbounded read is still used)
+    """
+    # Place the token just past the 64 KiB boundary so the unbounded path finds it
+    # but the bounded path does not.  Use a padding line slightly shorter than the
+    # cap so the whole prefix + newline lands inside, then the privileged token falls
+    # beyond.
+    padding = "# " + "a" * dt._AI_MANIFEST_READ_CAP + "\n"
+    content = padding + "services:\n  app:\n    privileged: true\n"
+    (tmp_path / "pod.yaml").write_text(content)
+    markers = dt.detect_kernel_adjacency(tmp_path)
+    assert "privileged-container" not in markers      # == expected (beyond cap)
+    assert markers == []                              # != wrong value (should be empty)

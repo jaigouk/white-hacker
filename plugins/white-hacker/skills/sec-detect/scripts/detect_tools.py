@@ -323,7 +323,8 @@ def detect_kernel_adjacency(root: Path) -> list[str]:
             continue
         if name.endswith((".yml", ".yaml")):
             try:
-                text = path.read_text(encoding="utf-8", errors="ignore").lower()
+                with path.open(encoding="utf-8", errors="ignore") as fh:
+                    text = fh.read(_AI_MANIFEST_READ_CAP).lower()
             except (OSError, ValueError):
                 continue
             if any(tok in text for tok in _PRIVILEGED_CONTAINER_TOKENS):
