@@ -116,9 +116,11 @@ def _read_manifest(folder: Path) -> dict | None:
 
     Byte-CAPPED (MED-2): a trojanized extension controls its own manifest, so an oversized
     file is stat-skipped (and the read is bounded as a backstop against a stat/size race)
-    BEFORE `json.loads` — a multi-GB / deeply-nested manifest can't blow up RAM. NEVER
-    raises: a missing/unreadable/garbage/oversized manifest → None (the dir degrades,
-    skipped exactly like an unparseable one), not a crash."""
+    BEFORE `json.loads` — a multi-GB manifest can't blow up RAM. The byte cap defends
+    RAM-by-SIZE only; a small-but-deeply-NESTED manifest still raises RecursionError at
+    `json.loads` UNDER the cap (parse-depth, not size), so that is caught too. NEVER raises:
+    a missing / unreadable / garbage / oversized / over-nested manifest → None (the dir
+    degrades, skipped exactly like an unparseable one), not a crash."""
     path = folder / "package.json"
     try:
         if path.stat().st_size > _MAX_MANIFEST_BYTES:
@@ -131,7 +133,12 @@ def _read_manifest(folder: Path) -> dict | None:
         if len(raw) > _MAX_MANIFEST_BYTES:
             return None
         doc = json.loads(raw.decode("utf-8"))
-    except (OSError, ValueError, UnicodeDecodeError):
+    except (OSError, ValueError, UnicodeDecodeError, RecursionError):
+        # RecursionError: a deeply-NESTED untrusted manifest sits UNDER the byte cap yet
+        # exceeds json.loads' recursion limit. It is a RuntimeError subclass (NOT a
+        # ValueError), so it must be named explicitly — the byte cap defends RAM-by-SIZE,
+        # this defends parse-DEPTH (sibling of config_persist_scan.py:125 / wh-5ox.3
+        # DEFECT-1). Narrow tuple by design (ADR-003 / Policy 12 — never bare `Exception`).
         return None
     return doc if isinstance(doc, dict) else None
 

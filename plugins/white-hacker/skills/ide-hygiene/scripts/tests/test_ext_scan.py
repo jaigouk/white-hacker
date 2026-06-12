@@ -128,6 +128,36 @@ def test_enumerate_skips_oversized_manifest_no_raise(tmp_path: Path) -> None:
     assert all("evil.bloat" not in f["file"] for f in doc["findings"])
 
 
+def test_enumerate_skips_deeply_nested_manifest_no_raise(tmp_path: Path) -> None:
+    # DEPTH (not SIZE): a trojanized extension can ship a manifest that is small in BYTES
+    # but deeply NESTED, so `json.loads` raises RecursionError (a RuntimeError subclass —
+    # NOT a ValueError) UNDER the byte cap. The byte cap defends RAM-by-size; this defends
+    # parse-depth. The over-nested manifest MUST be SKIPPED cleanly (no raise), the scan
+    # MUST complete, and a well-formed sibling MUST still be enumerated. Regression for the
+    # ext_scan.py:134 except tuple omitting RecursionError (sibling of config_persist_scan
+    # DEFECT-1). This test FAILS (RecursionError) before the fix and PASSES after.
+    ext_dir = tmp_path / "extensions"
+    nested = ext_dir / "evil.deep-9.9.9"
+    nested.mkdir(parents=True)
+    # a nested OBJECT (~600 KB, under the byte cap) whose depth exceeds json's recursion
+    # limit — depth, not size, is what trips json.loads here.
+    payload = '{"a":' * 100_000 + "1" + "}" * 100_000
+    assert len(payload.encode()) < ext_scan._MAX_MANIFEST_BYTES  # genuinely under the SIZE cap
+    (nested / "package.json").write_text(payload, encoding="utf-8")
+    (nested / "extension.js").write_text(_BENIGN_ACTIVATION, encoding="utf-8")
+    _write_ext(ext_dir, "acme", "ok", "2.0.0")  # a well-formed sibling
+
+    exts = ext_scan.enumerate_extensions(extensions_dir=str(ext_dir), editor_cli=None)
+    ids = {e["id"] for e in exts}
+    assert ids == {"acme.ok"}  # the over-nested one is skipped, the good sibling survives
+    assert "evil.deep" not in ids  # explicit !=: the nested ext is NOT enumerated
+
+    # scan() completes end-to-end (degrade, never crash) on the deeply-nested manifest
+    doc = ext_scan.scan(extensions_dir=str(ext_dir), watchlist=[], editor_cli=None)
+    assert vf.validate(doc) == []
+    assert all("evil.deep" not in f["file"] for f in doc["findings"])
+
+
 # --------------------------------------------------------------------------- #
 # pin/verify against the watchlist extension block (both directions — Policy 9)
 # --------------------------------------------------------------------------- #
