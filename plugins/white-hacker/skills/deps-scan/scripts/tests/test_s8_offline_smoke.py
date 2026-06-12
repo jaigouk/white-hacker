@@ -149,13 +149,18 @@ def test_s8_version_mismatch_does_not_flag(tmp_path):
 # --------------------------------------------------------------------------- #
 # 4) degraded contrast — no snapshot -> S8 silent + records malware-db, never raises
 # --------------------------------------------------------------------------- #
-def test_s8_degrades_without_snapshot(tmp_path):
+def test_s8_degrades_without_snapshot(tmp_path, monkeypatch):
+    # wh-ezc: scan now loads the bundled curated watchlist by default. To test the
+    # SNAPSHOT-ABSENT degrade path we monkeypatch load_malware_db → {} (simulates the
+    # curated file being absent/odd — load_malware_db never raises, returns empty).
+    monkeypatch.setattr(sc, "load_malware_db", lambda **_kw: {})
+
     proj = _write_project(
         tmp_path / "app",
         {_BAD_EXPLICIT: "1.2.3", _BAD_WILDCARD: "0.0.1", _CLEAN: "18.2.0"},
     )
 
-    doc = sc.scan(str(proj))  # no malware_db passed → S8 degrades
+    doc = sc.scan(str(proj))  # no malware_db passed + degraded curated → S8 degrades
 
     # == expected: the known-bad deps do NOT fire (S8 had no snapshot to match against)
     assert not any(f"{_BAD_EXPLICIT} @" in s for s in _scenarios(doc))

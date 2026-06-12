@@ -302,9 +302,12 @@ def test_workspace_and_file_deps_are_benign(tmp_path):
 # --------------------------------------------------------------------------- #
 # DEGRADED — no malware-db snapshot (S8) → records it, never raises
 # --------------------------------------------------------------------------- #
-def test_degraded_no_malware_db_lists_it_and_never_raises(tmp_path):
+def test_degraded_no_malware_db_lists_it_and_never_raises(tmp_path, monkeypatch):
+    # wh-ezc: scan now loads the bundled curated watchlist by default (always-on).
+    # Degrade = the curated file is absent/odd → load_malware_db returns {} → S8
+    # still degrades cleanly and malware-db is recorded in tools_unavailable.
+    monkeypatch.setattr(sc, "load_malware_db", lambda **_kw: {})
     proj = _write(tmp_path / "p", {"dependencies": {"react": "18.2.0"}})
-    # no OSSF snapshot path passed → S8 degrades cleanly
     doc = sc.scan(str(proj))
     assert "malware-db" in doc["summary"]["tools_unavailable"]
     assert doc["summary"]["tools_unavailable"] != []  # the wrong value
@@ -327,11 +330,13 @@ def test_s8_known_bad_match_when_snapshot_present(tmp_path):
 
 
 def test_scan_never_raises_on_missing_manifest(tmp_path):
+    # wh-ezc: scan loads the bundled curated watchlist even on missing-manifest paths.
+    # An empty dir has no manifest → degrade to empty findings (no ecosystem recognized).
+    # malware-db is NOT in tools_unavailable when the curated file loads successfully.
     empty = tmp_path / "nothing"
     empty.mkdir()
     doc = sc.scan(str(empty))            # must degrade, not raise
     assert _emitted(doc) == []
-    assert "malware-db" in doc["summary"]["tools_unavailable"]
     assert vf.validate(doc) == []
 
 
@@ -585,4 +590,192 @@ def test_findings_emit_repo_relative_paths_not_absolute(tmp_path):
     assert any(f["file"] == "package.json" for f in findings)
     # the script-keyed finding keeps its repo-relative subpath
     assert any(f["file"] == "scripts/postinstall.js" for f in findings)
+    assert vf.validate(doc) == []
+
+
+# --------------------------------------------------------------------------- #
+# wh-ezc — always-on bundled watchlist (scan loads curated floor by default)
+# --------------------------------------------------------------------------- #
+
+def _write_pypi(project_dir: pathlib.Path, requirements: str) -> pathlib.Path:
+    """Write a minimal PyPI project with only a requirements.txt."""
+    project_dir.mkdir(parents=True, exist_ok=True)
+    (project_dir / "requirements.txt").write_text(requirements)
+    return project_dir
+
+
+def test_s8_always_on_no_malware_db_arg_flags_curated_entry(tmp_path):
+    """(a) Always-on: scan(project_dir) with NO malware_db arg and NO snapshot
+    flags litellm==1.82.7 (bundled watchlist seed) via S8 HIGH.
+    A sibling pinning litellm==1.82.6 (clean version) is NOT flagged.
+
+    Policy 9: pin both == expected AND != the wrong value.
+    """
+    # positive case: litellm 1.82.7 is in the bundled curated watchlist (GHSA-5mg7-485q-xm76)
+    proj_bad = _write_pypi(
+        tmp_path / "bad",
+        "litellm==1.82.7\n",
+    )
+    doc_bad = sc.scan(str(proj_bad))
+    bad_findings = _emitted(doc_bad)
+    s8_hits = [x for x in bad_findings if "S8" in x.get("exploit_scenario", "")]
+    assert len(s8_hits) >= 1, "litellm@1.82.7 must be flagged via S8 (bundled watchlist)"
+    assert s8_hits[0]["severity"] == "HIGH"
+    assert s8_hits[0]["severity"] != "MEDIUM"  # S8 is always HIGH, not MEDIUM
+    assert "litellm" in s8_hits[0]["exploit_scenario"]
+    # malware-db should NOT be in tools_unavailable (curated file is loaded)
+    assert "malware-db" not in doc_bad["summary"]["tools_unavailable"]
+    assert vf.validate(doc_bad) == []
+
+    # negative case: litellm 1.82.6 (clean version — NOT in the watchlist) must NOT be flagged
+    proj_clean = _write_pypi(
+        tmp_path / "clean",
+        "litellm==1.82.6\n",
+    )
+    doc_clean = sc.scan(str(proj_clean))
+    clean_s8 = [x for x in _emitted(doc_clean) if "S8" in x.get("exploit_scenario", "")]
+    assert clean_s8 == [], "litellm@1.82.6 (clean version) must NOT be flagged by S8"
+    assert clean_s8 != [{"severity": "HIGH"}]  # the wrong value: clean sibling is not flagged
+
+
+def test_s8_degrade_when_curated_file_absent(tmp_path, monkeypatch):
+    """(b) Degrade: when load_malware_db returns {} (e.g. curated file missing),
+    scan returns empty S8, tools_unavailable records 'malware-db', and never raises.
+
+    Policy 9: pin both the empty finding list AND the tools_unavailable presence.
+    """
+    # monkeypatch load_malware_db in supply_chain to return an empty db (simulates
+    # missing curated file — load_malware_db never raises, so this is the degrade path)
+    monkeypatch.setattr(sc, "load_malware_db", lambda **_kw: {})
+
+    proj = _write_pypi(tmp_path / "p", "litellm==1.82.7\n")
+    doc = sc.scan(str(proj))
+    s8_hits = [x for x in _emitted(doc) if "S8" in x.get("exploit_scenario", "")]
+    assert s8_hits == [], "empty malware-db → S8 must return [] (degrade, not raise)"
+    assert s8_hits != [{"severity": "HIGH"}]  # the wrong value: degrade path is never HIGH S8
+    # tools_unavailable records malware-db so the caller knows S8 was degraded
+    assert "malware-db" in doc["summary"]["tools_unavailable"]
+    assert doc["summary"]["tools_unavailable"] != []   # the wrong value: must be recorded
+    assert vf.validate(doc) == []
+
+
+def test_s8_caller_db_unioned_with_bundled_floor(tmp_path):
+    """(c) Union: a caller-supplied malware_db dict is honored AND unioned with the
+    bundled curated floor — not silently replaced.
+
+    The curated floor seeds litellm@1.82.7/1.82.8.  The caller adds evil-extra@1.0.0.
+    Both must appear as S8 findings; react (control) must stay clean.
+
+    Policy 9: assert both present == expected AND react != flagged.
+    """
+    proj = _write_pypi(
+        tmp_path / "p",
+        "litellm==1.82.7\nevil-extra==1.0.0\nrequests==2.31.0\n",
+    )
+    caller_db: dict = {"evil-extra": {"1.0.0"}}
+    doc = sc.scan(str(proj), malware_db=caller_db)
+    findings = _emitted(doc)
+
+    # the bundled floor entry (litellm@1.82.7) must still be present
+    litellm_hits = [x for x in findings if "litellm" in x.get("exploit_scenario", "")
+                    and "S8" in x.get("exploit_scenario", "")]
+    assert litellm_hits, "bundled floor entry litellm@1.82.7 must survive union with caller db"
+    assert litellm_hits[0]["severity"] == "HIGH"
+
+    # the caller-supplied entry (evil-extra@1.0.0) must also be present
+    evil_hits = [x for x in findings if "evil-extra" in x.get("exploit_scenario", "")]
+    assert evil_hits, "caller-supplied evil-extra@1.0.0 must be flagged by S8"
+    assert evil_hits[0]["severity"] == "HIGH"
+    assert evil_hits[0]["severity"] != "MEDIUM"  # S8 is always HIGH
+
+    # malware-db must NOT be in tools_unavailable (non-empty union db)
+    assert "malware-db" not in doc["summary"]["tools_unavailable"]
+
+    # control: requests is benign (not in watchlist)
+    requests_hits = [x for x in findings if "requests @" in x.get("exploit_scenario", "")]
+    assert requests_hits == []   # clean dep must stay clean
+    assert vf.validate(doc) == []
+
+
+def test_s8_caller_db_list_typed_value_unions_without_raise(tmp_path):
+    """wh-ezc N-1 regression: a caller db whose value is a LIST/TUPLE (not a set or a
+    scalar) must UNION with the bundled floor WITHOUT raising — the union loop must
+    normalize list/tuple/set/frozenset/scalar values to a hashable set.
+
+    Before the fix, `{["1.0.0"]}` raised `TypeError: unhashable type: 'list'`, crashing
+    scan() and breaking the "never raises" contract.
+
+    Policy 9: assert caller-evil@1.0.0 IS flagged (== flagged) AND a clean control
+    package is NOT flagged (!= flagged), AND scan() does not raise.
+    """
+    proj = _write_pypi(
+        tmp_path / "p",
+        "caller-evil==1.0.0\nrequests==2.31.0\n",
+    )
+    # LIST-typed value (the N-1 crash trigger) — must be normalized, not wrapped in a set
+    caller_db: dict = {"caller-evil": ["1.0.0"]}
+    doc = sc.scan(str(proj), malware_db=caller_db)  # must NOT raise TypeError
+    findings = _emitted(doc)
+
+    # the list-typed caller entry is flagged via S8 HIGH
+    evil_hits = [x for x in findings if "caller-evil" in x.get("exploit_scenario", "")
+                 and "S8" in x.get("exploit_scenario", "")]
+    assert evil_hits, "caller-evil@1.0.0 (list-typed value) must be flagged by S8"
+    assert evil_hits[0]["severity"] == "HIGH"
+    assert evil_hits[0]["severity"] != "MEDIUM"  # S8 is always HIGH
+
+    # the bundled floor survives the union (litellm seed still present in the db, though
+    # not pinned in THIS manifest) — malware-db is NOT recorded unavailable
+    assert "malware-db" not in doc["summary"]["tools_unavailable"]
+
+    # control: requests is benign (not in watchlist nor caller db)
+    requests_hits = [x for x in findings if "requests @" in x.get("exploit_scenario", "")]
+    assert requests_hits == []   # clean dep must stay clean (!= flagged)
+    assert vf.validate(doc) == []
+
+
+def test_s8_union_tolerates_unhashable_caller_value_no_raise(tmp_path):
+    """wh-5ox.18 NIT 2: a malformed caller-db value that is UNHASHABLE (a dict) must NOT
+    raise — `_as_set` str()-coerces every value, so the "union never raises" contract holds
+    on the bundled-present path too. Before the fix `_as_set`'s `{v}` raised
+    `TypeError: unhashable type: 'dict'`, crashing scan() for the whole project.
+
+    Policy 9: scan() does not raise AND a real string-valued sibling entry still flags
+    (== flagged) AND a clean control stays clean (!= flagged).
+    """
+    proj = _write_pypi(tmp_path / "p", "evil-extra==1.0.0\nrequests==2.31.0\n")
+    # the union loop runs `_as_set` over EVERY caller entry, so the unhashable `weird-pkg`
+    # value trips the crash regardless of the manifest — the N-2 trigger.
+    caller_db: dict = {"evil-extra": {"1.0.0"}, "weird-pkg": {"meta": {"nested": 1}}}
+    doc = sc.scan(str(proj), malware_db=caller_db)  # must NOT raise TypeError
+    findings = _emitted(doc)
+
+    evil_hits = [x for x in findings if "evil-extra" in x.get("exploit_scenario", "")
+                 and "S8" in x.get("exploit_scenario", "")]
+    assert evil_hits, "string-valued evil-extra@1.0.0 still flagged despite the unhashable sibling"
+    assert evil_hits[0]["severity"] == "HIGH"
+    assert "malware-db" not in doc["summary"]["tools_unavailable"]
+    requests_hits = [x for x in findings if "requests @" in x.get("exploit_scenario", "")]
+    assert requests_hits == []   # clean dep stays clean (!= flagged)
+    assert vf.validate(doc) == []
+
+
+def test_s8_bundled_empty_path_normalizes_caller_db(tmp_path, monkeypatch):
+    """wh-5ox.18 NIT 1: when the bundled floor is empty (curated file absent/odd), the caller
+    db must STILL be normalized + honored — pre-fix the `elif bundled:` branch was skipped, so
+    the caller db's handling depended on which path ran. This pins the symmetry: a list-typed
+    caller value still flags on the bundled-empty path (and scan stays raise-free + schema-valid).
+    """
+    monkeypatch.setattr(sc, "load_malware_db", lambda: {})  # force the degraded (empty) floor
+    proj = _write_pypi(tmp_path / "p", "caller-evil==1.0.0\nrequests==2.31.0\n")
+    caller_db: dict = {"caller-evil": ["1.0.0"]}  # list-typed value, bundled-empty path
+    doc = sc.scan(str(proj), malware_db=caller_db)  # must NOT raise; caller db normalized
+    findings = _emitted(doc)
+
+    evil_hits = [x for x in findings if "caller-evil" in x.get("exploit_scenario", "")
+                 and "S8" in x.get("exploit_scenario", "")]
+    assert evil_hits, "caller-evil@1.0.0 flagged even with an empty bundled floor (symmetric path)"
+    assert evil_hits[0]["severity"] == "HIGH"
+    requests_hits = [x for x in findings if "requests @" in x.get("exploit_scenario", "")]
+    assert requests_hits == []   # clean dep stays clean (!= flagged)
     assert vf.validate(doc) == []

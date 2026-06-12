@@ -44,7 +44,7 @@ import degradation as dg
 # S8 matcher delegates to (sibling module, same package — imported via the conftest path
 # like the tests' `import malware_db as mdb`; no defensive guard needed, it has no
 # optional-stdlib dependency unlike tomllib above).
-from malware_db import is_known_bad
+from malware_db import is_known_bad, load_malware_db
 
 KB_REF = "AISEC-SUPPLY-CHAIN-001"
 _OWASP = ["A06:2021"]  # Vulnerable and Outdated Components
@@ -1246,9 +1246,36 @@ def scan(project_dir: str, scan_plan: dict | None = None,
 
     Dispatch (spike-09 §F5): the first marker manifest present picks the adapter + the
     `scanned_langs` lang + the `manifest_path` (npm leads — package.json is unchanged).
-    `malware_db` None → S8 degrades; `summary.tools_unavailable` records `malware-db`.
+    `malware_db` None → bundled curated watchlist loaded by default (always-on, wh-ezc);
+    a caller-supplied db is UNIONed with the bundled floor. S8 degrades (records
+    `malware-db` in `tools_unavailable`) only when the curated file is absent/odd.
     `allowlist` overrides the curated `reference/ai-sdk-allowlist.json` (S4/S5) — used to
     pass an ecosystem-specific allowlist (e.g. a module path / `groupId:artifactId`)."""
+    # wh-ezc: always-on bundled watchlist — load the curated floor BEFORE both the
+    # merged-early-return AND the main signal_s8 call so S8 is live in every path.
+    # Degrade contract (ADR-003): load_malware_db never raises; an absent/odd curated
+    # file returns {} → signal_s8 still returns [] and _build_doc records malware-db
+    # unavailable.  A caller-supplied db is UNIONed with the bundled floor (not replaced).
+    bundled: dict[str, set[str]] = load_malware_db()
+    if malware_db is None:
+        malware_db = bundled
+    else:
+        # union: merge the caller db into a copy of the bundled floor (which may be {} when the
+        # curated file is absent/odd). EVERY value — bundled AND caller — is normalized through
+        # `_as_set` on BOTH paths (symmetry, wh-5ox.18 N-1) so a scalar version ("*") or a
+        # list/tuple/set/frozenset all become a `set[str]`. `_as_set` str()-coerces, so an
+        # unhashable/odd caller value (a dict) can never raise (wh-5ox.18 N-2 — the contract is
+        # "the union never raises"). A genuinely empty caller db just copies the floor.
+        def _as_set(v: object) -> set[str]:
+            if isinstance(v, (list, tuple, set, frozenset)):
+                return {str(x) for x in v}
+            return {str(v)}
+
+        merged_db: dict[str, set[str]] = {k: _as_set(v) for k, v in bundled.items()}
+        for name, versions in malware_db.items():
+            merged_db[name] = merged_db.get(name, set()) | _as_set(versions)
+        malware_db = merged_db
+
     # wh-7rk: the kernel-module / DKMS pin-and-verify pass is ECOSYSTEM-INDEPENDENT — a
     # bare out-of-tree module repo carries no package.json, so run it regardless of (and
     # before) the ecosystem dispatch. Findings are merged + renumbered into the document.

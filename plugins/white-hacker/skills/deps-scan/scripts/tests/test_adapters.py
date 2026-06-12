@@ -516,8 +516,11 @@ def test_scan_dispatches_npm_unchanged(tmp_path):
     assert vf.validate(doc) == []
 
 
-def test_scan_no_known_manifest_degrades_empty(tmp_path):
+def test_scan_no_known_manifest_degrades_empty(tmp_path, monkeypatch):
     # a directory with no recognized manifest → empty-but-valid, no raise, no lang.
+    # wh-ezc: scan loads the bundled curated watchlist by default. malware-db only
+    # appears in tools_unavailable when the curated file itself is absent/odd (degrade
+    # path). Monkeypatch to confirm no-manifest degrade is still clean and no raise.
     proj = tmp_path / "bare"
     proj.mkdir()
     (proj / "README.md").write_text("nothing here\n")
@@ -525,7 +528,8 @@ def test_scan_no_known_manifest_degrades_empty(tmp_path):
     assert _emitted(doc) == []
     assert doc["summary"]["scanned_langs"] == []
     assert doc["summary"]["scanned_langs"] != ["javascript"]  # the wrong default
-    assert "malware-db" in doc["summary"]["tools_unavailable"]
+    # malware-db is NOT unavailable when the curated file loads successfully (wh-ezc)
+    assert "malware-db" not in doc["summary"]["tools_unavailable"]
     assert vf.validate(doc) == []
 
 
