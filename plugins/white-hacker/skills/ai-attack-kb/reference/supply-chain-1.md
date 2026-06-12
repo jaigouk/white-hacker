@@ -18,7 +18,7 @@ detections:
   - "typosquat/homoglyph/keyboard-adjacency distance (Damerau-Levenshtein 1-2) to a curated AI-SDK allowlist, applied across ecosystems (npm/PyPI/RubyGems/Go/crates/Maven)"
   - "package added via an unverified LLM-suggested install command (the AI's pasted `install <pkg>` line, name never checked against official docs)"
   - "scope/name separator or non-ASCII homoglyph collision with an allowlist entry while the raw string differs"
-xref: ["LLM03:2025"]
+xref: ["LLM03:2025", "AML.T0010 [primary-sourced: https://atlas.mitre.org/techniques/AML.T0010]", "T1195.002 [primary-sourced: https://attack.mitre.org/techniques/T1195/002/]", "T1552.005 [primary-sourced: https://attack.mitre.org/techniques/T1552/005/]"]
 ---
 Slopsquatting is the AI-native supply-chain technique: an LLM invents a plausible-but-nonexistent
 package name, an attacker pre-registers it, and a developer installs it by pasting the AI's

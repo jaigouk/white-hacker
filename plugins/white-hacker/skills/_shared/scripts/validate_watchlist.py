@@ -91,9 +91,17 @@ REASONS = {
         "regression: candidate failed the version-aware is_known_bad round-trip "
         "(bad version must flag True, clean sibling False)"
     ),
+    "related_kb_dangling": (
+        "related_kb: database_specific.related_kb does not resolve to a known "
+        "ai-attack-kb/reference/*.md file (dangling reference fails Gate-2; wh-5ox.9)"
+    ),
     "top_level_not_object": "top-level entry is not a JSON object",
     "unreadable": "could not read/parse JSON",
 }
+
+# The ai-attack-kb/reference directory, resolved relative to this file.
+# _SKILLS_DIR = .../plugins/white-hacker/skills (computed above).
+_KB_REFERENCE_DIR = _SKILLS_DIR / "ai-attack-kb" / "reference"
 
 
 def load_schema(path: Path = SCHEMA_PATH) -> dict:
@@ -216,17 +224,53 @@ def _schema_errors(entry: dict, schema: dict) -> list[str]:
     ]
 
 
-def validate_entry(entry: dict, schema: dict | None = None) -> list[str]:
-    """Schema (2) + id-bound provenance (1) errors for ONE entry (empty list = valid).
+def _related_kb_error(entry: dict, kb_reference_dir: Path | None = None) -> str | None:
+    """SEC-Q5: check database_specific.related_kb resolves to a real ai-attack-kb/reference/*.md.
+
+    Returns a FIXED reason string (structural key name only, never the feed value) if the
+    field is present and dangling; None if absent or resolving. Path is computed deterministically
+    relative to the skills root — no network, no LLM (Policy 5).
+    """
+    db_specific = entry.get("database_specific")
+    if not isinstance(db_specific, dict):
+        return None
+    related_kb = db_specific.get("related_kb")
+    if related_kb is None:
+        return None  # field absent → no check needed
+    if not isinstance(related_kb, str):
+        return None  # type errors are caught by the schema; don't double-report here
+    # related_kb must be a BARE filename (schema: 'Relative filename', e.g. 'supply-chain-2.md').
+    # Reject any path component / traversal / absolute path BEFORE the resolve: the reference dir
+    # is flat (ADR-005, one level deep) and an absolute path must never enter committed watchlist
+    # data (public-repo, repo-relative-only rule). This also forecloses a basename-collision where
+    # a misleading prefix (e.g. 'evil/supply-chain-1.md') would otherwise resolve by basename.
+    if related_kb != Path(related_kb).name:
+        return REASONS["related_kb_dangling"]
+    kb_dir = kb_reference_dir if kb_reference_dir is not None else _KB_REFERENCE_DIR
+    candidate = Path(kb_dir) / related_kb
+    if not candidate.is_file():
+        return REASONS["related_kb_dangling"]
+    return None
+
+
+def validate_entry(entry: dict, schema: dict | None = None,
+                   kb_reference_dir: Path | None = None) -> list[str]:
+    """Schema (2) + id-bound provenance (1) + related_kb resolve (4) errors for ONE entry.
 
     Regression (3) is a corpus/dir-level check (`regression_errors`) driven by --check-regression,
     not a single-entry property, so it is not folded in here.
+
+    `kb_reference_dir` overrides the default `_KB_REFERENCE_DIR` (used in tests to point at a
+    fixture dir or a real KB path without depending on a specific machine layout).
     """
     schema = schema if schema is not None else load_schema()
     errors = _schema_errors(entry, schema)
     prov = provenance_error(entry)
     if prov is not None:
         errors.append(prov)
+    kb_err = _related_kb_error(entry, kb_reference_dir)
+    if kb_err is not None:
+        errors.append(kb_err)
     return errors
 
 

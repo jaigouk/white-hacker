@@ -50,6 +50,17 @@
             "description": "Explicit list → exactly those versions are bad; absent/[] → whole-package wildcard '*' in the loader fold.",
             "type": "array",
             "items": { "type": "string", "minLength": 1 }
+          },
+          "database_specific": {
+            "description": "Per-affected-entry metadata (loader-ignored). Carries optional last_safe_version — the highest version of this package NOT in the bad set (wh-5ox.9).",
+            "type": "object",
+            "additionalProperties": true,
+            "properties": {
+              "last_safe_version": {
+                "description": "The highest version of this package known NOT to be compromised. Surfaced in the S8 recommendation.",
+                "type": "string"
+              }
+            }
           }
         }
       }
@@ -83,13 +94,26 @@
       }
     },
     "database_specific": {
-      "description": "OSV's sanctioned namespace for non-standard fields — Gate-2-checked, loader-ignored. retrieved = when the feeder fetched it; watchlist_confidence: auto-extracted candidates land low, human review can raise.",
+      "description": "OSV's sanctioned namespace for non-standard fields — Gate-2-checked, loader-ignored. retrieved = when the feeder fetched it; watchlist_confidence: auto-extracted candidates land low, human review can raise. wh-5ox.9 adds optional last_safe_version / related_kb / mitre_techniques (additive; ADR-026 §2).",
       "type": "object",
       "additionalProperties": true,
       "required": ["retrieved", "watchlist_confidence"],
       "properties": {
         "retrieved": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
-        "watchlist_confidence": { "enum": ["low", "medium", "high"] }
+        "watchlist_confidence": { "enum": ["low", "medium", "high"] },
+        "last_safe_version": {
+          "description": "The highest version of this package known NOT to be compromised. Surfaced in the S8 finding recommendation as a safe-pin hint.",
+          "type": "string"
+        },
+        "related_kb": {
+          "description": "Relative filename of the ai-attack-kb/reference entry for this technique (e.g. 'supply-chain-2.md'). Gate-2-checked: a dangling path FAILS validation.",
+          "type": "string"
+        },
+        "mitre_techniques": {
+          "description": "Primary-sourced MITRE technique codes (ATLAS AML.Txxxx or ATT&CK Txxxx.xxx). Verified against canonical matrices; each must be tagged [primary-sourced: <url>] in the KB xref.",
+          "type": "array",
+          "items": { "type": "string" }
+        }
       }
     }
   }

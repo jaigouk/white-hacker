@@ -18,7 +18,7 @@ detections:
   - "installed artifact (binary/image/package) consumed without verifying its checksum or signature (cosign / GPG) against the publisher's expected value"
   - "installed/locked dependency version matches a known-compromised watchlist (the deps-scan S8 signal): Trivy v0.69.4-.6 / trivy-action 76-77, LiteLLM 1.82.7-1.82.8, Telnyx 4.87.1-4.87.2, ~42 @tanstack/* packages, nrwl.angular-console v18.95.0 — caveat: a specific-version match resolves the version from the target's OWN lockfile, which is attacker-controlled and can be edited to mask the bad version, so the manifest pin warrants a human cross-check rather than trusting the resolved version alone; wildcard (name-only) watchlist entries are unaffected"
   - "CI workflow grants a broad GITHUB_TOKEN or keeps long-lived SSH/cloud/K8s/Docker/Git secrets in the runner environment with no egress allowlist (the runner-memory-dump / secret-harvest blast surface)"
-xref: ["LLM03:2025"]
+xref: ["LLM03:2025", "AML.T0010 [primary-sourced: https://atlas.mitre.org/techniques/AML.T0010]", "T1195.002 [primary-sourced: https://attack.mitre.org/techniques/T1195/002/]", "T1552.005 [primary-sourced: https://attack.mitre.org/techniques/T1552/005/]"]
 ---
 A breached maintainer/bot account (incomplete credential rotation) is used to force-push imposter
 commits over existing release **tags** — mutable refs — and to publish malicious binaries/images;

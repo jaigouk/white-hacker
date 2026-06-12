@@ -627,3 +627,200 @@ def test_schema_file_is_pinned_draft_2020_12():
     schema = vw.load_schema()
     assert schema["$schema"] == "https://json-schema.org/draft/2020-12/schema"
     assert schema["properties"]["schema_version"]["const"] == "watchlist-1.0"
+
+
+# --- wh-5ox.9: additive optional fields (last_safe_version / related_kb /
+#     mitre_techniques in database_specific; database_specific in affected[].items)
+# Policy 9: pin BOTH == expected AND != the wrong value per invariant.
+
+# The 3 new fields are OPTIONAL — an existing valid entry without them still passes (== []).
+_VALID_WITH_NEW_FIELDS = {
+    **VALID,
+    "database_specific": {
+        "retrieved": "2026-06-10",
+        "watchlist_confidence": "low",
+        "last_safe_version": "1.2.2",
+        "related_kb": "supply-chain-2.md",
+        "mitre_techniques": ["T1195.002", "AML.T0010"],
+    },
+}
+
+
+def test_new_optional_fields_all_present_validates():
+    """A row with all 3 new database_specific fields validates (== []) — happy path."""
+    errs = vw.validate_entry(_VALID_WITH_NEW_FIELDS)
+    assert errs == [], errs
+    # != wrong: it must NOT return a non-empty error list
+    assert errs != ["any error"], errs
+
+
+def test_existing_entry_without_new_fields_still_validates():
+    """Existing entries WITHOUT the new fields still pass — strictly additive (ADR-026 §2)."""
+    errs = vw.validate_entry(VALID)
+    assert errs == [], errs
+    assert errs != ["any error"]
+
+
+def test_last_safe_version_must_be_string_not_int():
+    """Type guard: last_safe_version as int (wrong type) fails schema validation."""
+    bad = {
+        **VALID,
+        "database_specific": {
+            **VALID["database_specific"],
+            "last_safe_version": 123,  # int, not string
+        },
+    }
+    errs = vw.validate_entry(bad)
+    assert errs != [], "integer last_safe_version must fail"
+    assert any("last_safe_version" in e for e in errs), errs
+
+
+def test_mitre_techniques_must_be_array_not_string():
+    """Type guard: mitre_techniques as a string (not array of strings) fails."""
+    bad = {
+        **VALID,
+        "database_specific": {
+            **VALID["database_specific"],
+            "mitre_techniques": "T1195.002",  # scalar string, not array
+        },
+    }
+    errs = vw.validate_entry(bad)
+    assert errs != [], "scalar mitre_techniques must fail"
+    assert any("mitre_techniques" in e for e in errs), errs
+
+
+def test_related_kb_must_be_string_not_list():
+    """Type guard: related_kb as a list (not a string) fails."""
+    bad = {
+        **VALID,
+        "database_specific": {
+            **VALID["database_specific"],
+            "related_kb": ["supply-chain-1.md"],  # list, not string
+        },
+    }
+    errs = vw.validate_entry(bad)
+    assert errs != [], "list-typed related_kb must fail"
+    assert any("related_kb" in e for e in errs), errs
+
+
+def test_dangling_related_kb_fails_resolve_check():
+    """A related_kb pointing at a nonexistent KB file under ai-attack-kb/reference/ FAILS.
+    Mirrors validate_findings --check-kb-refs pattern (Policy 9 != side)."""
+    entry = {
+        **VALID,
+        "database_specific": {
+            **VALID["database_specific"],
+            "related_kb": "supply-chain-NONEXISTENT.md",
+        },
+    }
+    errs = vw.validate_entry(entry)
+    assert errs != [], "dangling related_kb must fail (resolve check)"
+    assert any("related_kb" in e for e in errs), errs
+    # SEC-Q5: the reason names the structural key, NOT the feed value
+    assert all("supply-chain-NONEXISTENT.md" not in e for e in errs), errs
+
+
+def test_valid_related_kb_passes_resolve_check():
+    """A related_kb pointing at a real ai-attack-kb/reference/*.md PASSES.
+    Policy 9 == side: confirms the resolve check accepts a real KB file."""
+    entry = {
+        **VALID,
+        "database_specific": {
+            **VALID["database_specific"],
+            "related_kb": "supply-chain-1.md",
+        },
+    }
+    errs = vw.validate_entry(entry)
+    assert errs == [], errs
+    assert errs != ["any error"]
+
+
+def test_related_kb_with_path_component_fails():
+    """related_kb must be a BARE filename (schema: 'Relative filename', e.g. 'supply-chain-2.md').
+    A path-prefixed, traversal, or ABSOLUTE value FAILS even when the basename resolves — enforces
+    the flat reference/ layout (ADR-005) and the public-repo no-absolute-path rule (Policy 9 != side).
+    """
+    for bad_kb in ("sub/supply-chain-1.md", "../supply-chain-1.md", "/etc/supply-chain-1.md"):
+        entry = {
+            **VALID,
+            "database_specific": {
+                **VALID["database_specific"],
+                "related_kb": bad_kb,
+            },
+        }
+        errs = vw.validate_entry(entry)
+        assert errs != [], f"path-containing related_kb must fail: {bad_kb!r}"
+        assert any("related_kb" in e for e in errs), errs
+        # SEC-Q5: the reason names the structural key, NEVER the feed value
+        assert all(bad_kb not in e for e in errs), errs
+
+
+def test_related_kb_reason_in_reasons_dict():
+    """REASONS dict has the new related_kb reason key (SEC-Q5 vocabulary gate)."""
+    assert "related_kb_dangling" in vw.REASONS
+    # The reason MUST name the structural key, never a feed value
+    reason = vw.REASONS["related_kb_dangling"]
+    assert "related_kb" in reason
+    # != wrong: the reason must NOT be a URL or path (structural key only)
+    assert "http" not in reason.lower()
+
+
+def test_affected_item_database_specific_optional_last_safe_version_validates():
+    """An affected[].items entry with an optional database_specific.last_safe_version validates."""
+    entry = {
+        **VALID,
+        "affected": [
+            {
+                "package": {"ecosystem": "PyPI", "name": "neutralized-sample-pkg"},
+                "versions": ["9.9.99"],
+                "database_specific": {"last_safe_version": "1.2.2"},
+            }
+        ],
+    }
+    errs = vw.validate_entry(entry)
+    assert errs == [], errs
+    assert errs != ["any error"]
+
+
+def test_affected_item_database_specific_last_safe_version_wrong_type_fails():
+    """Type guard: affected[].items.database_specific.last_safe_version as int fails."""
+    entry = {
+        **VALID,
+        "affected": [
+            {
+                "package": {"ecosystem": "PyPI", "name": "neutralized-sample-pkg"},
+                "versions": ["9.9.99"],
+                "database_specific": {"last_safe_version": 100},  # int, not string
+            }
+        ],
+    }
+    errs = vw.validate_entry(entry)
+    assert errs != [], "int last_safe_version in affected[].items.database_specific must fail"
+
+
+def test_schema_has_last_safe_version_in_database_specific_properties():
+    """Schema has explicit last_safe_version property in database_specific (not just via
+    additionalProperties:true). Additive — no new required field (ADR-026 §2)."""
+    schema = vw.load_schema()
+    db_specific_props = schema["properties"]["database_specific"]["properties"]
+    assert "last_safe_version" in db_specific_props
+    assert "related_kb" in db_specific_props
+    assert "mitre_techniques" in db_specific_props
+    # != wrong: the new fields must NOT be in 'required'
+    db_specific_required = schema["properties"]["database_specific"].get("required", [])
+    assert "last_safe_version" not in db_specific_required
+    assert "related_kb" not in db_specific_required
+    assert "mitre_techniques" not in db_specific_required
+
+
+def test_schema_has_affected_items_database_specific():
+    """Schema names the database_specific property under affected[].items (additive, optional)."""
+    schema = vw.load_schema()
+    affected_item_props = schema["properties"]["affected"]["items"]["properties"]
+    assert "database_specific" in affected_item_props
+    # The nested last_safe_version is also explicitly typed
+    nested_props = affected_item_props["database_specific"]["properties"]
+    assert "last_safe_version" in nested_props
+    # != wrong: must not be required
+    nested_required = affected_item_props["database_specific"].get("required", [])
+    assert "last_safe_version" not in nested_required

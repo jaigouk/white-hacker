@@ -108,6 +108,26 @@ _F4 = {
                  "(F4 rung 4); remove or replace if unintended (F4 rung 5)."),
 }
 
+
+def _s8_recommendation(last_safe_version: str | None) -> str:
+    """Return the S8 recommendation, appending a safe-pin hint when `last_safe_version` is given.
+
+    wh-5ox.9: the watchlist entry may carry `database_specific.last_safe_version` — the highest
+    version NOT in the compromised set. When present, surface it as a pin target so the reviewer
+    has an actionable safe version without a separate lookup. Absent → unchanged baseline (additive,
+    no regression). Touch only the S8 rung (Policy 3 / SOLID O).
+
+    `last_safe_version` is watchlist-DATA-derived, so it is `_scrub`'d at this egress embed point —
+    same posture as the values `_make_finding` scrubs into `exploit_scenario` (wh-ln2 / ADR-019) and
+    the SEC-Q5 value-plane guard — so a poisoned/auto-fed row cannot inject newlines/ANSI to forge
+    lines in the recommendation. A legit version spec survives `_scrub` byte-identical.
+    """
+    base = _F4["S8"]
+    if last_safe_version:
+        return f"{base} If a safe version is needed, pin to {_scrub(last_safe_version)}."
+    return base
+
+
 # Embedded fallback allowlist (so tests don't depend on the reference/ path resolving).
 _FALLBACK_ALLOWLIST = (
     "@anthropic-ai/sdk", "openai", "langchain", "@langchain/core", "llamaindex",
@@ -833,6 +853,205 @@ def parse_maven(project_dir: str) -> dict:
     }
 
 
+# ---------------------------------- Gradle --------------------------------- #
+# Gradle's "other half" of Java/Android: build.gradle (Groovy DSL) + build.gradle.kts
+# (Kotlin DSL) are ARBITRARY build-time CODE (an S6/S7 surface) — so this is REGEX
+# extraction, NOT a Groovy/Kotlin parser (the _GEM_RE precedent above, :529). The dep
+# `name` is the `group:artifact` coordinate — the SAME OSV-Maven naming `parse_maven`
+# emits (:820) so the S8 watchlist matches both Java build systems identically. Exotic DSL
+# forms are deliberately missed — ACCEPTED floor behavior (ADR-003: confidence-capped, the
+# tool-assisted path covers the rest); we do not chase DSL completeness. Stdlib only.
+_GRADLE_CONFIGS = (
+    "implementation", "api", "compileOnly", "runtimeOnly", "testImplementation",
+)
+_GRADLE_CFG_ALT = "|".join(_GRADLE_CONFIGS)
+# String-coordinate form (Groovy `implementation 'g:a:v'` AND Kotlin `implementation("g:a:v")`):
+# a config keyword, then a quoted `group:artifact[:version]` token. The optional `(` covers
+# the Kotlin function-call syntax; the inner quote class accepts ' or ".
+_GRADLE_STR_RE = re.compile(
+    rf"""(?:{_GRADLE_CFG_ALT})\s*\(?\s*['"]([^'"\s]+:[^'"\s]+)['"]"""
+)
+# Map form (Groovy): `implementation group: 'g', name: 'a', version: 'v'` (any key order;
+# version optional). Captured loosely then re-parsed per-key so order does not matter.
+_GRADLE_MAP_RE = re.compile(
+    rf"""(?:{_GRADLE_CFG_ALT})\s+((?:group|name|version)\s*:\s*['"][^'"]*['"].*)$"""
+)
+_GRADLE_MAP_KEY_RE = re.compile(r"""(group|name|version)\s*:\s*['"]([^'"]*)['"]""")
+# Version-catalog alias: `implementation libs.foo.bar` / `implementation(libs.foo.bar)`.
+# Captured as a dotted alias; resolved against gradle/libs.versions.toml when possible.
+_GRADLE_ALIAS_RE = re.compile(
+    rf"""(?:{_GRADLE_CFG_ALT})\s*\(?\s*(libs(?:\.[A-Za-z0-9_]+)+)\s*\)?\s*$"""
+)
+# A `gradle.lockfile` entry (opt-in dependency locking): `group:artifact:version=configs`.
+# The non-`=` head before the first `=` is the coordinate; the trailing `=configs` lists
+# the configurations. `empty=annotationProcessor` and comment lines carry no `:` → skipped.
+_GRADLE_LOCK_RE = re.compile(r"^([^=\s]+:[^=\s]+:[^=\s]+)=")
+
+
+def _resolved_gradle(root: Path) -> dict[str, str]:
+    """Extract `{group:artifact: locked_version}` from a `gradle.lockfile` (wh-0c2).
+
+    Gradle's opt-in dependency locking writes one `group:artifact:version=configurations`
+    line per resolved dependency (plus `# ...` comment lines and an `empty=...` trailer).
+    This is the RESOLVED source — the strongest signal — so it mirrors `_resolved_gem`
+    (:536) and attaches as the dep's `resolved`. Plain text (stdlib regex), no new dep.
+    NEVER raises: a missing/odd/garbage lockfile yields `{}` (like `_resolved_gem`)."""
+    out: dict[str, str] = {}
+    for line in _read_text(str(root / "gradle.lockfile")).splitlines():
+        m = _GRADLE_LOCK_RE.match(line.strip())
+        if not m:
+            continue
+        # SAFE: `_GRADLE_LOCK_RE` (:868) requires EXACTLY 2 colons in group(1)
+        # (`[^=\s]+:[^=\s]+:[^=\s]+`), so this 3-way unpack never ValueErrors. If that regex
+        # is ever widened, keep the colon count pinned (or guard the split) — a 2/4-part
+        # group(1) would otherwise raise here.
+        group, artifact, version = m.group(1).split(":", 2)
+        out.setdefault(f"{group}:{artifact}", version)
+    return out
+
+
+def _gradle_catalog(root: Path) -> dict[str, str]:
+    """Map a version-catalog alias (`libs.foo.bar`) to its `group:artifact:version`
+    coordinate from `gradle/libs.versions.toml` (wh-0c2), resolved where STATICALLY
+    possible. Reuses the defensive `_read_toml` (:324) so on a Python-3.10 floor (no
+    `tomllib`) or a malformed catalog it degrades to `{}` (ADR-003) — the alias then stays
+    wildcard-only. A `[libraries]` entry is `{module|group+name, version[.ref]}`; a
+    `version.ref` is looked up in `[versions]`. Aliases dasherize: TOML key `commons-lang3`
+    is referenced `libs.commons.lang3`, so both `-` and `_` map to the `.` separator."""
+    data = _read_toml(root / "gradle" / "libs.versions.toml")
+    versions = data.get("versions") if isinstance(data.get("versions"), dict) else {}
+    libraries = data.get("libraries") if isinstance(data.get("libraries"), dict) else {}
+    out: dict[str, str] = {}
+    for key, entry in libraries.items():
+        if not isinstance(entry, dict):
+            continue
+        module = entry.get("module")
+        if isinstance(module, str) and ":" in module:
+            coord = module
+        else:
+            grp, nm = entry.get("group"), entry.get("name")
+            if not (isinstance(grp, str) and isinstance(nm, str)):
+                continue
+            coord = f"{grp}:{nm}"
+        ver = ""
+        vref = entry.get("version")
+        if isinstance(vref, dict):  # { version.ref = "x" } → TOML { version: { ref: x } }
+            ref = vref.get("ref")
+            if isinstance(ref, str) and isinstance(versions.get(ref), str):
+                ver = versions[ref]
+        elif isinstance(vref, str):  # an inline literal version
+            ver = vref
+        # the TOML alias key is dasherized in DSL: `commons-lang3` → `libs.commons.lang3`.
+        alias = "libs." + str(key).replace("-", ".").replace("_", ".")
+        out[alias] = f"{coord}:{ver}" if ver else coord
+    return out
+
+
+def _gradle_coord_dep(coord: str, resolved: dict[str, str]) -> dict | None:
+    """Build a dep from a `group:artifact[:version]` coordinate. The `name` is
+    `group:artifact` (OSV-Maven naming, :820); the version segment becomes `spec` (else
+    `*`). A `gradle.lockfile` pin for the same coordinate attaches as `resolved` — additive
+    (mirrors `_resolved_gem` / parse_maven's optional key). Returns None for a coordinate
+    with no `group:artifact` (a single bare token), so a malformed line is dropped.
+
+    A URL-SCHEME coordinate is NOT a registry dep (QA-finding-1): `file:.../lib.jar` is a
+    local flat-dir artifact → `source_type="file"` (S2-excluded, like parse_maven's `system`
+    scope, :821); `http(s):...` is a remote flat-dir URL → `source_type="url"`. Classifying
+    them off `registry` keeps a phantom local jar out of the S3 unpinned-range signal — the
+    same non-registry handling `_classify_pypi` (:353) applies to a `file:`/url requirement."""
+    low = coord.lower()
+    if low.startswith("file:"):  # a local flat-dir jar — non-registry (S2-excluded)
+        return {"name": coord, "spec": "*", "source_type": "file"}
+    if low.startswith(("http://", "https://")):  # a remote flat-dir URL — non-registry
+        return {"name": coord, "spec": "*", "source_type": "url"}
+    parts = coord.split(":")
+    if len(parts) < 2 or not parts[0] or not parts[1]:
+        return None
+    name = f"{parts[0]}:{parts[1]}"
+    spec = parts[2] if len(parts) >= 3 and parts[2] else "*"
+    dep = {"name": name, "spec": spec, "source_type": "registry"}
+    if name in resolved:  # additive optional key, only when the lockfile pins it
+        dep["resolved"] = resolved[name]
+    return dep
+
+
+def parse_gradle(project_dir: str) -> dict:
+    """Gradle ADAPTER (wh-0c2): build.gradle (Groovy DSL) AND build.gradle.kts (Kotlin DSL)
+    dependency declarations — string-coordinate (`implementation 'g:a:v'` /
+    `implementation("g:a:v")`), map (`group:/name:/version:`), and version-catalog-alias
+    (`libs.foo.bar`) forms. The dep `name` is the `group:artifact` coordinate (OSV-Maven
+    naming, :820) so the S8 watchlist matches Maven + Gradle identically.
+
+    `gradle.lockfile` (opt-in locking) is the RESOLVED source — its `group:artifact:version`
+    pin attaches as the OPTIONAL `resolved` key (mirrors `_resolved_gem`), the strongest S8
+    signal. A `libs.foo.bar` alias resolves through `gradle/libs.versions.toml` where
+    statically possible (`_gradle_catalog`); an UNRESOLVABLE alias (no catalog / Python-3.10
+    no-tomllib / a dynamic ref) stays wildcard-only BY DESIGN (S8 conservatively matches only
+    a `"*"` whole-package entry, never a specific version — the wh-4k9 FP class).
+
+    The build scripts are surfaced in `script_files` (S6/S7) — Gradle build logic is
+    arbitrary build-time code. They are NOT install lifecycle hooks, so `lifecycle_scripts`
+    stays `{}` (no S1 false-claim). `settings.gradle` multi-module includes are NOT followed
+    — best-effort ROOT module only (a submodule's `build.gradle` joins `script_files` if it
+    is the root; cross-module include resolution is out of scope, ticket Notes). NEVER raises:
+    a missing/garbage/hostile build script degrades to an empty-but-valid struct (ADR-003).
+
+    Accepted floor GAPS (ADR-003: confidence-capped, the tool-assisted path covers the rest —
+    deliberate, not bugs):
+      (A) `_GRADLE_ALIAS_RE` is `$`-anchored, so a single-line block
+          `dependencies { implementation(libs.x) }` is NOT matched — only a one-declaration-
+          per-line alias resolves (the common, multi-line idiom). A string-coordinate on a
+          single line still extracts (it is not `$`-anchored).
+      (B) Only the 5 common configurations (`implementation/api/compileOnly/runtimeOnly/
+          testImplementation`) are extracted; `classpath` (buildscript), `annotationProcessor`,
+          `kapt`, and `ksp` are NOT — a deliberate floor scope (extend via `_GRADLE_CONFIGS`)."""
+    root = Path(project_dir)
+    resolved = _resolved_gradle(root)
+    catalog = _gradle_catalog(root)
+    deps: list[dict] = []
+    seen_names: set[str] = set()  # first-seen wins (the parse_pypi idiom, :463)
+    script_files: list[str] = []
+
+    def _add(d: dict | None) -> None:
+        if d and d["name"] not in seen_names:
+            deps.append(d)
+            seen_names.add(d["name"])
+
+    for fname in ("build.gradle", "build.gradle.kts"):
+        path = root / fname
+        text = _read_text(str(path))
+        if not text:
+            continue
+        script_files.append(str(path))  # arbitrary build-time code → S6/S7 surface
+        for raw in text.splitlines():
+            line = raw.split("//", 1)[0]  # strip a line comment (best-effort)
+            for m in _GRADLE_STR_RE.finditer(line):
+                _add(_gradle_coord_dep(m.group(1), resolved))
+            mm = _GRADLE_MAP_RE.search(line)
+            if mm:
+                kv = {k: v for k, v in _GRADLE_MAP_KEY_RE.findall(mm.group(1))}
+                grp, nm = kv.get("group"), kv.get("name")
+                if grp and nm:
+                    coord = (f"{grp}:{nm}:{kv['version']}" if kv.get("version")
+                             else f"{grp}:{nm}")
+                    _add(_gradle_coord_dep(coord, resolved))
+                continue  # a map line is not also a string-coordinate / alias line
+            ma = _GRADLE_ALIAS_RE.search(line)
+            if ma:
+                alias = ma.group(1)
+                if alias in catalog:  # statically resolvable through the catalog
+                    _add(_gradle_coord_dep(catalog[alias], resolved))
+                else:  # unresolvable alias → wildcard-only (name is the alias itself)
+                    _add({"name": alias, "spec": "*", "source_type": "registry"})
+
+    return {
+        "deps": deps,
+        "lifecycle_scripts": {},   # build scripts are NOT install hooks (no S1 false-claim)
+        "lockfile_present": (root / "gradle.lockfile").exists(),
+        "script_files": _dedup(script_files),
+    }
+
+
 # --------------------------------------------------------------------------- #
 # ecosystem dispatch — marker manifest -> (adapter, lang, manifest filename)
 # --------------------------------------------------------------------------- #
@@ -845,6 +1064,10 @@ _DISPATCH: tuple[tuple[str, object, str, str], ...] = (
     ("go.mod", parse_go, "go", "go.mod"),
     ("Cargo.toml", parse_cargo, "rust", "Cargo.toml"),
     ("pom.xml", parse_maven, "java", "pom.xml"),
+    # Gradle is Java's "other half" (incl. all Android). A Gradle project carries no
+    # pom.xml, so appending after Maven is safe — the first marker present still wins.
+    ("build.gradle", parse_gradle, "java", "build.gradle"),
+    ("build.gradle.kts", parse_gradle, "java", "build.gradle.kts"),
 )
 
 
@@ -1301,11 +1524,17 @@ def _evidence(hits: list[dict]) -> str:
 
 def scan(project_dir: str, scan_plan: dict | None = None,
          malware_db: dict | None = None, scoring_standard: str = "CVSS4.0",
-         allowlist: list[str] | None = None) -> dict:
+         allowlist: list[str] | None = None,
+         last_safe_db: dict[str, str] | None = None) -> dict:
     """Detect the ecosystem, run its adapter + the shared S1–S8 core over `project_dir`,
     and emit a schema-valid findings document. NEVER raises on a missing/odd manifest —
     degrades to an empty valid result. Always `tool_assisted:false` (this is the floor),
     capped confidence.
+
+    `last_safe_db` is an OPTIONAL mapping `{package_name: last_safe_version_str}` sourced from
+    the watchlist entry's `database_specific.last_safe_version` field (wh-5ox.9). When supplied,
+    the S8 recommendation surfaces the safe-pin version for the flagged package. Absent → the
+    baseline S8 recommendation is used unchanged (additive, no regression).
 
     Dispatch (spike-09 §F5): the first marker manifest present picks the adapter + the
     `scanned_langs` lang + the `manifest_path` (npm leads — package.json is unchanged).
@@ -1405,8 +1634,11 @@ def scan(project_dir: str, scan_plan: dict | None = None,
         emit, severity = score(hits)
         if not emit:
             continue
+        # wh-5ox.9: pass last_safe_version for S8 findings (None when absent or not S8).
+        _lsv = (last_safe_db or {}).get(name) if name in s8_names else None
         findings.append(_make_finding(idx, name, d, hits, severity, manifest_path,
-                                      s4_hits.get(name), s5_hits.get(name)))
+                                      s4_hits.get(name), s5_hits.get(name),
+                                      last_safe_version=_lsv))
         idx += 1
 
     # 2) project-level dangerous-install-script finding (reported once, keyed to the
@@ -1438,9 +1670,14 @@ def _renumber(findings: list[dict], start: int = 1) -> list[dict]:
 
 def _make_finding(idx: int, name: str, dep: dict, hits: list[dict], severity: str,
                   manifest_path: str, s4_target: str | None,
-                  s5_target: str | None) -> dict:
+                  s5_target: str | None,
+                  last_safe_version: str | None = None) -> dict:
     sig = _dominant_signal(hits)
-    rec = _F4.get(sig, _F4["_default"])
+    if sig == "S8":
+        # wh-5ox.9: surface last_safe_version in the S8 rung when present (additive).
+        rec = _s8_recommendation(last_safe_version)
+    else:
+        rec = _F4.get(sig, _F4["_default"])
     target = s5_target or s4_target
     # exploit_scenario is an egress surface — scrub every repo-derived value (name, the
     # raw dep spec, the look-alike target) at the embed point so a hostile manifest can't
