@@ -863,10 +863,19 @@ def detect_ecosystem(project_dir: str) -> tuple[object, str, str] | None:
 # --------------------------------------------------------------------------- #
 # the GENERIC signal core (S1–S8) over the normalized struct
 # --------------------------------------------------------------------------- #
+# wh-8ci: the wildcard token is ANCHORED so a bare `x`/`*`/`latest` counts ONLY as a
+# version segment — `^`/`~` range operators, a `*` wildcard, the WHOLE-WORD `latest` tag, or
+# an `x` bounded by a version separator (`.`/space) or the string ends (`1.x`, `1.2.x`,
+# `1.x.x`). Before anchoring, the bare `x`/`latest` matched ANY letter run — so a name with
+# an 'x' (`xlrd`), a PEP 508 `[extra]` (`[x]`), or a marker (`sys_platform == "linux"`) all
+# false-flagged as unpinned (paired with fix (a), which feeds the name-stripped constraint).
+_UNPINNED_RE = re.compile(r"[\^~]|\*|\blatest\b|(?:^|[.\s])x(?:[.\s]|$)")
+
+
 def _unpinned(spec: str) -> bool:
     """A semver range that can silently pull a freshly-published version (S3)."""
     s = (spec or "").strip()
-    return bool(re.search(r"[\^~*]|latest|x", s)) and _classify_source(s) == "registry"
+    return bool(_UNPINNED_RE.search(s)) and _classify_source(s) == "registry"
 
 
 # A PLAIN version literal: an OPTIONAL leading `v` (Go/OSV-Go sets are v-prefixed, e.g.
@@ -939,7 +948,11 @@ def signal_s3(norm: dict) -> bool:
     """S3 — unpinned ranges AND no lockfile committed."""
     if norm.get("lockfile_present"):
         return False
-    return any(_unpinned(d["spec"]) for d in norm.get("deps", []))
+    # `_constraint(d)` strips a leading PEP 508 name (the pypi adapter stores the FULL line
+    # as `spec`) so `_unpinned` reads ONLY the version constraint — otherwise a fully-pinned
+    # dep whose NAME contains 'x' (e.g. `xlrd==1.2.0`) false-flags. Aligns S3 with S8
+    # (signal_s8 already uses `_exact_pin(_constraint(d))`). wh-8ci.
+    return any(_unpinned(_constraint(d)) for d in norm.get("deps", []))
 
 
 def signal_s4(norm: dict, allowlist: list[str]) -> list[tuple[str, str]]:
@@ -1336,8 +1349,8 @@ def scan(project_dir: str, scan_plan: dict | None = None,
             hits.append({"signal": script_corr_sig, "severity": "LOW"})
         if has_name_signal and s1:
             hits.append({"signal": "S1", "severity": "LOW"})
-        if has_name_signal and s3 and _unpinned(d["spec"]):
-            hits.append({"signal": "S3", "severity": "LOW"})
+        if has_name_signal and s3 and _unpinned(_constraint(d)):  # wh-8ci: read the
+            hits.append({"signal": "S3", "severity": "LOW"})      # constraint, not the spec
 
         emit, severity = score(hits)
         if not emit:

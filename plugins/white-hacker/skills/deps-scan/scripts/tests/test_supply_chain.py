@@ -779,3 +779,124 @@ def test_s8_bundled_empty_path_normalizes_caller_db(tmp_path, monkeypatch):
     requests_hits = [x for x in findings if "requests @" in x.get("exploit_scenario", "")]
     assert requests_hits == []   # clean dep stays clean (!= flagged)
     assert vf.validate(doc) == []
+
+
+# --------------------------------------------------------------------------- #
+# wh-8ci — S3 `_unpinned` 'x'-in-name false positive (BOTH fix (a) AND fix (b))
+#
+# `_unpinned` (supply_chain.py:866) matched a literal 'x' ANYWHERE, and the pypi
+# adapter stores the FULL PEP 508 line as `spec` (name embedded). So a fully-pinned
+# `xlrd==1.2.0` — the 'x' lives in the NAME — false-flagged as an unpinned range at the
+# S3 call sites: signal_s3 (:942) and the per-dep S3 corroborator (:1339).
+#
+# The fix is BOTH (neither alone is complete — white-hacker dogfood finding):
+#   (a) feed `_unpinned(_constraint(d))` at both call sites — strips the leading bare name,
+#       aligning S3 with S8 (signal_s8 already uses `_exact_pin(_constraint(d))` at :1045).
+#       But `_constraint` strips ONLY the bare name, so PEP 508 `[extras]` and `; markers`
+#       survive (`pkg[x]==1` → `[x]==1`; `foo==1; sys_platform == "linux"` → the 'x' in
+#       "linux") — fix (a) alone leaves those residual FPs.
+#   (b) anchor the regex so a bare 'x'/'*' counts ONLY as a version segment. This kills the
+#       extras/markers residue — but on the RAW name-embedded spec a dotted name like `x.y`
+#       (leading 'x' followed by '.') still matches the anchored token, so (a) is still
+#       needed on top. Together: every genuine range stays True, every FP becomes False.
+# Under fix (b) `_unpinned` IS changed → direct `_unpinned(...) is False` asserts are valid.
+# --------------------------------------------------------------------------- #
+
+def test_signal_s3_pinned_name_with_x_no_false_positive(tmp_path):
+    """signal_s3 must read the version CONSTRAINT, not the name-embedded pypi spec.
+    A fully-pinned `xlrd==1.2.0` (the 'x' is in the NAME) is NOT an unpinned range.
+
+    RED at HEAD: signal_s3 calls `_unpinned(d["spec"])` → `_unpinned('xlrd==1.2.0')`
+    matches the literal 'x' → True (the FP). Fix (a) feeds `_constraint(d)` → '==1.2.0'
+    → False. Policy 9 — pin BOTH directions in one invariant test.
+    """
+    pinned = sc.parse_pypi(str(_write_pypi(tmp_path / "pinned", "xlrd==1.2.0\n")))
+    assert sc.signal_s3(pinned) is False          # == expected: pinned 'x'-named dep → no S3
+    # != the wrong value: a genuine unpinned range (no lockfile) STILL fires S3 (no FN)
+    ranged = sc.parse_pypi(str(_write_pypi(tmp_path / "ranged", "boto3^1.0.0\n")))
+    assert sc.signal_s3(ranged) is True
+
+
+def test_scan_pinned_name_with_x_does_not_corroborate_s3(tmp_path):
+    """The per-dep S3 corroborator (supply_chain.py:1339) must also read the constraint,
+    not the name-embedded spec — else a watchlisted, FULLY-PINNED dep whose NAME contains
+    'x' wrongly picks up an S3 'unpinned' corroborator on its finding.
+
+    RED at HEAD: `_unpinned('xpkg-evil==1.2.0')` matches the 'x' → S3 attaches. After fix
+    (a) `_unpinned(_constraint(d))` == `_unpinned('==1.2.0')` == False → no S3.
+    Policy 9 — pin BOTH: the S8 name signal IS present (==), the S3 corroborator is NOT (!=).
+    `allowlist=[]` isolates the S8+S3 path (no incidental S4/S5).
+    """
+    proj = _write_pypi(tmp_path / "p", "xpkg-evil==1.2.0\n")          # pinned, no lockfile
+    doc = sc.scan(str(proj), malware_db={"xpkg-evil": {"1.2.0"}}, allowlist=[])
+    hits = [f for f in _emitted(doc) if "xpkg-evil" in f.get("exploit_scenario", "")]
+    assert len(hits) == 1, "watchlisted xpkg-evil@1.2.0 must emit exactly one S8 finding"
+    scenario = hits[0]["exploit_scenario"]
+    assert "S8" in scenario        # == expected: the name signal is present
+    assert "S3" not in scenario    # != the wrong value: a pinned dep must NOT corroborate S3
+    assert vf.validate(doc) == []
+
+
+def test_scan_genuine_range_still_corroborates_s3(tmp_path):
+    """Control (no FN): a watchlisted dep with a GENUINE unpinned range + no lockfile STILL
+    picks up the S3 corroborator after the fix — the alignment must not suppress real ranges.
+    Policy 9 — the `!=` direction for the corroborator path.
+    """
+    proj = _write_pypi(tmp_path / "p", "xpkg-evil^1.0.0\n")          # genuine range, no lock
+    doc = sc.scan(str(proj), malware_db={"xpkg-evil": {"*"}}, allowlist=[])
+    hits = [f for f in _emitted(doc) if "xpkg-evil" in f.get("exploit_scenario", "")]
+    assert len(hits) == 1, "watchlisted xpkg-evil must emit exactly one finding"
+    scenario = hits[0]["exploit_scenario"]
+    assert "S8" in scenario        # name signal present
+    assert "S3" in scenario        # == expected: a real range + no lockfile → S3 corroborates
+    assert vf.validate(doc) == []
+
+
+def test_unpinned_no_false_negative_on_ranges_and_tags():
+    """Guard (fix b, no FN): the ANCHORED regex still flags every genuine range/wildcard/tag
+    — a bare 'x'/'*' AS A VERSION SEGMENT (`1.x`, `1.2.x`, `1.x.x`, `1.0.*`), plus the
+    `^`/`~` range operators and the `latest` tag. Policy 9 both directions.
+    """
+    for spec in ("1.x", "1.2.x", "1.x.x", "^1.0.0", "~1.0", "*", "1.0.*", "latest"):
+        assert sc._unpinned(spec) is True, f"{spec!r} must read as an unpinned range"
+    # != the wrong value: a bare exact version / pypi '==' pin is NOT unpinned
+    assert sc._unpinned("1.2.0") is False
+    assert sc._unpinned("==1.2.0") is False
+
+
+def test_unpinned_anchored_kills_name_extras_and_marker_false_positives():
+    """Fix (b): the anchored regex makes a bare 'x'/'*'/`latest` count ONLY as a version
+    segment — never a stray letter in a NAME, a PEP 508 `[extra]`, or a `; marker`. These
+    are the residual FPs that fix (a)'s name-strip alone cannot reach (extras/markers
+    survive `_constraint`). RED before fix (b): the old `[\\^~*]|latest|x` matched the 'x'
+    anywhere. Policy 9 — the FP-killed (==False) direction; the no-FN (!=True) direction is
+    pinned in test_unpinned_no_false_negative_on_ranges_and_tags.
+    """
+    # the headline name-embedded FP (the 'x' in 'xlrd')
+    assert sc._unpinned("xlrd==1.2.0") is False
+    # PEP 508 extras residue: `_constraint` strips only the bare name, leaving `[x]==1.0`
+    assert sc._unpinned("[x]==1.0") is False
+    # environment-marker residue: the 'x' inside the VERY common `sys_platform == "linux"`
+    assert sc._unpinned('==1.0; sys_platform == "linux"') is False
+    assert sc._unpinned('==1.0; extra == "test"') is False
+    # `latest` must be a whole token, not a substring of a name
+    assert sc._unpinned("mypackagelatest==1.0") is False
+    # plain exact pins (incl. build metadata) stay pinned
+    assert sc._unpinned("boto3==1.0.0") is False
+    assert sc._unpinned("1.0.0+exotic") is False
+
+
+def test_both_fixes_needed_constraint_strip_under_anchored_regex():
+    """Why BOTH (a) AND (b): the anchored regex (b) treats a leading 'x' followed by '.' as
+    a version segment, so a DOTTED pypi NAME like `x.y` still matches on the name-embedded
+    raw spec — fix (a)'s `_constraint` name-strip closes that residual. (Conversely, (b) is
+    what kills the extras/markers residue that (a) alone leaves.) Policy 9 both directions.
+    """
+    dep = {"name": "x.y", "spec": "x.y==1.0", "source_type": "registry"}
+    # (b)'s anchored regex is still fooled by the dotted NAME on the RAW spec ...
+    assert sc._unpinned(dep["spec"]) is True
+    # ... (a) strips the name so only the constraint is read → not unpinned
+    assert sc._unpinned(sc._constraint(dep)) is False     # == expected: pinned → not unpinned
+    # != the wrong value: a genuine range survives the strip and still reads unpinned
+    ranged = {"name": "x.y", "spec": "x.y^1.0.0", "source_type": "registry"}
+    assert sc._unpinned(sc._constraint(ranged)) is True
