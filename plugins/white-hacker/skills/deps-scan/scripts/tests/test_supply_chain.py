@@ -900,3 +900,223 @@ def test_both_fixes_needed_constraint_strip_under_anchored_regex():
     # != the wrong value: a genuine range survives the strip and still reads unpinned
     ranged = {"name": "x.y", "spec": "x.y^1.0.0", "source_type": "registry"}
     assert sc._unpinned(sc._constraint(ranged)) is True
+
+
+# --------------------------------------------------------------------------- #
+# wh-ln2 — _scrub: findings text is an egress surface (ADR-019; Agents Rule of
+# Two). A hostile manifest must not inject newlines/ANSI into exploit_scenario to
+# visually FORGE severity lines; a legitimate spec must survive byte-identical.
+# Tests pin BOTH `== scrubbed` AND `!= over-scrubbed` (Policy 9).
+# --------------------------------------------------------------------------- #
+# The wave-1a PoC3 string: a leading newline + an ANSI SGR red sequence that, raw,
+# would render a forged "FAKE-CRITICAL" line in red in the human's report.
+_POC_SCRUB_SPEC = "\n\x1b[31mFAKE-CRITICAL"
+
+
+def test_scrub_drops_control_chars_and_ansi():
+    out = sc._scrub(_POC_SCRUB_SPEC)
+    # == expected: the C0 newline and the ANSI ESC are gone; the visible residue is
+    # the literal letters, never a control byte that could forge a line.
+    assert "\n" not in out
+    assert "\x1b" not in out
+    assert "\r" not in out
+    assert "\t" not in out
+    assert "[31m" not in out          # the CSI body went with the ESC
+    assert "FAKE-CRITICAL" in out     # legible letters are kept (not nuked wholesale)
+    # != the wrong value: the raw injectable string never passes through verbatim.
+    assert out != _POC_SCRUB_SPEC
+
+
+def test_scrub_keeps_benign_specs_byte_identical():
+    # Legitimate version specs carry no control/ANSI bytes → must be byte-identical
+    # (== expected). The != pair guards against over-scrubbing that would mangle a
+    # real spec (e.g. stripping `^`, `=`, `:`, `/`, `+` or `.`).
+    for benign in ("^1.0.0", "==1.2.3", "~>2.1", "1.2.3",
+                   "git+https://github.com/acme/lib.git#v1.2.3",
+                   "file:../local-tool", ">=1.0.0,<2.0.0"):
+        assert sc._scrub(benign) == benign          # survives untouched
+        assert sc._scrub(benign) != ""              # not nuked to empty
+
+
+def test_scrub_collapses_newline_and_tab_runs_to_single_space():
+    # A run of newlines/tabs collapses to ONE space (== expected) — the attacker
+    # cannot reflow the report by padding whitespace; != the original multi-line form.
+    multi = "a\n\n\t\nb"
+    assert sc._scrub(multi) == "a b"
+    assert sc._scrub(multi) != multi
+
+
+def test_scrub_caps_length_with_ellipsis_marker():
+    # A pathologically long value is capped (~200 chars) with an ellipsis marker so a
+    # manifest cannot flood the report. == expected: short output, ends in the marker;
+    # != the wrong value: the full 5000-char payload is not echoed.
+    payload = "A" * 5000
+    out = sc._scrub(payload)
+    assert len(out) <= 210                # capped near ~200 (+ the marker)
+    assert out != payload                 # not the full flood
+    assert out.endswith("…")              # ellipsis marker present
+
+
+def test_scrub_never_raises_on_odd_input():
+    # degrade-never-raise (ADR-003): _scrub tolerates empty + lone-ESC + stray C1.
+    assert sc._scrub("") == ""
+    assert "\x1b" not in sc._scrub("\x1b")          # a bare ESC with no CSI body
+    assert "\x9b" not in sc._scrub("x\x9by")        # a lone C1 control byte
+
+
+def test_make_finding_poc_spec_cannot_inject_newline_or_ansi(tmp_path):
+    """End-to-end through scan(): a hostile dep `spec` (the PoC3 string) reaches
+    _make_finding's exploit_scenario but renders INERT — no newline, no ANSI ESC —
+    and the document stays schema-valid. `lodahs` (dist-1 of `lodash`) + a lifecycle
+    script trips S4 so a finding is actually emitted to carry the payload."""
+    proj = _write(tmp_path / "p", {
+        "dependencies": {"lodahs": _POC_SCRUB_SPEC},
+        "scripts": {"postinstall": "node scripts/postinstall.js"},
+    }, scripts_files={"scripts/postinstall.js": "// inert\n"})
+    doc = sc.scan(str(proj))
+    cand = next(x for x in _emitted(doc) if "lodahs" in x["exploit_scenario"])
+    scen = cand["exploit_scenario"]
+    # == scrubbed: the injected newline + ANSI are gone from the rendered scenario.
+    assert "\n" not in scen
+    assert "\x1b" not in scen
+    assert "[31m" not in scen
+    # != the wrong value: the raw payload substring never survives verbatim.
+    assert _POC_SCRUB_SPEC not in scen
+    # the dep NAME is still legible in the scenario (we scrub, not nuke).
+    assert "lodahs" in scen
+    assert vf.validate(doc) == []
+
+
+def test_make_finding_benign_spec_survives_in_scenario(tmp_path):
+    """The != over-scrub pair end-to-end: a legitimate git+https spec on a flagged
+    dep survives byte-identical inside the rendered scenario."""
+    benign = "git+https://github.com/acme/lodahs.git#v1.2.3"
+    proj = _write(tmp_path / "p", {
+        "dependencies": {"lodahs": benign},
+        "scripts": {"postinstall": "node scripts/postinstall.js"},
+    }, scripts_files={"scripts/postinstall.js": "// inert\n"})
+    doc = sc.scan(str(proj))
+    cand = next(x for x in _emitted(doc) if "lodahs" in x["exploit_scenario"])
+    assert benign in cand["exploit_scenario"]          # == expected: untouched
+    assert vf.validate(doc) == []
+
+
+def test_make_kernel_finding_scrubs_build_file_path():
+    """_make_kernel_finding interpolates `build_file` into its scenario. Driven directly
+    (the kernel build-file lookup is top-level-only, so a hostile path can't arrive via
+    scan() without fighting the parser — the unit contract is what we pin, matching the
+    file's `_unpinned`/`_constraint` direct-test style). A control/ANSI byte in the path
+    must not reach the rendered scenario (== scrubbed); the legible name survives, and
+    the finding stays schema-valid when wrapped in a document (!= over-scrubbed)."""
+    hostile = "drivers/a\x1b[31m\nb/Makefile"
+    f = sc._make_kernel_finding(hostile, ["wget http://example.test/x.bin"])
+    scen = f["exploit_scenario"]
+    assert "\x1b" not in scen          # == scrubbed: no ANSI ESC in the scenario
+    assert "\n" not in scen
+    assert "[31m" not in scen
+    assert "Makefile" in scen          # != over-scrubbed: the legible name survives
+    # the embedded raw path never survives verbatim in the rendered scenario.
+    assert hostile not in scen
+    # still schema-valid once wrapped in a findings document.
+    doc = sc._build_doc([f], {"deps": [], "lifecycle_scripts": {}}, None, {}, "CVSS4.0")
+    assert vf.validate(doc) == []
+
+
+def test_make_script_finding_scrubs_script_path():
+    """_make_script_finding interpolates `script_path` into its scenario. Driven directly
+    (a real on-disk script path with embedded `\\n` can't round-trip the whitespace-
+    splitting command parser — the unit contract is what we pin). A control/ANSI byte in
+    the path renders inert (== scrubbed) yet the legible `.js` basename survives, and the
+    finding stays schema-valid wrapped in a document (!= over-scrubbed)."""
+    hostile = "bad\x1b[31m\ndir/postinstall.js"
+    f = sc._make_script_finding(0, hostile, ["child_process.exec", "eval"],
+                                "package.json")
+    scen = f["exploit_scenario"]
+    assert "\x1b" not in scen          # == scrubbed
+    assert "\n" not in scen
+    assert "[31m" not in scen
+    assert "postinstall.js" in scen    # != over-scrubbed: basename legible
+    assert hostile not in scen
+    doc = sc._build_doc([f], {"deps": [], "lifecycle_scripts": {}}, None, {}, "CVSS4.0")
+    assert vf.validate(doc) == []
+
+
+# --------------------------------------------------------------------------- #
+# wh-ln2 D1 — ASCII C0/C1 + ANSI is NOT enough: attacker-controlled UNICODE
+# codepoints re-enable the same forge/Trojan-Source attack and must also be
+# neutralized (QA + white-hacker round-1 MEDIUM). `_scrub` must treat:
+#   * U+2028 LINE SEP (Zl) / U+2029 PARA SEP (Zp) → a single space (many
+#     terminals/editors render them as a NEWLINE → forged severity line);
+#   * Cf format chars — bidi overrides/isolates U+202A–202E / U+2066–2069 and
+#     zero-width/BOM U+200B/200C/200D/FEFF → dropped (Trojan-Source reorder).
+# Legit non-ASCII (`é`, `カ`) + URL/spec punctuation carry NO Zl/Zp/Cf → survive.
+# Categories grounded via unicodedata (Zl/Zp/Cf) — Policy 9 pins BOTH directions.
+# --------------------------------------------------------------------------- #
+_U_LINE_SEP = " "   # Zl — newline-like
+_U_PARA_SEP = " "   # Zp — newline-like
+_U_RLO = "‮"        # Cf — bidi right-to-left override (Trojan-Source)
+_U_ZWSP = "​"       # Cf — zero-width space (token-splitting)
+_U_BOM = "﻿"        # Cf — zero-width no-break space / BOM
+
+
+def test_scrub_neutralizes_unicode_line_and_para_separators():
+    # Zl/Zp collapse to a single space (== expected — mirrors the \n handling), so a
+    # manifest can't open a forged line; the surrounding letters stay legible.
+    out = sc._scrub(f"a{_U_LINE_SEP}{_U_PARA_SEP}b")
+    assert _U_LINE_SEP not in out                 # the line separator is gone
+    assert _U_PARA_SEP not in out                 # the para separator is gone
+    assert out == "a b"                            # == expected: collapsed to one space
+    # != the wrong value: the raw newline-like form never survives verbatim.
+    assert out != f"a{_U_LINE_SEP}{_U_PARA_SEP}b"
+    assert "a" in out and "b" in out               # letters kept (not nuked)
+
+
+def test_scrub_drops_unicode_format_chars_bidi_and_zero_width():
+    # Cf chars (bidi override, zero-width, BOM) are dropped outright (== the control
+    # handling) so a Trojan-Source visual reorder / token-split can't render.
+    out = sc._scrub(f"safe{_U_RLO}{_U_ZWSP}{_U_BOM}name")
+    assert _U_RLO not in out                        # bidi override gone
+    assert _U_ZWSP not in out                       # zero-width space gone
+    assert _U_BOM not in out                        # BOM gone
+    assert out == "safename"                        # == expected: Cf removed, no gap
+    assert out != f"safe{_U_RLO}{_U_ZWSP}{_U_BOM}name"   # != the raw payload
+
+
+def test_scrub_keeps_legit_non_ascii_and_urls_byte_identical():
+    # The != over-scrub guard: legit non-ASCII letters (é, カ) carry no Zl/Zp/Cf, and
+    # URL/spec punctuation is untouched → every value survives byte-identical.
+    for benign in ("café-utils", "日本語パッケージ", "^1.0.0", "==1.2.3",
+                   "git+https://github.com/acmé/lib.git#v1.2.3",
+                   "=> ../local/fork v1.2.3"):
+        assert sc._scrub(benign) == benign          # == expected: untouched
+        assert sc._scrub(benign) != ""              # not nuked to empty
+
+
+def test_scrub_unicode_pass_never_raises():
+    # degrade-never-raise (ADR-003): the category pass tolerates lone Cf / Zl / Zp +
+    # an astral codepoint without raising.
+    assert sc._scrub(_U_RLO) == ""                  # a lone Cf → empty, no raise
+    assert sc._scrub(_U_LINE_SEP) == " "            # a lone Zl → single space
+    assert "\U0001F4A9" in sc._scrub("x\U0001F4A9y")  # astral So char survives, no raise
+
+
+def test_make_finding_unicode_payload_cannot_inject_line_or_reorder(tmp_path):
+    """End-to-end through scan() (mirrors the ASCII PoC e2e test): a hostile dep `spec`
+    carrying U+2028 (newline-like) + U+202E (bidi override) reaches _make_finding's
+    exploit_scenario but renders INERT — neither codepoint survives — and the document
+    stays schema-valid. `lodahs` (dist-1 of `lodash`) + a lifecycle script trips S4."""
+    payload = f"1.0.0{_U_LINE_SEP}{_U_RLO}FAKE-CRITICAL"
+    proj = _write(tmp_path / "p", {
+        "dependencies": {"lodahs": payload},
+        "scripts": {"postinstall": "node scripts/postinstall.js"},
+    }, scripts_files={"scripts/postinstall.js": "// inert\n"})
+    doc = sc.scan(str(proj))
+    cand = next(x for x in _emitted(doc) if "lodahs" in x["exploit_scenario"])
+    scen = cand["exploit_scenario"]
+    # == scrubbed: the newline-like separator + bidi override are gone.
+    assert _U_LINE_SEP not in scen
+    assert _U_RLO not in scen
+    # != the wrong value: the raw payload substring never survives verbatim.
+    assert payload not in scen
+    assert "lodahs" in scen                          # name still legible
+    assert vf.validate(doc) == []

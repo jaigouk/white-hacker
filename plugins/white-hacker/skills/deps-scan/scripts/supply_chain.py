@@ -1180,6 +1180,56 @@ def _repo_rel(path: str, project_dir: str) -> str:
     return os.path.relpath(path, project_dir).replace(os.sep, "/")
 
 
+# wh-ln2 — exploit_scenario is an EGRESS surface to the human reader (ADR-019; Agents
+# Rule of Two). The scenario builders interpolate RAW attacker-controlled manifest
+# strings (a dep spec/name, a build-file/script path), so a hostile manifest could
+# inject newlines/ANSI to visually FORGE severity lines in the rendered report. `_scrub`
+# is the render-time neutralizer applied to EVERY repo-derived value at the embed point.
+# ANSI escape sequences: a CSI (`\x1b[ … <final byte 0x40–0x7E>`) or an OSC
+# (`\x1b] … <BEL | ST>`); stripped WHOLE (ESC + body) so no `[31m` residue is left.
+_ANSI_ESCAPE_RE = re.compile(
+    r"\x1b\[[0-?]*[ -/]*[@-~]"        # CSI: ESC [ params intermediates final
+    r"|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)"  # OSC: ESC ] ... (BEL or ST)
+    r"|\x1b."                          # any other ESC-introduced 2-char sequence
+)
+# Whitespace control chars — collapsed to one space. Includes the ASCII newline/CR/tab/
+# form-feed/vtab AND the Unicode U+2028 LINE SEP (Zl) / U+2029 PARA SEP (Zp), which many
+# terminals/editors render as a NEWLINE → a forged severity line (wh-ln2 D1). Collapsing
+# them HERE (one run-collapse step) denies an attacker visible-width padding too.
+_WS_CONTROL_RE = re.compile(r"[\t\n\r\f\v  ]+")
+# Residual C0 (0x00–0x1F) + C1 (0x80–0x9F) control bytes — dropped outright.
+_OTHER_CONTROL_RE = re.compile(r"[\x00-\x1f\x80-\x9f]")
+_SCRUB_MAXLEN = 200  # cap embedded repo strings so a manifest cannot flood the report
+
+
+def _scrub(s: str) -> str:
+    """Neutralize an attacker-controlled string for safe interpolation into a finding's
+    `exploit_scenario` (an egress surface). Strips ANSI escape sequences (CSI/OSC) WHOLE,
+    collapses any newline/tab run to a single space, drops residual C0/C1 control bytes,
+    neutralizes attacker UNICODE — U+2028/U+2029 line/para separators (Zl/Zp) → a space,
+    Cf format chars (bidi overrides/isolates, zero-width, BOM) → dropped (Trojan-Source) —
+    and caps length to ~200 chars with an ellipsis marker. Legitimate version specs
+    (`^1.0.0`, `==1.2.3`, a `git+https://…#sha` URL) and legit non-ASCII letters survive
+    byte-identical. Pure; NEVER raises (degrade-never-raise, ADR-003) — odd input coerces
+    via str()."""
+    try:
+        text = s if isinstance(s, str) else str(s)
+        text = _ANSI_ESCAPE_RE.sub("", text)       # ESC + body first (keeps no residue)
+        text = _WS_CONTROL_RE.sub(" ", text)       # newline/tab/U+2028/U+2029 runs → one space
+        text = _OTHER_CONTROL_RE.sub("", text)     # any remaining ASCII control byte → gone
+        # wh-ln2 D1: ASCII C0/C1 + the Zl/Zp line/para seps (handled above) are not
+        # enough — Cf FORMAT chars (bidi overrides/isolates U+202A–202E / U+2066–2069,
+        # zero-width / BOM U+200B/200C/200D/FEFF) drive a Trojan-Source visual reorder /
+        # token-split in the rendered scenario → drop them (mirrors the control handling).
+        # unicodedata is already imported (degrade-never-raise: this stays in try/except).
+        text = "".join(c for c in text if unicodedata.category(c) != "Cf")
+        if len(text) > _SCRUB_MAXLEN:
+            text = text[:_SCRUB_MAXLEN] + "…"       # cap + ellipsis marker
+        return text
+    except Exception:  # pragma: no cover — belt-and-suspenders: never raise on egress
+        return ""
+
+
 def scan_kernel_module_sources(project_dir: str) -> list[dict]:
     """Flag UNPINNED out-of-tree kernel-module / DKMS source fetches (ADR-006).
 
@@ -1208,7 +1258,7 @@ def _make_kernel_finding(build_file: str, unpinned_lines: list[str]) -> dict:
     `tool_assisted:false` → confidence capped by dg.cap_floor_confidence."""
     n = len(unpinned_lines)
     scenario = (
-        f"out-of-tree kernel-module / DKMS build {build_file} fetches "
+        f"out-of-tree kernel-module / DKMS build {_scrub(build_file)} fetches "
         f"{n} UNPINNED source{'s' if n != 1 else ''} (curl/wget of an http(s) URL, or "
         f"`git clone` without an immutable ref) — a tampered or hijacked source builds "
         f"into the kernel at install time; static_review_only, triage decides (ADR-006)."
@@ -1392,9 +1442,12 @@ def _make_finding(idx: int, name: str, dep: dict, hits: list[dict], severity: st
     sig = _dominant_signal(hits)
     rec = _F4.get(sig, _F4["_default"])
     target = s5_target or s4_target
-    detail = f" (looks like '{target}')" if target else ""
+    # exploit_scenario is an egress surface — scrub every repo-derived value (name, the
+    # raw dep spec, the look-alike target) at the embed point so a hostile manifest can't
+    # inject newlines/ANSI to forge severity lines (wh-ln2; ADR-019).
+    detail = f" (looks like '{_scrub(target)}')" if target else ""
     scenario = (
-        f"{name} @ {dep['spec']}{detail}: supply-chain-malware candidate "
+        f"{_scrub(name)} @ {_scrub(dep['spec'])}{detail}: supply-chain-malware candidate "
         f"(signals: {_evidence(hits)}) — novel malware that CVE-based SCA misses; "
         f"static_review_only, triage decides."
     )
@@ -1424,7 +1477,7 @@ def _make_script_finding(idx: int, script_path: str, patterns: list[str],
                          manifest_path: str) -> dict:
     """Project-level S6 finding: a dangerous install script (≥2 dangerous APIs)."""
     scenario = (
-        f"install script {script_path} contains ≥2 dangerous APIs "
+        f"install script {_scrub(script_path)} contains ≥2 dangerous APIs "
         f"({', '.join(sorted(patterns))}): supply-chain-malware candidate (signal: S6) "
         f"— runs at `npm install` time before any test; static_review_only, triage decides."
     )
