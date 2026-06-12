@@ -118,6 +118,27 @@ _AI_NESTED_TOKENS: tuple[str, ...] = tuple(
 # descending into deeply-nested build artefacts not covered by _PRUNE_DIRS.
 _AI_INFRA_MAX_DEPTH: int = 5
 
+# Depth cap for detect_kernel_adjacency's _iter_files walk (relative to root;
+# root=0, a file directly under root sits in a depth-0 dir).  Bounds the
+# recursive scan so a pathologically deep tree cannot force an unbounded
+# scandir walk (CWE-400 CPU/time DoS, wh-dv4) — sibling to wh-qu0's per-file
+# read-cap.  Kernel-adjacency tokens live in shallow manifests (root compose=0,
+# deploy/k8s=1, helm charts/<x>/templates=3, kustomize k8s/overlays/<env>=3);
+# the deep tail is a monorepo `services/<svc>/deploy/k8s/overlays/<env>/` ≈ 6.
+# 8 covers that tail with margin (no legit token dropped) while still pruning
+# any pathological tree.  Independently tunable from _AI_INFRA_MAX_DEPTH.
+_KERNEL_ADJ_MAX_DEPTH: int = 8
+
+# Entry (file-count) cap for detect_kernel_adjacency's _iter_files walk — bounds the
+# BREADTH axis the depth cap leaves open (wh-k5a): a wide SHALLOW tree (many files within
+# the depth cap) would otherwise force an unbounded stat/open walk (CWE-400 — the 3rd DoS
+# axis after wh-dv4 depth + wh-qu0 per-file read).  The walk TRUNCATES once this many files
+# are yielded (degrade-never-raise — truncate, never raise; ADR-003).  Generous DoS backstop
+# on the ADVISORY scan-plan path (LOW/P3): a realistic review tree's kernel-adjacency
+# manifests sit far below this, so over-truncation only ever drops an advisory marker, never
+# a VULN finding.  Independently tunable from _KERNEL_ADJ_MAX_DEPTH.
+_KERNEL_ADJ_MAX_ENTRIES: int = 50_000
+
 # Maximum bytes read from a nested manifest when scanning for AI-SDK tokens.
 # AI-SDK tokens appear near the top of requirements.txt / pyproject.toml /
 # package.json, so 64 KiB is more than sufficient.  Capping the read protects
@@ -269,12 +290,56 @@ def detect_infra(root: Path) -> list[str]:
     return sorted(found)
 
 
-def _iter_files(root: Path):
-    """Yield regular files under `root` (recursive), skipping unreadable trees."""
+def _iter_files(root: Path, max_depth: int | None = None, max_entries: int | None = None):
+    """Yield regular files under `root` (recursive), skipping unreadable trees.
+
+    When ``max_depth`` is None (default) the walk is unbounded — the original
+    contract, so existing/future callers are unchanged.  When ``max_depth`` is
+    set, the walk is *pruned* at that directory depth (root=0): directories
+    deeper than the cap are never descended, bounding CPU/time on a
+    pathologically deep tree (CWE-400, wh-dv4).  Mirrors detect_ai_agent_infra's
+    in-place ``dirnames`` pruning against _AI_INFRA_MAX_DEPTH.
+
+    When ``max_entries`` is set, the walk STOPS after yielding that many files —
+    bounding the BREADTH/file-count axis a depth cap leaves open: a wide SHALLOW
+    tree within the depth cap would otherwise force an unbounded stat/open walk
+    (CWE-400, wh-k5a).  It truncates (returns the generator early), never raises
+    (ADR-003).  Default None keeps the unbounded contract, so other callers are
+    unchanged.
+
+    NOTE: a depth *filter* on ``root.rglob("*")`` would NOT bound the walk —
+    rglob scandir's every directory regardless of which paths are yielded — so
+    the bounded path uses ``os.walk`` and prunes the descent instead.
+    """
+    yielded = 0
     try:
-        for p in root.rglob("*"):
-            if p.is_file():
-                yield p
+        if max_depth is None:
+            for p in root.rglob("*"):
+                if p.is_file():
+                    yield p
+                    yielded += 1
+                    if max_entries is not None and yielded >= max_entries:
+                        return
+            return
+        for dirpath_str, dirnames, filenames in os.walk(root):
+            dirpath = Path(dirpath_str)
+            try:
+                depth = len(dirpath.relative_to(root).parts)
+            except ValueError:
+                continue
+            # Prune in-place at the cap so deeper directories are never walked.
+            if depth >= max_depth:
+                dirnames[:] = []
+            for filename in filenames:
+                candidate = dirpath / filename
+                try:
+                    if candidate.is_file():
+                        yield candidate
+                        yielded += 1
+                        if max_entries is not None and yielded >= max_entries:
+                            return
+                except OSError:
+                    continue
     except OSError:
         return
 
@@ -312,8 +377,12 @@ def detect_kernel_adjacency(root: Path) -> list[str]:
     if gomod and any(tok in gomod for tok in _EBPF_GOMOD_TOKENS):
         markers.add("ebpf")
 
-    # --- file-suffix + content signals (single recursive walk) ---
-    for path in _iter_files(root):
+    # --- file-suffix + content signals (single recursive, depth+breadth-bounded walk) ---
+    # max_depth bounds the descent (deep tree, wh-dv4) and max_entries bounds the file
+    # count (wide shallow tree, wh-k5a) so neither axis forces an unbounded scandir/stat
+    # walk (CWE-400) on every build_scan_plan; tokens sit in shallow, modest manifests.
+    for path in _iter_files(root, max_depth=_KERNEL_ADJ_MAX_DEPTH,
+                            max_entries=_KERNEL_ADJ_MAX_ENTRIES):
         name = path.name.lower()
         if name.endswith(".bpf.c") or name.endswith(".bt"):
             markers.add("ebpf")

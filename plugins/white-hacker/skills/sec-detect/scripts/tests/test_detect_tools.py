@@ -10,6 +10,7 @@ Run: `uv run --with pytest pytest .claude/skills/sec-detect/scripts/`
 """
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import detect_tools as dt
@@ -744,3 +745,185 @@ def test_kernel_adjacency_yaml_token_beyond_cap_not_matched(tmp_path: Path):
     markers = dt.detect_kernel_adjacency(tmp_path)
     assert "privileged-container" not in markers      # == expected (beyond cap)
     assert markers == []                              # != wrong value (should be empty)
+
+
+# --- wh-dv4: _iter_files unbounded rglob DEPTH walk (CWE-400 CPU/time DoS) -----
+# _iter_files (detect_tools.py:272) walked the WHOLE tree via root.rglob("*") with
+# no depth bound; detect_kernel_adjacency consumes the full generator on every
+# build_scan_plan, so a pathologically deep tree forces an unbounded scandir walk
+# (distinct from wh-qu0's per-file OOM read-cap). The fix adds a `max_depth` param
+# to _iter_files (default None = unbounded → other callers unchanged) that PRUNES
+# the walk via os.walk + in-place dirnames (mirrors detect_ai_agent_infra :385-388),
+# and detect_kernel_adjacency opts in with _KERNEL_ADJ_MAX_DEPTH.
+# Policy 9: pin BOTH directions on DEPTH — within-cap matched, beyond-cap absent —
+# AND the shared-function contract (default unbounded vs bounded prunes).
+
+
+def _privileged_yaml_at_depth(root: Path, depth: int, name: str = "pod.yaml") -> Path:
+    """Create `name` with a `privileged: true` token at directory `depth`.
+
+    depth 0 = file directly under root; depth N = file inside N nested dirs
+    (its directory's path has N parts relative to root).
+    """
+    d = root
+    for i in range(depth):
+        d = d / f"lvl{i}"
+    d.mkdir(parents=True, exist_ok=True)
+    f = d / name
+    f.write_text("services:\n  app:\n    privileged: true\n")
+    return f
+
+
+def test_iter_files_default_unbounded_but_bounded_prunes(tmp_path: Path):
+    """The shared helper: default yields deep files; a cap PRUNES them.
+
+    Pins the SOLID/Liskov invariant that other callers (max_depth=None) keep the
+    full recursive contract, while the bounded call actually stops descending.
+
+    == expected: the deep file IS yielded unbounded; is NOT yielded when capped
+    != wrong: deep file missing from the unbounded walk (would break other callers)
+              OR present in the bounded walk (would mean the cap does not prune)
+    """
+    cap = dt._KERNEL_ADJ_MAX_DEPTH
+    deep = _privileged_yaml_at_depth(tmp_path, cap + 3, name="deep.txt")
+
+    unbounded = list(dt._iter_files(tmp_path))               # default max_depth=None
+    assert deep in unbounded                                 # == expected (unbounded)
+
+    bounded = list(dt._iter_files(tmp_path, max_depth=cap))  # opt-in cap
+    assert deep not in bounded                               # == expected (pruned)
+    assert deep in unbounded and deep not in bounded         # != wrong (both directions)
+
+
+def test_kernel_adjacency_token_within_depth_cap_matched(tmp_path: Path):
+    """A privileged token at the deepest still-scanned depth (== cap) IS matched.
+
+    Guards against over-pruning (false negative): the cap is INCLUSIVE — files in
+    a directory at depth == cap are still scanned (mirrors detect_ai_agent_infra's
+    `>=` prune at :385). Realistic kernel-adjacency manifests sit shallow.
+
+    == expected: "privileged-container" in markers (token within cap)
+    != wrong: markers empty (regression — the cap must not swallow within-cap tokens)
+    """
+    _privileged_yaml_at_depth(tmp_path, dt._KERNEL_ADJ_MAX_DEPTH)
+    markers = dt.detect_kernel_adjacency(tmp_path)
+    assert "privileged-container" in markers                 # == expected (within cap)
+    assert markers != []                                     # != wrong (not empty)
+
+
+def test_kernel_adjacency_token_just_beyond_depth_cap_not_matched(tmp_path: Path):
+    """A privileged token at the FIRST pruned level (cap + 1) MUST NOT be matched.
+
+    Paired with the within-cap test (depth == cap matched), this straddles the
+    REAL cap exactly — pinning the os.walk prune semantics (`current_depth >= cap`,
+    root = depth 0), not an off-by-one. Descent into depth cap+1 is pruned at the
+    depth-cap dir, so the token there is never walked.
+
+    Before the fix (unbounded rglob) this FAILS — the deep token is found.
+    After the fix (pruned os.walk) this PASSES — the level is never descended.
+
+    == expected: "privileged-container" NOT in markers (cap+1 token never walked)
+    != wrong: "privileged-container" in markers (would mean the walk still descends)
+    """
+    # cap + 1 = the first level the prune drops; cheap (no 5000-level tree).
+    _privileged_yaml_at_depth(tmp_path, dt._KERNEL_ADJ_MAX_DEPTH + 1)
+    markers = dt.detect_kernel_adjacency(tmp_path)
+    assert "privileged-container" not in markers             # == expected (beyond cap)
+    assert markers == []                                     # != wrong (should be empty)
+
+
+def test_iter_files_bounded_walk_does_not_descend_past_cap(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """Direct DoS-closing evidence (AC#3): the bounded walk PRUNES descent.
+
+    A match test proves the token is absent; this spies on os.walk to prove the
+    deep tree is never *walked* past the cap — the actual CPU/time bound (CWE-400),
+    not merely a filtered match set. A post-filter on rglob would FAIL this.
+
+    == expected: deepest directory visited == cap (descent stops at the cap)
+    != wrong: deepest visited == cap + 5 (would mean the full tree was scandir'd)
+    """
+    cap = dt._KERNEL_ADJ_MAX_DEPTH
+    _privileged_yaml_at_depth(tmp_path, cap + 5, name="leaf.txt")
+
+    visited_depths: list[int] = []
+    real_walk = os.walk
+
+    def _spy_walk(top, *args, **kwargs):
+        # Yield the SAME dirnames list object so _iter_files' in-place prune
+        # still propagates back to the real os.walk generator.
+        for dirpath, dirnames, filenames in real_walk(top, *args, **kwargs):
+            visited_depths.append(len(Path(dirpath).relative_to(tmp_path).parts))
+            yield dirpath, dirnames, filenames
+
+    monkeypatch.setattr(dt.os, "walk", _spy_walk)
+    list(dt._iter_files(tmp_path, max_depth=cap))
+
+    assert visited_depths                                    # sanity: the walk ran
+    assert max(visited_depths) == cap                        # == expected (stops at cap)
+    assert max(visited_depths) != cap + 5                    # != wrong (no full descent)
+    assert all(d <= cap for d in visited_depths)             # never past the cap
+
+
+# --------------------------------------------------------------------------- #
+# wh-k5a — _iter_files bounds DEPTH (wh-dv4) but not BREADTH. A wide SHALLOW tree
+# (high file count within the depth cap) re-opens the CWE-400 CPU/time DoS along
+# the entry-count axis. `max_entries` (per-caller opt-in, default None=unbounded)
+# truncates the walk at the cap; detect_kernel_adjacency opts in via
+# _KERNEL_ADJ_MAX_ENTRIES. Mirrors the wh-dv4 within/beyond + Liskov pattern above.
+# --------------------------------------------------------------------------- #
+def _wide_shallow_tree(root: Path, n_files: int, subdir: str = "manifests") -> Path:
+    """Create `n_files` empty files in ONE shallow dir (depth 1, within any cap)."""
+    d = root / subdir
+    d.mkdir(parents=True, exist_ok=True)
+    for i in range(n_files):
+        (d / f"f{i}.txt").write_text("")
+    return d
+
+
+def test_iter_files_max_entries_truncates_and_default_unbounded(tmp_path: Path):
+    """`max_entries` truncates a wide shallow tree; default None stays unbounded.
+
+    The breadth axis the depth cap leaves open (wh-k5a): every file sits at depth 1
+    (<= _KERNEL_ADJ_MAX_DEPTH), so the depth prune never fires — only an entry cap
+    bounds it. Before the fix `_iter_files` has no `max_entries` param (TypeError).
+
+    == expected: exactly `cap` files yielded when the tree exceeds it; ALL when None
+    != wrong: more than `cap` (no truncation) OR fewer than the full set when unbounded
+    """
+    _wide_shallow_tree(tmp_path, 20)
+    unbounded = list(dt._iter_files(tmp_path))                       # default None
+    assert len(unbounded) == 20                                      # == expected (all)
+
+    bounded = list(dt._iter_files(tmp_path, max_entries=5))          # opt-in cap
+    assert len(bounded) == 5                                         # == expected (truncated)
+    assert len(bounded) != 20                                        # != wrong (not unbounded)
+
+
+def test_iter_files_max_entries_truncates_on_bounded_depth_path(tmp_path: Path):
+    """The os.walk (max_depth set) branch — the path detect_kernel_adjacency uses —
+    ALSO honors `max_entries`, not just the default rglob branch.
+
+    == expected: yields exactly the entry cap even with a depth cap also set
+    != wrong: yields the full wide set (entry cap ignored on the os.walk path)
+    """
+    _wide_shallow_tree(tmp_path, 20)
+    cap = 5
+    bounded = list(dt._iter_files(tmp_path, max_depth=dt._KERNEL_ADJ_MAX_DEPTH, max_entries=cap))
+    assert len(bounded) == cap                                       # == expected
+    assert len(bounded) != 20                                        # != wrong
+
+
+def test_kernel_adjacency_token_within_entry_cap_matched(tmp_path: Path):
+    """Over-truncation guard (false negative): a privileged token among a realistic,
+    small manifest set (well within _KERNEL_ADJ_MAX_ENTRIES) is STILL matched.
+
+    == expected: "privileged-container" in markers (token within the entry cap)
+    != wrong: markers empty (the entry cap must not swallow a within-cap token)
+    """
+    _privileged_yaml_at_depth(tmp_path, 1)                          # one shallow token file
+    _wide_shallow_tree(tmp_path, 10, subdir="extra")               # a few benign siblings
+    markers = dt.detect_kernel_adjacency(tmp_path)
+    assert "privileged-container" in markers                        # == expected (within cap)
+    assert markers != []                                            # != wrong (not empty)
