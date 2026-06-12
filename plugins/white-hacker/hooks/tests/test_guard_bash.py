@@ -2,8 +2,10 @@
 
 Run: uv run --with pytest pytest plugins/white-hacker/hooks/tests/test_guard_bash.py
 
->1 deny case + >1 allow case, per the VC: denies git push/apply, rm -rf, secret-file reads, and
-exfil-shaped egress; allows benign read-only Bash, uv run, and .env.example templates.
+>1 deny case + >1 allow case, per the VC: denies git push/apply, rm -rf, secret-file reads,
+exfil-shaped egress, active-scan verbs (nmap/masscan/zmap), and cloud-mutation verbs
+(aws/gcloud/az/terraform/kubectl/helm/pulumi); allows benign read-only Bash, uv run, and
+.env.example templates.
 """
 from __future__ import annotations
 
@@ -89,3 +91,53 @@ def test_main_deny_exit_2(monkeypatch):
 
 def test_residual_risk_documented():
     assert "RESIDUAL RISK" in (gb.__doc__ or "")
+
+
+# --- ACTIVE-SCAN VERBS (wh-evr / ADR-031 C5) --------------------------------
+
+def test_denies_active_scan_verbs():
+    assert deny("nmap -sV 10.0.0.0/8")
+    assert deny("masscan --rate 100 10.0.0.0/8")
+    assert deny("zmap -p 80 0.0.0.0/0")
+    # Confirm the specific deny reason is non-empty
+    assert gb.decide(_ev("nmap -sV 10.0.0.0/8"))[1] != ""
+    assert gb.decide(_ev("masscan --rate 100 10.0.0.0/8"))[1] != ""
+
+
+# --- CLOUD-MUTATION VERBS (wh-evr / ADR-031 C1) -----------------------------
+
+def test_denies_cloud_mutation_verbs():
+    assert deny("aws ec2 run-instances --image-id ami-123")
+    assert deny("terraform apply")
+    assert deny("kubectl apply -f deploy.yaml")
+    assert deny("gcloud compute instances create x")
+    assert deny("az vm create --name myvm")
+    assert deny("helm install x ./chart")
+    assert deny("pulumi up")
+    # az gets a specific message naming "Azure CLI"
+    _, msg = gb.decide(_ev("az vm create --name myvm"))
+    assert "Azure CLI" in msg or "az" in msg.lower()
+
+
+# --- WRAPPER-STRIP DENY (wh-evr) --------------------------------------------
+
+def test_denies_via_wrapper_sudo_nice():
+    assert deny("sudo nmap -sS 10.0.0.1")
+    assert deny("nice -n 10 terraform apply")
+    # Not allowed even under double-wrapper
+    assert deny("sudo nice -n 10 nmap -sV 10.0.0.0/8")
+
+
+# --- FLOOR PRESERVED (both directions, Policy 9) ----------------------------
+
+def test_floor_preserved_allows():
+    assert allow("grep -rn TODO src/")
+    assert allow("uv run pytest")
+    assert allow("git status")
+    assert allow("git diff HEAD")
+    assert allow("cat README.md")
+    # Confirm these are truly None (no deny reason)
+    assert gb.decide(_ev("grep -rn TODO src/"))[1] == ""
+    assert gb.decide(_ev("uv run pytest"))[1] == ""
+    assert gb.decide(_ev("git status"))[1] == ""
+    assert gb.decide(_ev("git diff HEAD"))[1] == ""

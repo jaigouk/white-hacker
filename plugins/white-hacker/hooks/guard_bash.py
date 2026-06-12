@@ -7,7 +7,11 @@ injection target, so it must not combine untrusted input + secret access + egres
   * any reference to a SECRET file (`.env`, `id_rsa`, `*.pem`/`*.key`, `~/.ssh/**`,
     `~/.aws/credentials`, `.npmrc`/`.pypirc`/`.netrc`) — the agent inspects files with the Read
     tool, never Bash, so this is low-FP for legitimate review;
-  * exfil-shaped egress (`curl`/`wget`/`scp`/`nc`/… with a file-upload flag).
+  * exfil-shaped egress (`curl`/`wget`/`scp`/`nc`/… with a file-upload flag);
+  * active-scan verbs (`nmap`/`masscan`/`zmap`) — network scanning is outside the read-only
+    working-tree review posture (ADR-031 C5);
+  * cloud-mutation verbs (`aws`/`gcloud`/`az`/`terraform`/`kubectl`/`helm`/`pulumi`) — live
+    infrastructure mutation is outside the authorized review scope (ADR-031 C1).
 
 Allows benign read-only Bash, `uv run`, `grep`/`cat` of non-secret files, `git status`/`diff`/`log`,
 and `.env.example`/`.sample`/`.template` templates.
@@ -27,6 +31,8 @@ import sys
 _SEPARATOR_RE = re.compile(r"\|\||&&|;|\||&|\n")
 WRAPPERS = {"timeout", "time", "nice", "nohup", "stdbuf", "env", "sudo", "command", "builtin", "xargs", "\\"}
 NET_VERBS = {"curl", "wget", "nc", "ncat", "scp", "sftp", "ssh", "telnet", "socat", "ftp"}
+ACTIVE_SCAN_VERBS = {"nmap", "masscan", "zmap"}
+CLOUD_MUTATION_VERBS = {"aws", "gcloud", "az", "terraform", "kubectl", "helm", "pulumi"}
 
 # secret-file references (paths/args). `.env.example|sample|template|dist` are NOT secrets.
 SECRET_RE = re.compile(
@@ -53,9 +59,24 @@ def _tokens(sub: str) -> list[str]:
 
 
 def _verb(tokens: list[str]) -> tuple[str, list[str]]:
+    """Return (bare_verb, rest) after stripping leading wrapper tokens.
+
+    Skips wrapper tokens (sudo/nice/timeout/…) together with any option-flags
+    and their arguments that belong to the wrapper (e.g. ``nice -n 10``).
+    """
     i = 0
-    while i < len(tokens) and (tokens[i] in WRAPPERS or os.path.basename(tokens[i]) in WRAPPERS):
-        i += 1
+    while i < len(tokens):
+        tok = tokens[i]
+        if tok in WRAPPERS or os.path.basename(tok) in WRAPPERS:
+            i += 1
+            # skip option flags belonging to this wrapper (e.g. -n 10, --adjustment 10)
+            while i < len(tokens) and tokens[i].startswith("-"):
+                i += 1
+                # skip the option's argument if it looks like a value (not a flag or a verb)
+                if i < len(tokens) and not tokens[i].startswith("-"):
+                    i += 1
+        else:
+            break
     rest = tokens[i:]
     return (os.path.basename(rest[0]) if rest else ""), rest
 
@@ -80,6 +101,24 @@ def _check_sub(sub: str) -> str | None:
         gv = rest[1] if len(rest) > 1 else ""
         if gv in {"push", "apply", "am"}:
             return f"`git {gv}` blocked (review is read-only; proposes, never pushes/applies)"
+
+    # active network scanning — outside the read-only working-tree review posture (ADR-031 C5)
+    if verb in ACTIVE_SCAN_VERBS:
+        return (
+            f"`{verb} ...` blocked during review "
+            f"(active network scan is out of the read-only review scope)"
+        )
+
+    # cloud / infra mutation — outside the authorized review scope (ADR-031 C1)
+    if verb in CLOUD_MUTATION_VERBS:
+        if verb == "az":
+            verb_label = "Azure CLI `az`"
+        else:
+            verb_label = f"`{verb}`"
+        return (
+            f"{verb_label} blocked during review "
+            f"(cloud/infra mutation is out of the read-only review scope)"
+        )
 
     # secret-file references (anywhere in the command)
     for t in rest:
