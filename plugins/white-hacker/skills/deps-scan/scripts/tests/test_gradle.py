@@ -22,8 +22,6 @@ Run: `nice -n 10 uv run --project plugins/white-hacker/skills/deps-scan/scripts 
 """
 from __future__ import annotations
 
-import pathlib
-
 import supply_chain as sc
 import validate_findings as vf
 

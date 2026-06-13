@@ -4,8 +4,6 @@ Run: uv run --with jsonschema --with pytest pytest plugins/white-hacker/skills/s
 """
 from __future__ import annotations
 
-import copy
-
 import dedup_findings as dd
 import validate_findings as vf
 

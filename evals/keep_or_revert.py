@@ -86,8 +86,10 @@ def main(argv: list[str] | None = None) -> int:
         ns = p.parse_args(sys.argv[1:] if argv is None else argv)
     except SystemExit:
         return 2
-    b = json.loads(open(ns.baseline).read())
-    c = json.loads(open(ns.candidate).read())
+    with open(ns.baseline) as f:
+        b = json.load(f)
+    with open(ns.candidate) as f:
+        c = json.load(f)
     v = verdict(b, c, locked_regressions=ns.locked_regressions, new_coverage=ns.new_coverage)
     print(v)
     return {"KEEP": 0, "REVERT": 1, "INCONCLUSIVE": 2}[v]

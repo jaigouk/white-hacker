@@ -134,5 +134,9 @@ if __name__ == "__main__":  # pragma: no cover
     import json
     import sys
 
-    doc = json.loads(open(sys.argv[1]).read()) if len(sys.argv) > 1 else json.load(sys.stdin)
+    if len(sys.argv) > 1:
+        with open(sys.argv[1]) as f:
+            doc = json.load(f)
+    else:
+        doc = json.load(sys.stdin)
     print(json.dumps(normalize(doc), indent=2))

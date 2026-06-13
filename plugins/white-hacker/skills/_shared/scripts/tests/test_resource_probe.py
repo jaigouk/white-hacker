@@ -17,13 +17,11 @@ import resource_probe as rp
 def test_cores_positive():
     c = rp.cores()
     assert c >= 1       # a real host always has at least one core
-    assert c != 0       # never the degenerate zero that would break the divisor
 
 
 def test_load_nonneg():
     load = rp.load1()
     assert load >= 0.0  # load average is never negative
-    assert not (load < 0.0)
 
 
 def test_free_mb_sane_or_none():
@@ -36,7 +34,6 @@ def test_free_mb_sane_or_none():
 def test_suggested_at_least_one():
     s = rp.suggested_max_parallel()
     assert s >= 1       # always at least sequential
-    assert s != 0       # never zero (would mean "run nothing")
 
 
 def test_probe_shape():
@@ -82,7 +79,6 @@ def test_cap_bounded_by_cores(monkeypatch):
     cap = rp.suggested_max_parallel()
     assert cap <= 1                     # cores−HEADROOM binds
     assert cap == 1
-    assert cap != 3                     # NOT the raw core count
 
 
 def test_unknown_os_skips_memory_divisor(monkeypatch):

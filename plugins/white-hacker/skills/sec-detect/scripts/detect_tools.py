@@ -193,9 +193,6 @@ SCANNER_PREFERENCE: dict[str, list[tuple[str, str]]] = {
     "ai-redteam": [("promptfoo", "*"), ("garak", "*")],
 }
 
-# Categories whose relevance is conditional on something in the repo.
-_CONDITIONAL_CATEGORIES = {"iac", "ai-redteam"}
-
 # --- kernel/container trust-boundary awareness (spike-10 T-A, ADR-018) -----
 # ADVISORY altitude: this is informational SCAN-PLAN metadata that DRIVES an
 # agent advisory note (like the absent-SECURITY.md hygiene note) — it is NOT a

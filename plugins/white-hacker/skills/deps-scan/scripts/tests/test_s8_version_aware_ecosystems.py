@@ -37,8 +37,6 @@ import pathlib
 
 import supply_chain as sc
 
-_BAD = "evil-pkg"  # the watchlisted compromised name (registry-style, ecosystem-agnostic)
-
 
 def _scenarios(doc: dict) -> list[str]:
     return [f["exploit_scenario"] for f in doc["findings"]]

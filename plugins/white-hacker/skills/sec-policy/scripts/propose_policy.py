@@ -153,7 +153,7 @@ def _safe_write(path: Path, text: str) -> None:
     """
     flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, "O_NOFOLLOW", 0)
     try:
-        fd = os.open(path, flags, 0o644)
+        fd = os.open(path, flags, 0o600)
     except OSError as exc:  # ELOOP when the path is a symlink (O_NOFOLLOW) -> refuse.
         raise ValueError(f"refusing to write through a symlink: {path}") from exc
     with os.fdopen(fd, "w", encoding="utf-8") as f:

@@ -15,7 +15,6 @@ from __future__ import annotations
 import argparse
 import copy
 import json
-import sys
 from pathlib import Path
 
 LINE_WINDOW = 10

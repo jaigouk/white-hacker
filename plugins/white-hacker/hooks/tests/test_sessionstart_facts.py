@@ -18,8 +18,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-import pytest
-
 import sessionstart_project_facts as h
 
 HOOK_PY = Path(h.__file__)

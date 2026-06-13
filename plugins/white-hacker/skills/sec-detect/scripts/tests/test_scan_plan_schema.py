@@ -9,10 +9,8 @@ Run: `uv run --with jsonschema --with pytest pytest .claude/skills/sec-detect/sc
 """
 from __future__ import annotations
 
-import copy
 from pathlib import Path
 
-import pytest
 from jsonschema import Draft202012Validator
 
 import detect_tools as dt

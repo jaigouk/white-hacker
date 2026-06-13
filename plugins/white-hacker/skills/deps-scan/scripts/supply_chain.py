@@ -151,7 +151,7 @@ def load_allowlist(path: Path = _ALLOWLIST_PATH) -> list[str]:
         if isinstance(names, list) and names:
             return [str(n) for n in names]
     except (OSError, ValueError):
-        pass
+        return list(_FALLBACK_ALLOWLIST)
     return list(_FALLBACK_ALLOWLIST)
 
 

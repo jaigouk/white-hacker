@@ -36,7 +36,6 @@ RNG, no network. `tool_assisted:false`; confidence capped via degradation.cap_fl
 from __future__ import annotations
 
 import json
-import os
 import re
 import shutil
 import subprocess

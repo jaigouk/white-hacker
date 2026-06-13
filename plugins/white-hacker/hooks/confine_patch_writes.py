@@ -71,7 +71,7 @@ def _safe_abs(real: str) -> bool:
             if os.path.commonpath([real, os.path.realpath(tmp)]) == os.path.realpath(tmp):
                 return True
         except ValueError:
-            pass
+            continue
     return False
 
 

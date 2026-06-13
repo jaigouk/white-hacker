@@ -45,7 +45,6 @@ import json
 import os
 import re
 from collections.abc import Iterable, Iterator
-from pathlib import Path
 
 import degradation as dg
 
