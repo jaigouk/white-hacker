@@ -39,7 +39,7 @@ ALLOWLIST_BASENAMES = {
     "SECRETS.json", "DEPS.json", "SECURITY-REPORT.md", "PATCH-STATE.json",
 }
 ALLOWLIST_SUFFIXES = (".sarif",)
-ALLOWLIST_DIR_PREFIXES = ("PATCHES/",)
+ALLOWLIST_DIR_PREFIXES = ("PATCHES/", ".notes/")
 
 NESTED_SHELLS = {"sh", "bash", "zsh", "dash", "ksh"}
 WRAPPERS = {"timeout", "time", "nice", "nohup", "stdbuf", "env", "sudo", "command", "builtin", "xargs", "\\"}

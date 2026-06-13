@@ -45,7 +45,7 @@ CONTROL_BASENAMES = {
 # si-08 §5.2) protects the agent role / rules / CLAUDE.md, which supersedes the broader T-8.4
 # allow-set. `_shared/reference/` is in the lane so sec-learn can PROPOSE checklist/tool-registry
 # diffs (PR-gated); the identity files are denied because they are not in any allow segment.
-ALLOW_SEGMENTS = ("/ai-attack-kb/", "/_shared/reference/", "/PATCHES/", "/evals/traces/")
+ALLOW_SEGMENTS = ("/ai-attack-kb/", "/_shared/reference/", "/PATCHES/", "/evals/traces/", "/.notes/")
 FEED_HOSTS = {
     "api.osv.dev", "storage.googleapis.com", "api.github.com", "raw.githubusercontent.com",
     "github.com", "export.arxiv.org", "rss.arxiv.org", "arxiv.org", "genai.owasp.org",
