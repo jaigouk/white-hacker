@@ -824,3 +824,22 @@ def test_schema_has_affected_items_database_specific():
     # != wrong: must not be required
     nested_required = affected_item_props["database_specific"].get("required", [])
     assert "last_safe_version" not in nested_required
+
+
+def test_public_api_surface_pinned_by_all():
+    """wh-6ci.2: __all__ pins the re-export surface so CodeQL + ruff treat the cross-module
+    re-exports (load_malware_db, is_known_bad) as USED — clearing the py/unused-import FP (#57).
+    Rule 9: pin both == expected AND != the wrong value per invariant; a __all__ drift trips this
+    test (not only CI ruff F822)."""
+    # every name in __all__ is a real module attribute (== nothing dangling)
+    missing = [n for n in vw.__all__ if not hasattr(vw, n)]
+    assert missing == []
+    # the two cross-module re-exports the FP was about ARE exported
+    assert "load_malware_db" in vw.__all__
+    assert "is_known_bad" in vw.__all__
+    # the PRIVATE re-export is intentionally NOT exported, yet must still exist (used internally)
+    assert "_accumulate" not in vw.__all__   # != wrong: never leak the private name
+    assert hasattr(vw, "_accumulate")
+    # pin the exact surface size so an accidental add/remove fails here, not silently
+    assert len(vw.__all__) == 14
+    assert len(vw.__all__) != 0              # != wrong: never an empty/typoed surface

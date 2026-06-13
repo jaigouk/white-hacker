@@ -58,7 +58,7 @@ jobs:
       - name: Install Claude Code (pinned) + the gate's runtime dep
         run: |
           npm install -g @anthropic-ai/claude-code@2.1.167   # pinned; never 'latest' (ADR-006)
-          python -m pip install --quiet 'jsonschema>=4.20'
+          python -m pip install --quiet 'jsonschema>=4.20'   # version-constrained (ADR-006); hash-lock disproportionate for one transient CI dep
 
       - name: Run the white-hacker review on the diff (plugin loaded, read-only, floor-only)
         env:
@@ -91,7 +91,7 @@ jobs:
         run: |
           changed="$(git diff --name-only "origin/${{ github.base_ref }}...HEAD" || true)"
           if echo "$changed" | grep -qE 'plugins/white-hacker/skills/ai-attack-kb/|plugins/white-hacker/skills/_shared/reference/'; then
-            python -m pip install --quiet pytest jsonschema pyyaml
+            python -m pip install --quiet pytest jsonschema pyyaml   # deterministic gate deps; version-pin posture per ADR-006 (full hash-lock disproportionate)
             python -m pytest evals/tests/test_gate_ci.py -q
           else
             echo "no KB/checklist change; keep_or_revert gate skipped"
