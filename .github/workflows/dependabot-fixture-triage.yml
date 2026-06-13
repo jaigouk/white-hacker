@@ -1,9 +1,15 @@
-# Auto-suppress the recurring noise from the deliberately-vulnerable fixtures.
-# The eval corpus + research PoCs are vulnerable BY DESIGN, so Dependabot alerts/PRs against them are
-# expected and must NOT be acted on (merging a bump breaks the detection corpus). Dependabot has no
-# per-path exclusion for security alerts, and this repo's auto-triage UI lacks a manifest condition —
-# so we automate the dismissal + PR closure here. (CodeQL fixtures are already excluded via paths-ignore.)
-# Uses the pre-installed `gh` CLI only (no third-party Actions to pin).
+# Auto-close Dependabot PRs that ONLY touch the deliberately-vulnerable fixtures.
+# The eval corpus + research PoCs are vulnerable BY DESIGN, so a Dependabot bump of their deps must
+# never be merged (it breaks the detection corpus). The pre-installed `gh` CLI + the default
+# GITHUB_TOKEN can close such PRs.
+#
+# NOTE: alert *dismissal* is NOT automated here — the default GITHUB_TOKEN cannot access the
+# Dependabot alerts API ("Resource not accessible by integration", HTTP 403); only a PAT can. To also
+# auto-dismiss fixture alerts, add a PAT (scope `security_events` or classic `repo`) as a secret and a
+# step: `env: GH_TOKEN: ${{ secrets.DEPENDABOT_TRIAGE_PAT }}` running
+# `gh api repos/$REPO/dependabot/alerts?state=open --paginate --jq '.[]|select(.dependency.manifest_path|test("'"$FIXTURES"'"))|.number'`
+# piped to `gh api -X PATCH .../dependabot/alerts/$n -f state=dismissed -f dismissed_reason=not_used`.
+# CodeQL fixtures are already excluded via .github/codeql/codeql-config.yml paths-ignore.
 name: dependabot-fixture-triage
 
 on:
@@ -12,7 +18,6 @@ on:
   workflow_dispatch:
 
 permissions:
-  security-events: write # dismiss Dependabot alerts
   pull-requests: write # close fixture-only Dependabot PRs
   contents: read
 
@@ -21,26 +26,13 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  triage:
+  close-fixture-prs:
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ github.token }}
       REPO: ${{ github.repository }}
       FIXTURES: '^(evals/corpus/|docs/research/poc-)'
     steps:
-      - name: Dismiss Dependabot alerts in fixture paths
-        run: |
-          set -euo pipefail
-          gh api "repos/$REPO/dependabot/alerts?state=open&per_page=100" --paginate \
-            --jq ".[] | select(.dependency.manifest_path | test(\"$FIXTURES\")) | .number" \
-          | while read -r n; do
-              [ -n "${n:-}" ] || continue
-              echo "dismiss Dependabot alert #$n (fixture)"
-              gh api -X PATCH "repos/$REPO/dependabot/alerts/$n" \
-                -f state=dismissed -f dismissed_reason=not_used \
-                -f dismissed_comment="Auto-triage: intentionally-vulnerable eval/PoC fixture; must stay vulnerable for the detection corpus." >/dev/null
-            done
-
       - name: Close Dependabot PRs that only touch fixture paths
         run: |
           set -euo pipefail
