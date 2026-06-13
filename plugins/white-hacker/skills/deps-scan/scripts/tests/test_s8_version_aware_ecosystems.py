@@ -344,7 +344,7 @@ def _cargo_lock(name_to_version: dict[str, str]) -> str:
     """A Cargo.lock with an array of `[[package]]` name+version tables (TOML)."""
     blocks = ['version = 3', ""]
     for name, ver in name_to_version.items():
-        blocks += [f'[[package]]', f'name = "{name}"', f'version = "{ver}"', ""]
+        blocks += ['[[package]]', f'name = "{name}"', f'version = "{ver}"', ""]
     return "\n".join(blocks) + "\n"
 
 

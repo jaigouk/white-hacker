@@ -1,0 +1,14 @@
+# Local pre-commit hooks — the shift-left half of ADR-032 (scoped correctness ruff).
+# Install once per clone (uv-native):  uv tool install pre-commit && pre-commit install
+#   (uv tool install puts `pre-commit` on PATH persistently, so the git hook can find it; an
+#    ephemeral `uvx pre-commit install` writes a hook that fails later when uvx is gone.)
+# Mirrors the CI `lint` job (.github/workflows/ci.yml); rules live in ruff.toml.
+# ADR-006: the hook rev is pinned to an exact ruff release (matches the CI-pinned version).
+minimum_pre_commit_version: "3.5.0"
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.17
+    hooks:
+      - id: ruff
+        name: ruff (correctness lint)
+        args: ["--fix"]

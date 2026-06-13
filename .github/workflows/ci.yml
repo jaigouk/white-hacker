@@ -53,3 +53,16 @@ jobs:
 
       - name: Vendor-lane scrub guard (install/)
         run: uv run --with pytest pytest install/tests/ -q
+
+  lint:
+    name: ruff (correctness lint)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3 (SHA verified 2026-06-06)
+      - name: Install uv (pinned 0.11.2)
+        run: |
+          curl -LsSf https://astral.sh/uv/0.11.2/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: ruff — scoped correctness lint (rules in ruff.toml; ADR-032)
+        run: uv run --with 'ruff==0.15.17' ruff check .

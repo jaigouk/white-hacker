@@ -1,0 +1,16 @@
+# Repo-wide correctness lint (ADR-032). Scoped to CORRECTNESS rules ONLY — not style,
+# formatting, or type-checking — to catch the classes that otherwise surface post-push in CodeQL:
+#   F      pyflakes        — unused imports/names, f-string + redefinition bugs
+#   E722   bare `except:`
+#   SIM115 open() without a context manager (leaked file handles)
+#   B      flake8-bugbear  — likely-bug patterns (mutable defaults, etc.)
+# The per-ticket acceptance gates are UNCHANGED (pytest on the touched package + validate_manifest.py
+# + claude plugin validate); this is an always-on repo-wide hygiene layer, not a per-ticket gate.
+target-version = "py312"
+
+# Deliberately-vulnerable fixtures are vulnerable BY DESIGN — never lint them (same rationale as the
+# CodeQL paths-ignore in .github/codeql/codeql-config.yml and the dependabot.yml scoping).
+extend-exclude = ["evals/corpus", "docs/research"]
+
+[lint]
+select = ["F", "E722", "SIM115", "B"]

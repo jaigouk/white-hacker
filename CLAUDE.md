@@ -61,7 +61,8 @@ type template under [`docs/beads_templates/`](docs/beads_templates/):
 | `spike` | `beads-spike-template.md` | Problem · Research questions · Exit criteria · Time box |
 
 - **Real quality gates** (in every template) are **pytest on the touched package + `validate_manifest.py` +
-  `claude plugin validate` — NOT ruff / mypy / coverage** (Policy 12; `.claude/commands/launch-team.md`).
+  `claude plugin validate` — NOT mypy / coverage / style** (a scoped correctness `ruff` runs repo-wide as
+  pre-commit + CI per **ADR-032**, but is NOT a per-ticket gate) (Policy 12; `.claude/commands/launch-team.md`).
 - **Never** hand-author a ticket body or `bd create` a one-line description — including follow-ups a
   team files mid-wave (route them through `/design-ticket`; `.claude/commands/launch-team.md` Rule 8).
 - **Re-groom off-template tickets to the template before launch** (`/groom`, or re-design via

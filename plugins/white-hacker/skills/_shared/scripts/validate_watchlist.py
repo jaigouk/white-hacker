@@ -60,7 +60,7 @@ _DEPS_SCAN_SCRIPTS = _SKILLS_DIR / "deps-scan" / "scripts"
 if _DEPS_SCAN_SCRIPTS.is_dir() and str(_DEPS_SCAN_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(_DEPS_SCAN_SCRIPTS))
 
-from malware_db import _accumulate, is_known_bad, load_malware_db  # noqa: E402
+from malware_db import _accumulate, is_known_bad, load_malware_db  # noqa: E402,F401  (re-exported; used as validate_watchlist.load_malware_db in tests)
 
 SCHEMA_PATH = Path(__file__).resolve().parent.parent / "reference" / "watchlist-entry-schema.json"
 
