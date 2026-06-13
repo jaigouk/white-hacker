@@ -1,0 +1,59 @@
+# Auto-suppress the recurring noise from the deliberately-vulnerable fixtures.
+# The eval corpus + research PoCs are vulnerable BY DESIGN, so Dependabot alerts/PRs against them are
+# expected and must NOT be acted on (merging a bump breaks the detection corpus). Dependabot has no
+# per-path exclusion for security alerts, and this repo's auto-triage UI lacks a manifest condition —
+# so we automate the dismissal + PR closure here. (CodeQL fixtures are already excluded via paths-ignore.)
+# Uses the pre-installed `gh` CLI only (no third-party Actions to pin).
+name: dependabot-fixture-triage
+
+on:
+  schedule:
+    - cron: "17 6 * * *" # daily 06:17 UTC
+  workflow_dispatch:
+
+permissions:
+  security-events: write # dismiss Dependabot alerts
+  pull-requests: write # close fixture-only Dependabot PRs
+  contents: read
+
+concurrency:
+  group: fixture-triage
+  cancel-in-progress: false
+
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+      FIXTURES: '^(evals/corpus/|docs/research/poc-)'
+    steps:
+      - name: Dismiss Dependabot alerts in fixture paths
+        run: |
+          set -euo pipefail
+          gh api "repos/$REPO/dependabot/alerts?state=open&per_page=100" --paginate \
+            --jq ".[] | select(.dependency.manifest_path | test(\"$FIXTURES\")) | .number" \
+          | while read -r n; do
+              [ -n "${n:-}" ] || continue
+              echo "dismiss Dependabot alert #$n (fixture)"
+              gh api -X PATCH "repos/$REPO/dependabot/alerts/$n" \
+                -f state=dismissed -f dismissed_reason=not_used \
+                -f dismissed_comment="Auto-triage: intentionally-vulnerable eval/PoC fixture; must stay vulnerable for the detection corpus." >/dev/null
+            done
+
+      - name: Close Dependabot PRs that only touch fixture paths
+        run: |
+          set -euo pipefail
+          gh pr list --repo "$REPO" --state open --json number,author,headRefName \
+            --jq '.[] | select((.author.login | startswith("app/dependabot")) or (.headRefName | startswith("dependabot/"))) | .number' \
+          | while read -r pr; do
+              [ -n "${pr:-}" ] || continue
+              files=$(gh pr view "$pr" --repo "$REPO" --json files --jq '.files[].path')
+              [ -n "$files" ] || continue
+              # close ONLY when every changed file is under a fixture path
+              if ! printf '%s\n' "$files" | grep -vqE "$FIXTURES"; then
+                echo "close Dependabot PR #$pr (fixtures only)"
+                gh pr close "$pr" --repo "$REPO" --delete-branch \
+                  --comment "Auto-triage: this bumps deliberately-vulnerable eval/PoC fixture deps, which must stay vulnerable for the detection corpus. Closing." || true
+              fi
+            done
