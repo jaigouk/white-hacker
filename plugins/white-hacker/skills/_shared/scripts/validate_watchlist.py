@@ -60,7 +60,26 @@ _DEPS_SCAN_SCRIPTS = _SKILLS_DIR / "deps-scan" / "scripts"
 if _DEPS_SCAN_SCRIPTS.is_dir() and str(_DEPS_SCAN_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(_DEPS_SCAN_SCRIPTS))
 
-from malware_db import _accumulate, is_known_bad, load_malware_db  # noqa: E402,F401  (re-exported; used as validate_watchlist.load_malware_db in tests)
+from malware_db import _accumulate, is_known_bad, load_malware_db  # noqa: E402  (re-exported; see __all__)
+
+# Public API. Listing the re-exports (load_malware_db, is_known_bad) marks them used for both ruff
+# (F401) and CodeQL (py/unused-import); _accumulate stays a private internal re-export.
+__all__ = [
+    "load_malware_db",
+    "is_known_bad",
+    "ADVISORY_HOSTS",
+    "REASONS",
+    "SCHEMA_PATH",
+    "load_schema",
+    "provenance_error",
+    "validate_entry",
+    "validate_bytes",
+    "validate_file",
+    "validate_dir",
+    "regression_errors",
+    "mint_verdict",
+    "main",
+]
 
 SCHEMA_PATH = Path(__file__).resolve().parent.parent / "reference" / "watchlist-entry-schema.json"
 

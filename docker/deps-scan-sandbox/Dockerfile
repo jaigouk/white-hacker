@@ -9,11 +9,11 @@
 # run.sh (--network none, --read-only, --cap-drop ALL, non-root). The native
 # `uv run pytest` workflow is unchanged; this is an extra sealed lane.
 #
-# PIN the base image by digest before use (ADR-006 pin-and-verify):
+# Base image PINNED by digest (ADR-006 pin-and-verify; pinned 2026-06-13 — the multi-arch OCI index).
+# Re-verify / refresh the digest with:
 #   docker buildx imagetools inspect python:3.13-slim --format '{{json .Manifest.Digest}}'
-# then replace the tag below with  python:3.13-slim@sha256:<digest>.
 # ─────────────────────────────────────────────────────────────────────────────
-FROM python:3.13-slim
+FROM python:3.13-slim@sha256:f82c96458eedc847b233e582eb31336f4954b39cae020b6dcf5b3ed0e5cbcd74
 
 # Test-only deps — the floor itself needs NONE (stdlib only). Pin in CI via a lock.
 RUN pip install --no-cache-dir 'pytest~=8.3' 'jsonschema~=4.23' \
