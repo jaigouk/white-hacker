@@ -39,7 +39,9 @@ jobs:
         uses: github/codeql-action/init@dd903d2e4f5405488e5ef1422510ee31c8b32357 # v3 (SHA resolved 2026-06-13)
         with:
           languages: ${{ matrix.language }}
-          queries: security-and-quality
+          # Query suite + fixture exclusions live in the config (keeps deliberately-vulnerable
+          # eval-corpus / PoC fixtures out of analysis so they don't generate recurring alerts).
+          config-file: ./.github/codeql/codeql-config.yml
 
       - name: Perform CodeQL analysis
         uses: github/codeql-action/analyze@dd903d2e4f5405488e5ef1422510ee31c8b32357 # v3 (SHA resolved 2026-06-13)

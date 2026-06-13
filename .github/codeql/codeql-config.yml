@@ -1,0 +1,16 @@
+# CodeQL configuration for white-hacker (referenced by .github/workflows/codeql.yml).
+#
+# Why paths-ignore: the eval corpus and the research PoCs are vulnerable BY DESIGN — the corpus
+# holds labeled vulnerable/benign variants (the reviewer's ground truth) and the PoCs are
+# intentionally-vulnerable demonstrations. CodeQL findings there are EXPECTED noise, not real
+# issues, so we exclude them from analysis (existing fixture alerts auto-close on the next scan;
+# no recurrence). All shipped product code under plugins/ and the real eval scripts in evals/
+# (e.g. keep_or_revert.py) are STILL fully analyzed.
+name: white-hacker CodeQL config
+
+queries:
+  - uses: security-and-quality
+
+paths-ignore:
+  - "evals/corpus/**"   # frozen labeled corpus — deliberately vulnerable/benign fixtures
+  - "docs/research/**"  # research + PoC fixtures (vulnerable-by-design; no shipped product code)
