@@ -56,6 +56,32 @@ _CONFIDENCE = {"HIGH": 0.7, "MEDIUM": 0.6, "LOW": 0.5}
 # Install-time lifecycle hooks (S1). `test`/`build`/etc. are NOT install hooks.
 _LIFECYCLE_HOOKS = ("preinstall", "install", "postinstall")
 
+# wh-5ox.2 — STRUCTURAL bun-runtime-dropper markers (Hades/Shai-Hulud lineage). A clean
+# install script that fetches the bun RUNTIME + manually unzips it by magic-bytes (no
+# same-line eval/exec) trips S6's ≥2-pattern HIGH on the SHAPE alone — durable because it
+# describes HOW any bun-fetch-dropper works, not campaign filenames (those are renamable
+# `[example-unverified]` and are deliberately NOT hardcoded). Re-derived from PRIMARY
+# sources (DO-NOT-COPY the unlicensed community YARA — epic wh-5ox):
+#   * release host — bun's official installer `bun_uri`
+#     (https://bun.com/install: `$github_repo/releases/(latest/)?download/.../bun-$target.zip`,
+#     `github_repo="$GITHUB/oven-sh/bun"`).
+#   * env var — `install_env=BUN_INSTALL` (ibid.). The documented var is BUN_INSTALL; the
+#     pattern also covers a renamed `_DIR`/`_BIN` form so a campaign variant still trips.
+#   * binary name — the release asset `bun-$target.zip`, target ∈ {linux,darwin}-{x64,aarch64}
+#     with optional `-musl`/`-baseline` suffixes (ibid.).
+#   * ZIP magic — the local-file-header signature 0x04034b50 (PKWARE APPNOTE.TXT §4.3.7),
+#     in the source forms a manual-unzip dropper uses to test magic bytes ("PK\x03\x04"
+#     string / `504b0304` hex / `04034b50` little-endian uint32 / `\x50\x4b\x03\x04` escapes).
+# Accepted residual: a package that LEGITIMATELY fetches+unzips the bun runtime in a
+# postinstall WILL trip ≥2 of these — that shape IS the signal (per the ticket); a generic
+# non-bun binary fetcher hits at most the generic `\bfetch\s*\(`, never ≥2 here.
+_BUN_DROPPER_PATTERNS = (
+    r"github\.com/oven-sh/bun/releases/(?:latest/)?download",
+    r"\bBUN_INSTALL(?:_[A-Z]+)?\b",
+    r"bun-(?:linux|darwin)-(?:x64|aarch64)(?:-musl)?(?:-baseline)?",
+    r"(?:PK\\x03\\x04|\\x50\\x4[bB]\\x03\\x04|504[bB]0304|04034[bB]50)",
+)
+
 # S6 dangerous-API string patterns searched inside a referenced install script.
 # These are recognition patterns quoted from public vendor advisories (spike-09 §F2/S6);
 # this module RECOGNIZES them, it never authors any. Each is a literal substring or regex.
@@ -72,6 +98,7 @@ _DANGEROUS_API_PATTERNS = (
     r"~/\.aws",
     r"~/\.npmrc",
     r"~/\.claude",
+    *_BUN_DROPPER_PATTERNS,  # wh-5ox.2 structural bun-runtime-dropper markers (above)
 )
 _DANGEROUS_API_RE = [re.compile(p) for p in _DANGEROUS_API_PATTERNS]
 

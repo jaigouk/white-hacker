@@ -1120,3 +1120,144 @@ def test_make_finding_unicode_payload_cannot_inject_line_or_reorder(tmp_path):
     assert payload not in scen
     assert "lodahs" in scen                          # name still legible
     assert vf.validate(doc) == []
+
+
+# --------------------------------------------------------------------------- #
+# wh-5ox.2 — STRUCTURAL bun-runtime-dropper markers in S6 (no campaign filenames)
+#
+# A clean-looking install script that fetches the bun RUNTIME from the official
+# release host + verifies the ZIP local-file-header magic + extracts into the bun
+# install dir + names the bun binary — with NO same-line eval/exec — must still
+# reach S6's >=2-pattern HIGH on the STRUCTURAL shape alone. Markers re-derived
+# from PRIMARY sources (DO-NOT-COPY the community YARA):
+#   * release host  github.com/oven-sh/bun/releases/(latest/)?download  — bun's
+#     official installer `bun_uri` (https://bun.com/install, install.sh).
+#   * env var       BUN_INSTALL(_DIR/_BIN)  — `install_env=BUN_INSTALL` (ibid.);
+#     pattern covers the documented var AND a renamed `_DIR`/`_BIN` campaign form.
+#   * binary name   bun-(linux|darwin)-(x64|aarch64)(-musl)?(-baseline)?  — the
+#     release asset `bun-$target.zip` (ibid.).
+#   * ZIP magic     PK\x03\x04 / 504b0304 / 04034b50  — the local-file-header
+#     signature 0x04034b50 (PKWARE APPNOTE.TXT §4.3.7), in the source forms a
+#     manual-unzip dropper uses to test magic bytes.
+# NO `[example-unverified]` campaign filename (ai_init.js/router_runtime.js) and
+# NO /tmp/.bun_ran runtime IOC are hardcoded — the structural spine carries it.
+# --------------------------------------------------------------------------- #
+
+# Clearly INERT detection test data (same discipline as _INERT_DANGEROUS_POSTINSTALL
+# and the eval corpus's neutralized filenames — NEVER functional): a no-op module
+# whose TEXT carries the structural bun-dropper marker strings. NO eval/exec/spawn/
+# child_process — proves detection on the SHAPE, not on an obvious dangerous-API tell.
+_BUN_DROPPER_FETCH_UNZIP = (
+    "// SAMPLE (inert) — detection test data only, does nothing.\n"
+    "// Structural bun-runtime dropper SHAPE: fetch the bun runtime from the\n"
+    "// official release host, verify the ZIP local-file-header magic, extract\n"
+    "// into the bun install dir, run the named bun binary. NO eval/exec here.\n"
+    "const url = 'https://github.com/oven-sh/bun/releases/download"
+    "/bun-v1.1.0/bun-linux-x64.zip';\n"
+    "async function drop() {\n"
+    "  const res = await fetch(url);\n"
+    "  const buf = Buffer.from(await res.arrayBuffer());\n"
+    "  // ZIP local-file-header magic PK\\x03\\x04 (PKWARE APPNOTE 4.3.7)\n"
+    "  if (buf.subarray(0, 4).toString('hex') === '504b0304') {\n"
+    "    const dir = process.env.BUN_INSTALL_DIR || (process.env.HOME + '/.bun');\n"
+    "    // manual extraction of bun-linux-x64 into dir ... (no-op in this sample)\n"
+    "  }\n"
+    "}\n"
+    "module.exports = function () { /* no-op: see comments above */ };\n"
+)
+
+# Benign control: a legit prebuild-install / node-pre-gyp-style postinstall that
+# fetches + extracts a prebuilt native addon from its OWN (NON-bun) GitHub release.
+# It legitimately hits the generic `\bfetch\s*\(`, but must NOT reach >=2 via the
+# bun-SPECIFIC structural patterns (no oven-sh host, no BUN_INSTALL, no bun binary
+# name, tar.gz not a manual ZIP-magic check) — the meaningful negative proving the
+# new patterns are bun-specific, not "any binary fetcher".
+_BENIGN_PREBUILT_FETCH = (
+    "// SAMPLE (inert) — a legit prebuild-install-style native-addon fetcher.\n"
+    "// Fetches a prebuilt binding tarball from its OWN GitHub release, via tar.\n"
+    "const url = 'https://github.com/acme-corp/acme-native/releases/download"
+    "/v2.1.0/acme-native-linux-x64.tar.gz';\n"
+    "async function getPrebuilt() {\n"
+    "  const res = await fetch(url);\n"
+    "  // tarball is unpacked with the system tar; a prebuilt C++ binding.\n"
+    "}\n"
+    "module.exports = function () { /* no-op */ };\n"
+)
+
+
+def _s6_patterns_for(script_path: str) -> list[str]:
+    """Matched-pattern strings S6 collects for one script (Policy 9 — assert on the
+    matched set, not just severity). signal_s6 returns {path: [pattern.pattern, ...]}."""
+    return sc.signal_s6({"script_files": [script_path]}).get(script_path, [])
+
+
+def test_structural_bun_dropper_fetch_unzip_emits_s6_high(tmp_path):
+    # RED→GREEN: the fetch-bun-runtime + verify-ZIP-magic + BUN_INSTALL + bun binary
+    # SHAPE (no eval/exec) reaches S6 HIGH via >=2 NEW structural patterns.
+    proj = _write(tmp_path / "p", {
+        "dependencies": {"react": "18.2.0"},
+        "scripts": {"postinstall": "node scripts/postinstall.js"},
+    }, scripts_files={"scripts/postinstall.js": _BUN_DROPPER_FETCH_UNZIP})
+    doc = sc.scan(str(proj))
+    f = _emitted(doc)
+    high = [x for x in f if x["severity"] == "HIGH"]
+    assert high, "structural bun-runtime fetch+unzip shape → S6 HIGH"
+    assert high[0]["tool_assisted"] is False          # floor, never tool-backed
+    # project-level, keyed to the script (NOT fanned out to the clean react dep)
+    script_findings = [x for x in f if x["file"].endswith("postinstall.js")]
+    assert len(script_findings) == 1
+    assert not any("react @" in x["exploit_scenario"] for x in f)
+
+    # == expected: >=2 of the NEW structural bun patterns matched the SAME script.
+    spath = str(proj / "scripts" / "postinstall.js")
+    matched = set(_s6_patterns_for(spath))
+    new_hits = matched & set(sc._BUN_DROPPER_PATTERNS)
+    assert len(new_hits) >= 2, (
+        "detection must be STRUCTURAL — >=2 distinct bun-dropper patterns, not the "
+        f"lone generic fetch(. got new_hits={sorted(new_hits)}"
+    )
+    # != the wrong reason: NOT reached via an obvious dangerous-API tell — the shape
+    # carries it, so eval/exec/spawn/child_process never fire on this fixture.
+    assert r"eval\s*(" not in matched
+    assert r"\bexec\s*(" not in matched
+    assert r"\bspawn\s*(" not in matched
+    assert "child_process" not in matched
+    assert vf.validate(doc) == []
+
+
+def test_benign_non_bun_prebuilt_fetcher_yields_no_s6_high(tmp_path):
+    # REQUIRED negative (Policy 9): a generic NON-bun binary fetcher must NOT reach
+    # S6 HIGH — it may trip the generic fetch( but < 2 of the bun-specific patterns.
+    proj = _write(tmp_path / "p", {
+        "name": "native-thing",
+        "dependencies": {"react": "18.2.0"},
+        "scripts": {"postinstall": "node scripts/postinstall.js"},
+    }, scripts_files={"scripts/postinstall.js": _BENIGN_PREBUILT_FETCH})
+    doc = sc.scan(str(proj))
+    f = _emitted(doc)
+    # == expected: no S6 HIGH finding (no >=2-pattern script).
+    assert not any(x["severity"] == "HIGH" for x in f)
+    assert not any(x["file"].endswith("postinstall.js") for x in f)
+    assert doc["summary"]["counts"]["high"] == 0
+
+    # != the wrong reason: the bun-specific patterns did NOT reach >=2 on a legit
+    # non-bun fetcher (proving the spine is bun-specific, not "any binary fetcher").
+    spath = str(proj / "scripts" / "postinstall.js")
+    matched = set(_s6_patterns_for(spath))
+    new_hits = matched & set(sc._BUN_DROPPER_PATTERNS)
+    assert len(new_hits) < 2, f"non-bun fetcher tripped bun patterns: {sorted(new_hits)}"
+    assert vf.validate(doc) == []
+
+
+def test_signal_s6_degrades_on_unreadable_or_binary_script_no_raise(tmp_path):
+    # ADR-003 degrade-never-raise: the new pure-regex patterns run over text read by
+    # the OSError-safe _read_text — a missing / binary / odd script must NOT raise.
+    missing = str(tmp_path / "nope" / "ghost.js")
+    out = sc.signal_s6({"script_files": [missing]})
+    assert out == {}                     # unreadable → skipped, never raised
+    assert out != {missing: []}          # (sanity: not a stub entry)
+    # a binary blob (embedded NULs / raw ZIP bytes) is read errors='ignore', no raise
+    blob = tmp_path / "blob.js"
+    blob.write_bytes(b"\x00\xff\xfe" + b"PK\x03\x04" * 4 + b"\x00bun-linux-x64")
+    out2 = sc.signal_s6({"script_files": [str(blob)]})
+    assert isinstance(out2, dict)        # returns cleanly, never raises
