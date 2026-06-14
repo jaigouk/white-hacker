@@ -378,7 +378,10 @@ def _read_toml(path: Path) -> dict:
         with path.open("rb") as fh:
             data = tomllib.load(fh)
         return data if isinstance(data, dict) else {}
-    except (OSError, tomllib.TOMLDecodeError, ValueError):
+    except (OSError, tomllib.TOMLDecodeError, ValueError, RecursionError):
+        # RecursionError (a RuntimeError subclass, NOT a ValueError): deeply-nested untrusted TOML
+        # trips tomllib's recursion limit at parse-DEPTH (under any byte size) -> name it explicitly,
+        # else a hostile manifest aborts scan() instead of degrading here (ADR-003; sibling wh-5ox.16).
         return {}
 
 

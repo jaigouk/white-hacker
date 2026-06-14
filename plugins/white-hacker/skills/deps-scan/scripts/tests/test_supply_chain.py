@@ -1261,3 +1261,23 @@ def test_signal_s6_degrades_on_unreadable_or_binary_script_no_raise(tmp_path):
     blob.write_bytes(b"\x00\xff\xfe" + b"PK\x03\x04" * 4 + b"\x00bun-linux-x64")
     out2 = sc.signal_s6({"script_files": [str(blob)]})
     assert isinstance(out2, dict)        # returns cleanly, never raises
+
+
+def test_read_toml_degrades_to_empty_on_untrusted_input_classes(tmp_path):
+    # wh-0uy / F-001 (AC3): _read_toml NEVER raises on untrusted input -> the whole degrade class maps to {}
+    # so the TOML adapters (gradle/pypi/cargo) COMPLETE rather than abort scan() (ADR-003). RecursionError (a
+    # RuntimeError subclass tomllib raises on a deeply-NESTED manifest) was the MISSED except member.
+    # both-ways (Policy 9): a VALID TOML still parses to its dict.
+    valid = tmp_path / "valid.toml"
+    valid.write_text('[versions]\ncommons = "3.12.0"\n', encoding="utf-8")
+    assert sc._read_toml(valid) == {"versions": {"commons": "3.12.0"}}
+    bad = tmp_path / "bad.toml"
+    bad.write_text("this is not = valid toml [[[\n", encoding="utf-8")
+    assert sc._read_toml(bad) == {}
+    assert sc._read_toml(tmp_path) == {}  # a directory is not openable -> OSError -> {}
+    nonutf8 = tmp_path / "binary.toml"
+    nonutf8.write_bytes(b"\xff\xfe\x00\x01key = 1\n")
+    assert sc._read_toml(nonutf8) == {}  # non-UTF8 -> UnicodeDecodeError (a ValueError subclass) -> {}
+    deep = tmp_path / "deep.toml"
+    deep.write_text("a = " + "[" * 6000 + "]" * 6000 + "\n", encoding="utf-8")
+    assert sc._read_toml(deep) == {}  # RecursionError -> {} (the bug this fixes)

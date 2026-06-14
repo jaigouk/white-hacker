@@ -505,3 +505,25 @@ def test_android_style_module_catalog_plus_kts_floor_value(tmp_path):
     doc = sc.scan(str(proj), malware_db={_BAD: {"1.2.3"}})
     assert _fired_s8(doc, _BAD) is True
     assert vf.validate(doc) == []
+
+
+def test_gradle_deep_nested_versions_toml_degrades_no_raise(tmp_path):
+    # wh-0uy / F-001 (sibling of CLOSED wh-5ox.16): a hostile gradle/libs.versions.toml whose value is a
+    # deeply-NESTED array trips tomllib's recursion limit -> RecursionError (a RuntimeError subclass, NOT a
+    # TOMLDecodeError/ValueError, so it must be NAMED in the except). _read_toml MUST degrade to {} so
+    # parse_gradle AND scan() COMPLETE rather than abort (ADR-003). A build.gradle.kts MARKER is present so
+    # scan() actually DISPATCHES to the gradle adapter (detect_ecosystem keys off the build-file marker) -
+    # without it scan() returns early and never reads the catalog, masking the bug.
+    proj = tmp_path / "deep"
+    gradle_dir = proj / "gradle"
+    gradle_dir.mkdir(parents=True)
+    (proj / "build.gradle.kts").write_text("dependencies {\n}\n")
+    depth = 6000
+    (gradle_dir / "libs.versions.toml").write_text("a = " + "[" * depth + "]" * depth + "\n", encoding="utf-8")
+    norm = sc.parse_gradle(str(proj))
+    assert isinstance(norm, dict)
+    assert isinstance(norm["deps"], list)
+    doc = sc.scan(str(proj))
+    assert vf.validate(doc) == []
+    assert norm != {}
+    assert norm["lockfile_present"] is False
