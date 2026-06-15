@@ -92,6 +92,7 @@ Untrusted data rendered into a browser/markup context without context-correct es
 - Install-time lifecycle-script abuse (npm/pip postinstall) — prefer `npm ci --ignore-scripts`.
 - Pin GitHub Actions to a **commit SHA**; pin container base images by **digest**.
 - Typosquatting / dependency-confusion; verify signatures/provenance (SLSA, Sigstore) where available.
+- **Environment-gated destructive sink** (geofencing / deadman-switch): a locale/TZ/region or token-response read GATING a `child_process`/`exec`/`rm -rf ~` sink — flag as a gate+sink CORRELATION, not a lone-sink HIGH (AISEC-SUPPLY-CHAIN-003; wh-5ox.8 deps-scan S6).
 - The tool the agent *uses* must itself be pinned/verified (ADR-006).
 - **Static-vs-EDR boundary:** runtime/host indicators (file-write-hash telemetry, live C2 DNS,
   `/proc/<pid>/mem` scraping) are OUT of static-source scope → route to a host/CI check, never claim

@@ -127,6 +127,35 @@ _DANGEROUS_API_PATTERNS = (
     # would be on a large attacker-controlled install script.
     r"(?i)npm-(?:command|session|scope)",  # npm CLI request headers, case-insensitive [primary-sourced: https://github.com/npm/npm-registry-fetch]
     r"(?si)\A(?=.*npm-(?:command|session|scope))(?=.*registry\.npmjs\.org)",  # \A-anchored header+registry-host co-occurrence (linear) [primary-sourced: header https://github.com/npm/npm-registry-fetch ; host https://docs.npmjs.com/cli/v11/using-npm/registry]
+    # --- wh-5ox.8: Hades/Miasma deadman-switch + environment-gated-payload shapes ---
+    # SIGNAL-ONLY, never-block, human-triaged: these FLAG a script for review; they assert
+    # nothing about malice (and the wiper stays DISPUTED — recognizing the literal is not
+    # adjudicating StepSecurity-vs-Socket). Two independent primitives that co-occur in one
+    # script reach S6 HIGH (>=2 distinct), exactly like the wh-5ox.5 pairs above.
+    #
+    # (1) DEADMAN switch: the gh-token-monitor / update-monitor systemd USER-service IOC.
+    # One alternation = ONE signal (the two service names are the same primitive). VERY
+    # specific (a benign install script never names this service) -> low FP.
+    r"(?:gh-token-monitor|update-monitor\.service)",  # systemd user-service deadman IOC [primary-sourced: plugins/white-hacker/skills/ai-attack-kb/reference/supply-chain-3.md:18]
+    # (2) The DISPUTED `rm -rf ~` wiper sink — the gated destructive primitive (also a 2nd
+    # distinct count when the deadman service or the env-gate co-occurrence is present).
+    # `~` / `~/Documents` / `~/` only; recognition, not adjudication.
+    r"rm\s+-rf\s+~",  # DISPUTED token-4xx/72h-TTL wiper sink [primary-sourced: plugins/white-hacker/skills/ai-attack-kb/reference/supply-chain-3.md:20]
+    # (`~/Library/LaunchAgents` was considered as a 3rd primitive but DROPPED — it is NOT a
+    # Hades vendor-primary IOC (it appears only in our own IR/recovery narrative, not
+    # Socket/StepSecurity), so it fails the primary-source gate, and a benign macOS
+    # daemon-installer (LaunchAgents write + fetch) false-HIGHs on it. The deadman switch
+    # already HIGHs via the strongly-sourced gh-token-monitor + rm -rf ~ pair. wh-5ox.8 QA.)
+    # (3) ENVIRONMENT-GATED payload = ONE \A-anchored co-occurrence (a locale/TZ/region read
+    # AND the DISPUTED DESTRUCTIVE `rm -rf ~` wiper sink), so it counts as ONE pattern and a
+    # LONE benign locale read can NEVER reach HIGH. \A-anchored double-lookahead runs the two
+    # .* ONCE (at string start) -> O(n), NOT the O(n^2) an unanchored double-lookahead would
+    # be (the wh-5ox.5 bounce). The sink is the DESTRUCTIVE wiper ONLY — NOT general execution
+    # (child_process/exec/spawn): those are the most common build-script APIs (node-gyp, tsc,
+    # webpack) AND already standalone S6 patterns, so reusing them here false-HIGHs a benign
+    # locale-aware build (wh-5ox.8 QA FP fix). The standalone `rm -rf ~` pattern supplies the
+    # 2nd distinct count for HIGH; the locale primitives are benign stdlib reads alone.
+    r"(?si)\A(?=.*(?:Intl\.DateTimeFormat|process\.env\.TZ|process\.env\.LANG|navigator\.language))(?=.*rm\s+-rf\s+~)",  # \A-anchored locale-gate + DISPUTED-wiper-sink co-occurrence (linear) [primary-sourced: locale https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/DateTimeFormat , https://nodejs.org/api/process.html#processenv ; destructive sink = the DISPUTED `rm -rf ~` wiper ...supply-chain-3.md:20]
     *_BUN_DROPPER_PATTERNS,  # wh-5ox.2 structural bun-runtime-dropper markers (above)
 )
 _DANGEROUS_API_RE = [re.compile(p) for p in _DANGEROUS_API_PATTERNS]

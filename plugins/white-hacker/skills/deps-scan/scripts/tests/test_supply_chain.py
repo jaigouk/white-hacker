@@ -342,6 +342,280 @@ def test_benign_registry_fetch_no_high(tmp_path):
 
 
 # --------------------------------------------------------------------------- #
+# wh-5ox.8 — S6 Hades/Miasma deadman-switch + environment-gated-payload shapes
+# (signal-only, never-block, human-triaged — flags a script for review, asserts
+# nothing about malice; the wiper stays DISPUTED). Primary source: ai-attack-kb
+# reference/supply-chain-3.md (deadman service IOC :18, LaunchAgents :60, wiper :20).
+# --------------------------------------------------------------------------- #
+# INERT detection test data only (eval-corpus discipline): never functional, carries
+# the recognition *strings* and nothing more.
+#
+# (a) DEADMAN switch: the gh-token-monitor systemd USER-service IOC co-present with the
+# DISPUTED `rm -rf ~` wiper sink → 2 distinct patterns → S6 HIGH.
+_INERT_DEADMAN_SWITCH_POSTINSTALL = (
+    "// SAMPLE (inert) — detection test data only, does nothing.\n"
+    "// would install a systemd user service gh-token-monitor.service that, on an\n"
+    "// HTTP token-revoked response, would rm -rf ~ (the DISPUTED wiper — surfaced,\n"
+    "// not adjudicated; Socket calls it label-only, StepSecurity a live wiper).\n"
+    "module.exports = function () { /* no-op: see comments above */ };\n"
+)
+# (b) ENV-GATED payload: a locale/TZ read (process.env.TZ) gating the DISPUTED
+# DESTRUCTIVE sink (`rm -rf ~`) → the \A-anchored co-occurrence regex (1) + the
+# standalone `rm -rf ~` wiper pattern (2) = 2 distinct → S6 HIGH. The sink is the
+# DESTRUCTIVE wiper ONLY — general execution (child_process/exec/spawn) is the common
+# build-script API and is NOT the env-gate sink (wh-5ox.8 QA FP fix).
+_INERT_ENV_GATED_PAYLOAD_POSTINSTALL = (
+    "// SAMPLE (inert) — detection test data only, does nothing.\n"
+    "// would read process.env.TZ and, only in a target region, would\n"
+    "// rm -rf ~ to detonate (an environment-gated DISPUTED wiper — geofenced wipe).\n"
+    "module.exports = function () { /* no-op: see comments above */ };\n"
+)
+# (c) FP guards — each is a LONE new primitive (<=1 pattern → never HIGH):
+_INERT_LONE_TZ_READ = (
+    "// SAMPLE (inert) — benign locale-aware date formatter, detection test data.\n"
+    "// const tz = process.env.TZ || 'UTC';  // format dates in the user's zone\n"
+    "module.exports = function () { /* no-op: see comments above */ };\n"
+)
+_INERT_LONE_PROCESS_EXIT = (
+    "// SAMPLE (inert) — benign CLI that exits non-zero on a usage error.\n"
+    "// if (!arg) process.exit(2);  // normal control flow, not a kill-switch\n"
+    "module.exports = function () { /* no-op: see comments above */ };\n"
+)
+_INERT_LONE_ENV_READ = (
+    "// SAMPLE (inert) — benign env read, detection test data.\n"
+    "// const port = process.env.PORT || 3000;  // read a config var\n"
+    "module.exports = function () { /* no-op: see comments above */ };\n"
+)
+_INERT_LONE_RM_CACHE = (
+    "// SAMPLE (inert) — benign cache cleanup in a build script, detection test data.\n"
+    "// rm -rf ~/.cache/acme-build  // clears this tool's OWN cache dir only\n"
+    "module.exports = function () { /* no-op: see comments above */ };\n"
+)
+# wh-5ox.8 QA fix — the env-gate sink must be the DISPUTED `rm -rf ~` wiper ONLY, NOT
+# general execution. child_process/exec/spawn are the most common build-script APIs AND
+# standalone S6 patterns, so a benign locale-aware build that ALSO spawns the compiler
+# must NOT false-HIGH. These are realistic benign builds (locale read + a build spawn,
+# NO destructive sink) — each must stay <=1 NEW pattern and NEVER reach HIGH.
+_BENIGN_LOCALE_AND_BUILD_SPAWN = (
+    "// SAMPLE (inert) — benign locale-aware native build, detection test data.\n"
+    "// const tz = process.env.TZ || 'UTC';  // stamp the build log in the user's zone\n"
+    "// child_process.execSync('node-gyp rebuild');  // normal native build, not a wiper\n"
+    "module.exports = function () { /* no-op: see comments above */ };\n"
+)
+_BENIGN_INTL_AND_TSC_SPAWN = (
+    "// SAMPLE (inert) — benign i18n build that spawns tsc, detection test data.\n"
+    "// new Intl.DateTimeFormat('de-DE').format(new Date());  // locale-aware output\n"
+    "// spawn('tsc', ['-p', 'tsconfig.json']);  // compile, not a destructive sink\n"
+    "module.exports = function () { /* no-op: see comments above */ };\n"
+)
+_BENIGN_LANG_AND_WEBPACK_EXEC = (
+    "// SAMPLE (inert) — benign webpack build keyed off LANG, detection test data.\n"
+    "// const lang = process.env.LANG || 'en_US';  // pick the locale bundle\n"
+    "// exec('webpack --config webpack.prod.js');  // bundle, not a destructive sink\n"
+    "module.exports = function () { /* no-op: see comments above */ };\n"
+)
+# wh-5ox.8 QA fix #2 — `~/Library/LaunchAgents` is NOT a Hades primary-sourced IOC (it
+# is self-authored IR/recovery narrative, supply-chain-3.md:71 — not Socket/StepSecurity),
+# and a benign macOS daemon-installer legitimately writes a LaunchAgents plist + fetches an
+# update. Dropping the standalone LaunchAgents pattern removes this net-new FP. The deadman
+# switch still HIGHs via the strongly-sourced gh-token-monitor(:18) + rm -rf ~(:20) pair.
+_BENIGN_MACOS_LAUNCHAGENT_INSTALLER = (
+    "// SAMPLE (inert) — benign macOS auto-update daemon installer, detection test data.\n"
+    "// cp updater.plist ~/Library/LaunchAgents/com.acme.updater.plist  // user agent\n"
+    "// fetch('https://updates.acme.example/manifest.json');  // check for updates\n"
+    "module.exports = function () { /* no-op: see comments above */ };\n"
+)
+
+
+def test_deadman_switch_service_plus_wiper_emits_high(tmp_path):
+    # RED→GREEN: the gh-token-monitor service IOC (1 new pattern) co-present with the
+    # DISPUTED `rm -rf ~` wiper sink (a 2nd new pattern) → 2 distinct → S6 HIGH.
+    proj = _write(tmp_path / "p", {
+        "dependencies": {"react": "18.2.0"},
+        "scripts": {"postinstall": "node scripts/x.js"},
+    }, scripts_files={"scripts/x.js": _INERT_DEADMAN_SWITCH_POSTINSTALL})
+    doc = sc.scan(str(proj))
+    f = _emitted(doc)
+    assert len(f) >= 1
+    high = [x for x in f if x["severity"] == "HIGH"]
+    assert high, "deadman service IOC + wiper sink → S6 HIGH"
+    assert [x for x in f if x["severity"] == "HIGH"] != []   # NOT the wrong value
+    assert high[0]["tool_assisted"] is False
+    assert "ignore-scripts" in high[0]["recommendation"].lower()
+    # project-level, keyed to the script (NOT fanned out to the clean react dep)
+    assert not any("react @" in x["exploit_scenario"] for x in f)
+    # == expected: the deadman-service AND the wiper patterns BOTH matched the SAME script.
+    matched = set(_s6_patterns_for(str(proj / "scripts" / "x.js")))
+    assert r"(?:gh-token-monitor|update-monitor\.service)" in matched
+    assert r"rm\s+-rf\s+~" in matched
+    assert vf.validate(doc) == []
+
+
+def test_env_gated_payload_emits_high(tmp_path):
+    # RED→GREEN: a locale read (process.env.TZ) gating the DISPUTED DESTRUCTIVE sink
+    # (`rm -rf ~`): the \A-anchored locale+wiper co-occurrence (1) + the standalone
+    # `rm -rf ~` wiper pattern (2) = 2 distinct → S6 HIGH. The sink is the destructive
+    # wiper ONLY — NOT general execution (child_process/exec/spawn), which is the common
+    # build API and would false-HIGH a benign locale-aware build (wh-5ox.8 QA FP fix).
+    proj = _write(tmp_path / "p", {
+        "dependencies": {"react": "18.2.0"},
+        "scripts": {"postinstall": "node scripts/x.js"},
+    }, scripts_files={"scripts/x.js": _INERT_ENV_GATED_PAYLOAD_POSTINSTALL})
+    doc = sc.scan(str(proj))
+    f = _emitted(doc)
+    assert len(f) >= 1
+    high = [x for x in f if x["severity"] == "HIGH"]
+    assert high, "locale-gated DISPUTED wiper → S6 HIGH"
+    assert [x for x in f if x["severity"] == "HIGH"] != []   # NOT the wrong value
+    assert high[0]["tool_assisted"] is False
+    # == expected: the co-occurrence regex AND the standalone wiper both matched.
+    matched = set(_s6_patterns_for(str(proj / "scripts" / "x.js")))
+    cooc = next(p for p in matched if p.startswith(r"(?si)\A") and "TZ" in p)
+    assert cooc in matched
+    assert r"rm\s+-rf\s+~" in matched
+    # != the wrong reason: the env-gate is NOT counting general execution any more.
+    assert "child_process" not in matched
+    assert len(matched) >= 2
+    assert vf.validate(doc) == []
+
+
+def test_lone_new_primitive_never_high(tmp_path):
+    # REQUIRED both-ways FP guard (Policy 9): each LONE new primitive yields <=1 pattern
+    # and NEVER reaches HIGH — a benign locale read / process.exit / env read / own-cache
+    # cleanup is not an environment-gated payload nor a deadman switch.
+    for label, body in (
+        ("lone-tz", _INERT_LONE_TZ_READ),
+        ("lone-exit", _INERT_LONE_PROCESS_EXIT),
+        ("lone-env", _INERT_LONE_ENV_READ),
+        ("lone-rm-cache", _INERT_LONE_RM_CACHE),
+    ):
+        proj = _write(tmp_path / label, {
+            "dependencies": {"react": "18.2.0"},
+            "scripts": {"postinstall": "node scripts/x.js"},
+        }, scripts_files={"scripts/x.js": body})
+        doc = sc.scan(str(proj))
+        # == expected: NO S6 HIGH for a lone primitive.
+        assert doc["summary"]["counts"]["high"] == 0, f"{label} wrongly reached HIGH"
+        assert doc["summary"]["counts"]["high"] != 1, f"{label} wrong value"
+        assert not [x for x in _emitted(doc) if x["severity"] == "HIGH"]
+        # != the wrong reason: <=1 distinct new pattern matched (the co-occurrence
+        # regex needs BOTH a locale AND a sink, so a lone locale read never fires it).
+        matched = _s6_patterns_for(str(proj / "scripts" / "x.js"))
+        assert len(matched) <= 1, f"{label} tripped >1 pattern: {matched}"
+        assert vf.validate(doc) == []
+
+
+def test_locale_plus_build_spawn_is_not_env_gated_payload_no_high(tmp_path):
+    # wh-5ox.8 QA FP fix (Policy 9 — INTENT, not behavior): shape #2 is a locale read
+    # gating a DESTRUCTIVE sink (the DISPUTED `rm -rf ~` wiper) — NOT general execution.
+    # child_process/exec/spawn are the most common build-script APIs (node-gyp, tsc,
+    # webpack), so a benign locale-aware build that ALSO spawns the compiler must NOT
+    # reach HIGH. The env-gate co-occurrence must NOT fire on a non-destructive sink, and
+    # the standalone child_process/exec/spawn pattern alone is only 1 distinct → not HIGH.
+    for label, body in (
+        ("tz+node-gyp", _BENIGN_LOCALE_AND_BUILD_SPAWN),
+        ("intl+tsc", _BENIGN_INTL_AND_TSC_SPAWN),
+        ("lang+webpack", _BENIGN_LANG_AND_WEBPACK_EXEC),
+    ):
+        proj = _write(tmp_path / label, {
+            "dependencies": {"react": "18.2.0"},
+            "scripts": {"postinstall": "node scripts/x.js"},
+        }, scripts_files={"scripts/x.js": body})
+        doc = sc.scan(str(proj))
+        # == expected: a locale read + a build spawn (no wiper) is NOT HIGH.
+        assert doc["summary"]["counts"]["high"] == 0, f"{label} wrongly reached HIGH"
+        assert doc["summary"]["counts"]["high"] != 1, f"{label} wrong value"
+        assert not [x for x in _emitted(doc) if x["severity"] == "HIGH"]
+        # != the wrong reason: the env-gate co-occurrence regex must NOT have fired on a
+        # general-execution sink — only `rm -rf ~` is a destructive sink for shape #2.
+        matched = _s6_patterns_for(str(proj / "scripts" / "x.js"))
+        cooc = [p for p in matched if p.startswith(r"(?si)\A")
+                and ("TZ" in p or "DateTimeFormat" in p or "LANG" in p)]
+        assert cooc == [], f"{label}: env-gate fired on a non-destructive sink: {cooc}"
+        assert vf.validate(doc) == []
+
+
+def test_benign_macos_launchagent_installer_no_high(tmp_path):
+    # wh-5ox.8 QA fix #2 (primary-source gate + FP discipline): `~/Library/LaunchAgents`
+    # is NOT a Hades vendor-primary IOC (it is our own IR/recovery narrative — :71), so it
+    # was dropped as a standalone S6 detector. A benign macOS auto-update daemon installer
+    # legitimately writes a LaunchAgents plist AND fetches an update manifest — it must NOT
+    # reach HIGH (it false-HIGHed on the pre-drop code via LaunchAgents + fetch( = 2).
+    proj = _write(tmp_path / "p", {
+        "dependencies": {"react": "18.2.0"},
+        "scripts": {"postinstall": "node scripts/x.js"},
+    }, scripts_files={"scripts/x.js": _BENIGN_MACOS_LAUNCHAGENT_INSTALLER})
+    doc = sc.scan(str(proj))
+    # == expected: a LaunchAgents write + a fetch (no wiper / no deadman IOC) is NOT HIGH.
+    assert doc["summary"]["counts"]["high"] == 0, "macOS daemon installer wrongly HIGH"
+    assert doc["summary"]["counts"]["high"] != 1   # NOT the wrong value
+    assert not [x for x in _emitted(doc) if x["severity"] == "HIGH"]
+    # != the wrong reason: only the generic `fetch(` matched (1 distinct); the dropped
+    # `~/Library/LaunchAgents` pattern is gone, so it cannot supply a 2nd count.
+    matched = set(_s6_patterns_for(str(proj / "scripts" / "x.js")))
+    assert "~/Library/LaunchAgents" not in matched   # the pattern was removed
+    assert len([p for p in matched if "LaunchAgents" in p]) == 0
+    assert vf.validate(doc) == []
+
+
+def test_env_gate_unique_contribution_locale_plus_wiper_only(tmp_path):
+    # The env-gate's UNIQUE value: a locale read + `rm -rf ~` with NOTHING else still
+    # reaches HIGH = co-occurrence(1) + standalone `rm -rf ~`(1) = 2. This pins the exact
+    # env-gated-WIPER shape so a future narrowing can't silently drop it (Policy 9).
+    body = (
+        "// SAMPLE (inert) — env-gated wiper, detection test data only.\n"
+        "// const tz = process.env.TZ;  // geofence: only in the target region...\n"
+        "// rm -rf ~  // ...would fire the DISPUTED wiper (surfaced, not adjudicated).\n"
+        "module.exports = function () { /* no-op: see comments above */ };\n"
+    )
+    proj = _write(tmp_path / "p", {
+        "dependencies": {"react": "18.2.0"},
+        "scripts": {"postinstall": "node scripts/x.js"},
+    }, scripts_files={"scripts/x.js": body})
+    doc = sc.scan(str(proj))
+    high = [x for x in _emitted(doc) if x["severity"] == "HIGH"]
+    assert high, "locale read + `rm -rf ~` (the env-gated-wiper shape) → S6 HIGH"
+    matched = set(_s6_patterns_for(str(proj / "scripts" / "x.js")))
+    cooc = next(p for p in matched if p.startswith(r"(?si)\A") and "TZ" in p)
+    assert cooc in matched                  # the env-gate fired (locale + wiper)
+    assert r"rm\s+-rf\s+~" in matched       # standalone wiper supplies the 2nd count
+    assert len(matched) >= 2                 # ≥2 distinct → HIGH
+    assert vf.validate(doc) == []
+
+
+def test_deadman_env_gate_no_redos_on_large_script(tmp_path):
+    # ReDoS (AC): the NEW \A-anchored co-occurrence regex must be LINEAR, not the O(n^2)
+    # an unanchored double-lookahead would be. ~200 KB body: the locale half-match
+    # PRESENT (process.env.TZ) but the destructive-sink half ABSENT (the worst-case the
+    # quadratic predecessor blows up on). wh-5ox.5 measured 1MB in 52ms → assert < 2s.
+    import time
+    big = "process.env.TZ\n" + ("var a=function(b){return b+1};\n" * 7000)
+    assert len(big) >= 200_000
+    proj = _write(tmp_path / "p", {
+        "dependencies": {"react": "18.2.0"},
+        "scripts": {"postinstall": "node scripts/x.js"},
+    }, scripts_files={"scripts/x.js": big})
+    t0 = time.perf_counter()
+    out = sc.signal_s6({"script_files": [str(proj / "scripts" / "x.js")]})
+    elapsed = time.perf_counter() - t0
+    assert elapsed < 2.0, f"S6 took {elapsed:.2f}s — possible ReDoS in a new pattern"
+    # half-match (locale only, no sink) → the co-occurrence regex must NOT fire
+    matched = out.get(str(proj / "scripts" / "x.js"), [])
+    cooc = [p for p in matched if p.startswith(r"(?si)\A") and "TZ" in p]
+    assert cooc == [], "co-occurrence fired on a locale-only half-match (FP)"
+
+
+def test_deadman_env_gate_degrades_on_hostile_bytes_no_raise(tmp_path):
+    # ADR-003 degrade-never-raise: the new pure-regex patterns run over text read by the
+    # OSError-safe + errors='ignore' _read_text — a hostile binary body must NOT raise.
+    blob = tmp_path / "blob.js"
+    blob.write_bytes(b"\x00\xff\xfe" + b"gh-token-monitor" + b"\x00rm -rf ~\x00" * 3)
+    out = sc.signal_s6({"script_files": [str(blob)]})
+    assert isinstance(out, dict)        # returns cleanly, never raises
+    assert out != {str(blob): None}     # (sanity: a real dict, not a stub)
+
+
+# --------------------------------------------------------------------------- #
 # S3 / scoring — lone signal is informational only (no finding)
 # --------------------------------------------------------------------------- #
 def test_missing_lockfile_alone_is_informational_only(tmp_path):
