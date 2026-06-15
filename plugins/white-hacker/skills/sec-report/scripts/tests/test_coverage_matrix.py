@@ -258,6 +258,66 @@ def test_non_dict_finding_and_non_list_findings_degrade(tmp_path):
     assert "T1195" in out2
 
 
+def test_deeply_nested_kb_yaml_degrades(tmp_path):
+    # A KB *.md whose front-matter is deeply-nested YAML trips PyYAML's recursion limit at
+    # parse-DEPTH, raising RecursionError (a RuntimeError subclass, NOT a yaml.YAMLError) —
+    # before the fix this ESCAPES kb_universe and aborts build_matrix (ADR-003 violation).
+    # Depth 600 reliably raises here (the boundary is ~500); a co-located well-formed entry
+    # must still contribute its technique (drop-the-bad-entry degrade).
+    deep = "[" * 600 + "]" * 600
+    bad = "---\nid: BAD\nxref: " + deep + "\n---\nbody\n"
+    kb = _write_kb(tmp_path, {"good.md": _kb_entry("AISEC-1", ["T1195"])})
+    (kb / "bad.md").write_text(bad)
+    out = cm.build_matrix(_doc([]), kb)  # must NOT raise RecursionError
+    assert isinstance(out, str)
+    # the well-formed entry survives; the bad file's would-be id never enters the universe
+    assert "T1195" in out
+    assert "BAD" not in out
+
+
+def test_deeply_nested_findings_json_degrades(tmp_path):
+    # A findings file that is deeply-nested JSON trips json's recursion limit, raising
+    # RecursionError — before the fix this ESCAPES main()'s `except (OSError, JSONDecodeError)`
+    # and aborts with a traceback (ADR-003 violation). Depth 20000 reliably raises here.
+    kb = _write_kb(tmp_path, {"e.md": _kb_entry("AISEC-1", ["T1195"])})
+    nested = tmp_path / "nested.json"
+    nested.write_text("[" * 20000 + "]" * 20000)
+    rc = cm.main([str(nested), "--kb-dir", str(kb)])  # must degrade to exit 2
+    assert rc == 2
+    assert rc != 0
+
+
+def test_non_utf8_findings_file_degrades(tmp_path):
+    # A findings file with a stray non-UTF-8 byte must DEGRADE to exit 2, not raise
+    # UnicodeDecodeError (a ValueError, NOT an OSError) from read_text() — ADR-003.
+    kb = _write_kb(tmp_path, {"e.md": _kb_entry("AISEC-1", ["T1195"])})
+    bad = tmp_path / "bad.json"
+    bad.write_bytes(b'{"findings": \xff []}')
+    rc = cm.main([str(bad), "--kb-dir", str(kb)])  # must NOT raise UnicodeDecodeError
+    assert rc == 2
+    assert rc != 0
+
+
+def test_well_formed_kb_and_findings_still_correct(tmp_path):
+    # Both-ways control for the degrade cases above: a well-formed KB + findings still yields
+    # the correct matrix (covered? == yes, the finding-ref present), proving the widened
+    # except clauses did not over-swallow legitimate input.
+    import json
+
+    kb = _write_kb(tmp_path, {"e.md": _kb_entry("AISEC-1", ["T1195"])})
+    good = tmp_path / "good.json"
+    good.write_text(json.dumps(_doc([_finding(att_ck=["T1195"])])))
+    out_path = tmp_path / "SECTION.md"
+    rc = cm.main([str(good), "--kb-dir", str(kb), "--out", str(out_path)])
+    assert rc == 0
+    assert rc != 2
+    written = out_path.read_text()
+    assert "T1195" in written
+    assert "F-001 (src/x.ts:42)" in written
+    assert "yes" in written
+    assert "gap" not in written
+
+
 def test_markdown_cell_injection_neutralized(tmp_path):
     # A schema-permitted `file` (finding-schema only constrains its FIRST char) carrying a
     # pipe + newline must NOT forge table columns or a phantom coverage row.

@@ -89,7 +89,10 @@ def kb_universe(kb_dir: Path) -> dict[str, dict]:
             continue
         try:
             meta = yaml.safe_load(front)
-        except yaml.YAMLError:
+        except (yaml.YAMLError, RecursionError):
+            # RecursionError (a RuntimeError subclass, NOT a yaml.YAMLError): deeply-nested
+            # untrusted YAML front-matter trips PyYAML's recursion limit at parse-DEPTH ->
+            # name it, else a hostile KB file aborts the scan (ADR-003; mirror supply_chain.py:410).
             continue
         if not isinstance(meta, dict):
             continue
@@ -179,8 +182,14 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     try:
-        doc = json.loads(Path(ns.file).read_text())
-    except (OSError, json.JSONDecodeError) as exc:
+        # errors="ignore" (mirror :84): a findings file with non-UTF-8 bytes must DEGRADE,
+        # not raise UnicodeDecodeError (a ValueError, NOT an OSError) — ADR-003.
+        doc = json.loads(Path(ns.file).read_text(encoding="utf-8", errors="ignore"))
+    except (OSError, json.JSONDecodeError, RecursionError, UnicodeDecodeError) as exc:
+        # RecursionError (a RuntimeError subclass): deeply-nested untrusted findings JSON trips
+        # json's recursion limit at parse-DEPTH. UnicodeDecodeError kept defensively even though
+        # errors="ignore" prevents it (the AC enumerates it across the read path); JSONDecodeError
+        # already covers the ValueError class. Mirror supply_chain.py:410 (ADR-003).
         print(f"INVALID {ns.file}: could not read/parse JSON: {exc}")
         return 2
 
