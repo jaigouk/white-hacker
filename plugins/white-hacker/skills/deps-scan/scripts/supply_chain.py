@@ -105,6 +105,28 @@ _DANGEROUS_API_PATTERNS = (
     r"~/\.aws",
     r"~/\.npmrc",
     r"~/\.claude",
+    # --- wh-5ox.5: layered crypto-exfil — symmetric cipher + asymmetric key-wrap ---
+    # Symmetric markers are ONE alternation on purpose: a benign AES util uses BOTH
+    # createCipheriv AND the algo string together, so counting them as one signal keeps it
+    # at 1 pattern; only the asymmetric wrap (publicEncrypt) adds the 2nd distinct pattern
+    # that pushes the symmetric+asymmetric pair to S6 HIGH. Dual-use caveat: legit hybrid
+    # encryption (AES bulk + RSA-wrap-the-key) matches the SAME shape, so S6 — a never-block,
+    # human-triaged candidate (spike-09 F2) — FLAGS a crypto-pair install script for review;
+    # it does not assert exfil.
+    r"(?:createCipheriv|aes-256-cbc)",  # [primary-sourced: https://nodejs.org/api/crypto.html#cryptocreatecipherivalgorithm-key-iv-options]
+    r"publicEncrypt",  # RSA wrap (RSA-OAEP default) [primary-sourced: https://nodejs.org/api/crypto.html#cryptopublicencryptkey-buffer]
+    # --- wh-5ox.5: npm-publish-impersonation — npm-CLI request header + registry host ---
+    # The npm-CLI internal request headers are the impersonation discriminator (a benign
+    # script never sets them). The registry host ALONE is not discriminating (benign metadata
+    # fetches hit it), so the host is matched ONLY in co-occurrence with a header (the
+    # lookahead) — this avoids a benign fetch('registry.npmjs.org') false HIGH. The bare
+    # header alternation supplies the 2nd distinct count so header+host -> HIGH regardless of
+    # which HTTP client the impersonator uses. The co-occurrence regex is \A-anchored so
+    # signal_s6's .search() runs the two .* lookaheads ONCE (at string start) instead of
+    # retrying at every offset — O(n), not the O(n^2) ReDoS an unanchored double-lookahead
+    # would be on a large attacker-controlled install script.
+    r"(?i)npm-(?:command|session|scope)",  # npm CLI request headers, case-insensitive [primary-sourced: https://github.com/npm/npm-registry-fetch]
+    r"(?si)\A(?=.*npm-(?:command|session|scope))(?=.*registry\.npmjs\.org)",  # \A-anchored header+registry-host co-occurrence (linear) [primary-sourced: header https://github.com/npm/npm-registry-fetch ; host https://docs.npmjs.com/cli/v11/using-npm/registry]
     *_BUN_DROPPER_PATTERNS,  # wh-5ox.2 structural bun-runtime-dropper markers (above)
 )
 _DANGEROUS_API_RE = [re.compile(p) for p in _DANGEROUS_API_PATTERNS]

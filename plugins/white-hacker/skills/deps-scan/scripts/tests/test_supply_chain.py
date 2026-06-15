@@ -228,6 +228,120 @@ def test_benign_native_build_pkg_yields_no_finding(tmp_path):
 
 
 # --------------------------------------------------------------------------- #
+# wh-5ox.5 — S6 layered crypto-exfil (symmetric cipher + asymmetric key-wrap)
+# --------------------------------------------------------------------------- #
+# INERT detection test data only (the eval-corpus discipline): these scripts are
+# never functional; they carry the recognition *strings* and nothing more.
+_INERT_CRYPTO_EXFIL_POSTINSTALL = (
+    "// SAMPLE (inert) — detection test data only, does nothing.\n"
+    "// would crypto.createCipheriv('aes-256-cbc', key, iv) to wrap the payload, then\n"
+    "// would crypto.publicEncrypt(pubKey, aesKey) to RSA-wrap the symmetric key (the\n"
+    "// double-wrap exfil tell) before sending it off-host.\n"
+    "module.exports = function () { /* no-op: see comments above */ };\n"
+)
+# Benign local-file AES util: symmetric cipher with a HEX key (NOT base64 →
+# Buffer.from(...,'base64') stays clear), and crucially NO publicEncrypt.
+_INERT_BENIGN_SYMMETRIC_UTIL = (
+    "// SAMPLE (inert) — benign local-file AES encrypt util, detection test data.\n"
+    "// const key = Buffer.from(hexKey, 'hex');  // HEX, not base64\n"
+    "// const c = createCipheriv('aes-256-cbc', key, iv);  // local file only\n"
+    "module.exports = function () { /* no-op: see comments above */ };\n"
+)
+
+
+def test_crypto_exfil_pair_emits_high(tmp_path):
+    # createCipheriv/aes-256-cbc is ONE alternation (1 signal); publicEncrypt is the
+    # 2nd distinct pattern — the double-wrap shape → S6 HIGH (≥2 dangerous-API hits).
+    proj = _write(tmp_path / "p", {
+        "dependencies": {"react": "18.2.0"},
+        "scripts": {"postinstall": "node scripts/x.js"},
+    }, scripts_files={"scripts/x.js": _INERT_CRYPTO_EXFIL_POSTINSTALL})
+    doc = sc.scan(str(proj))
+    f = _emitted(doc)
+    assert len(f) >= 1
+    high = [x for x in f if x["severity"] == "HIGH"]
+    assert high, "symmetric cipher + asymmetric key-wrap → S6 HIGH"
+    # NOT the wrong value: the double-wrap must NOT be silently dropped to MEDIUM/LOW.
+    assert [x for x in f if x["severity"] == "HIGH"] != []
+    assert high[0]["tool_assisted"] is False
+    assert "ignore-scripts" in high[0]["recommendation"].lower()
+    assert vf.validate(doc) == []
+
+
+def test_benign_symmetric_only_no_high(tmp_path):
+    # A local AES util (createCipheriv + HEX-keyed Buffer.from) with NO publicEncrypt
+    # hits exactly ONE distinct new pattern and zero existing ones → must NOT be HIGH.
+    # FP guard: a single symmetric-crypto signal is not exfil.
+    proj = _write(tmp_path / "p", {
+        "dependencies": {"react": "18.2.0"},
+        "scripts": {"postinstall": "node scripts/x.js"},
+    }, scripts_files={"scripts/x.js": _INERT_BENIGN_SYMMETRIC_UTIL})
+    doc = sc.scan(str(proj))
+    assert doc["summary"]["counts"]["high"] == 0   # the FP guard
+    assert doc["summary"]["counts"]["high"] != 1   # NOT the wrong value
+    assert not [x for x in _emitted(doc) if x["severity"] == "HIGH"]
+    assert vf.validate(doc) == []
+
+
+# --------------------------------------------------------------------------- #
+# wh-5ox.5 — S6 npm-publish-impersonation (npm-CLI header + registry host)
+# --------------------------------------------------------------------------- #
+# A non-npm-CLI client (axios) that forges npm-CLI request headers AND contacts the
+# registry to auto-publish. The header alternation (1 signal) + the header+host
+# co-occurrence lookahead (2nd signal) → HIGH regardless of HTTP client.
+_INERT_NPM_IMPERSONATION_POSTINSTALL = (
+    "// SAMPLE (inert) — detection test data only, does nothing.\n"
+    "// const axios = require('axios');\n"
+    "// const headers = { 'npm-command':'publish', 'npm-session':'abc', "
+    "'npm-scope':'@acme' };\n"
+    "// axios.post('https://registry.npmjs.org/-/package', body, { headers });\n"
+    "module.exports = function () { /* no-op: see comments above */ };\n"
+)
+# Benign metadata read: a plain registry fetch with NO npm-* headers → only the
+# existing `fetch(` pattern hits (1); the host is NOT counted on its own.
+_INERT_BENIGN_REGISTRY_FETCH = (
+    "// SAMPLE (inert) — benign registry metadata read, detection test data.\n"
+    "// fetch('https://registry.npmjs.org/react').then(r => r.json());\n"
+    "module.exports = function () { /* no-op: see comments above */ };\n"
+)
+
+
+def test_npm_impersonation_emits_high(tmp_path):
+    # axios (a non-npm client) forging npm-CLI headers + hitting registry.npmjs.org:
+    # header-alt (1) + header+host co-occurrence (2) = 2 distinct → S6 HIGH. Neither
+    # require('axios') nor axios.post( matches any existing dangerous pattern.
+    proj = _write(tmp_path / "p", {
+        "dependencies": {"react": "18.2.0"},
+        "scripts": {"postinstall": "node scripts/x.js"},
+    }, scripts_files={"scripts/x.js": _INERT_NPM_IMPERSONATION_POSTINSTALL})
+    doc = sc.scan(str(proj))
+    f = _emitted(doc)
+    assert len(f) >= 1
+    high = [x for x in f if x["severity"] == "HIGH"]
+    assert high, "npm-CLI header forgery + registry host → S6 HIGH"
+    assert [x for x in f if x["severity"] == "HIGH"] != []   # NOT the wrong value
+    assert high[0]["tool_assisted"] is False
+    assert "ignore-scripts" in high[0]["recommendation"].lower()
+    assert vf.validate(doc) == []
+
+
+def test_benign_registry_fetch_no_high(tmp_path):
+    # A bare fetch('https://registry.npmjs.org/react') with NO npm-* headers hits only
+    # the EXISTING `fetch(` pattern (1 distinct); the registry host is matched ONLY in
+    # co-occurrence with a header, so it is not counted alone → must NOT be HIGH.
+    # Host-literal FP guard.
+    proj = _write(tmp_path / "p", {
+        "dependencies": {"react": "18.2.0"},
+        "scripts": {"postinstall": "node scripts/x.js"},
+    }, scripts_files={"scripts/x.js": _INERT_BENIGN_REGISTRY_FETCH})
+    doc = sc.scan(str(proj))
+    assert doc["summary"]["counts"]["high"] == 0   # the FP guard
+    assert doc["summary"]["counts"]["high"] != 1   # NOT the wrong value
+    assert not [x for x in _emitted(doc) if x["severity"] == "HIGH"]
+    assert vf.validate(doc) == []
+
+
+# --------------------------------------------------------------------------- #
 # S3 / scoring — lone signal is informational only (no finding)
 # --------------------------------------------------------------------------- #
 def test_missing_lockfile_alone_is_informational_only(tmp_path):
@@ -1299,3 +1413,25 @@ def test_read_toml_degrades_to_empty_on_untrusted_input_classes(tmp_path):
     deep = tmp_path / "deep.toml"
     deep.write_text("a = " + "[" * 6000 + "]" * 6000 + "\n", encoding="utf-8")
     assert sc._read_toml(deep) == {}  # RecursionError -> {} (the bug this fixes)
+
+
+# --------------------------------------------------------------------------- #
+# wh-5ox.5 ReDoS regression — the npm header+host co-occurrence regex must be
+# linear (\A-anchored), not the O(n^2) an unanchored double-lookahead would be.
+# --------------------------------------------------------------------------- #
+def test_s6_cooccurrence_pattern_no_redos_on_large_script(tmp_path):
+    import time
+    # ~310 KB install script: npm header PRESENT, registry host ABSENT (the worst
+    # half-match the unanchored predecessor blew up on — ~30s+ here; linear is a few ms).
+    big = "npm-command\n" + ("var a=function(b){return b+1};\n" * 10000)
+    proj = _write(tmp_path / "p", {
+        "dependencies": {"react": "18.2.0"},
+        "scripts": {"postinstall": "node scripts/x.js"},
+    }, scripts_files={"scripts/x.js": big})
+    t0 = time.perf_counter()
+    doc = sc.scan(str(proj))
+    elapsed = time.perf_counter() - t0
+    assert elapsed < 5.0, f"S6 scan took {elapsed:.1f}s — possible ReDoS regression"
+    # half-match (header only, no registry host) is 1 distinct pattern -> NOT HIGH
+    assert doc["summary"]["counts"]["high"] == 0
+    assert vf.validate(doc) == []
