@@ -37,6 +37,13 @@ The machine JSON is the gate input. CI **fails on `summary.counts.high > 0`** (t
 overridable) — implemented by `scripts/ci_gate.py` (T-6.2), which validates the JSON against the
 finding-schema first, then checks the counts and returns a non-zero **exit code** to fail the PR.
 
+## Coverage matrix (recall-gap signal)
+`scripts/coverage_matrix.py` (wh-5ox.19) is a pure aggregator: it joins findings to their
+`att_ck`/`atlas` ids, groups by MITRE technique id against the `ai-attack-kb` technique
+universe, and emits a `Technique | ID | covered? | modality | finding-refs` markdown matrix.
+An in-scope KB technique with **zero** covering finding is flagged a `gap` — the intended
+recall/degradation signal `/sec-learn` harvests (`--out PATH` appends it as a report section).
+
 ## Posture
 Triaged-only (never raw discovery); no secret values ever written to the report or JSON
 (decision-makers see only `{file, line, category, diff}`). Pure reasoning — no tools at report time.
