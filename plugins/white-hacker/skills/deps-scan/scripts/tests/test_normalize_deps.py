@@ -71,6 +71,18 @@ def test_all_findings_are_supply_chain_candidates():
         assert f["kb_refs"] and f["kb_refs"][0].startswith("CVE-")
 
 
+def test_sca_findings_carry_empty_mitre_attribution():
+    # wh-5ox.10: an SCA/CVE finding matches NO ai-attack-kb entry, so MITRE attribution
+    # is present-but-empty (the spine is always there; it's just not populated).
+    doc = nd.normalize(_trivy_doc())
+    assert doc["findings"]                       # fixture has findings
+    for f in doc["findings"]:
+        assert f["att_ck"] == []                 # == empty (no KB match)
+        assert f["atlas"] == []
+        assert "disputed" not in f               # != propagated (no dispute on a CVE)
+    assert vf.validate(doc) == []                # still schema-valid with the new fields
+
+
 def test_recommendation_includes_fixed_version_when_present():
     doc = nd.normalize(_trivy_doc())
     upgrades = [f for f in doc["findings"] if "Upgrade" in f["recommendation"]]

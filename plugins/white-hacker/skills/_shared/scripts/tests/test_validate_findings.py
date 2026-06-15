@@ -124,6 +124,47 @@ def test_canonical_of_accepts_null_and_id():
     assert vf.validate(d) == []
 
 
+# === wh-5ox.10: att_ck / atlas / disputed are ADDITIVE finding fields =========
+def test_att_ck_atlas_arrays_accepted():
+    d = copy.deepcopy(VALID)
+    d["findings"][0]["att_ck"] = ["T1195.002", "T1552.005"]
+    d["findings"][0]["atlas"] = ["AML.T0010"]
+    assert vf.validate(d) == []                 # additive arrays of strings -> valid
+
+
+def test_disputed_object_accepted():
+    d = copy.deepcopy(VALID)
+    d["findings"][0]["disputed"] = {
+        "claim": "package X is exploitable",
+        "dispute_source": "upstream maintainer",
+        "status": "unresolved",
+    }
+    assert vf.validate(d) == []                 # well-formed disputed -> valid
+
+
+def test_disputed_bad_status_rejected():
+    # The "REJECTS a bad status" AC: the schema enum gives it for free (no code change).
+    d = copy.deepcopy(VALID)
+    d["findings"][0]["disputed"] = {
+        "claim": "c", "dispute_source": "s", "status": "maybe",  # not in the enum
+    }
+    assert vf.validate(d)                        # != [] -> rejected
+
+
+def test_disputed_missing_required_subfield_rejected():
+    d = copy.deepcopy(VALID)
+    d["findings"][0]["disputed"] = {"claim": "c", "status": "unresolved"}  # no dispute_source
+    assert vf.validate(d)
+
+
+def test_att_ck_atlas_disputed_are_not_newly_required():
+    # Strictly ADDITIVE (Policy 3): a finding WITHOUT the new fields is still valid.
+    assert vf.validate(VALID) == []
+    required = vf.load_schema()["$defs"]["finding"]["required"]
+    for added in ("att_ck", "atlas", "disputed"):
+        assert added not in required            # never promoted into `required`
+
+
 def test_empty_findings_list_is_valid():
     d = copy.deepcopy(VALID)
     d["findings"] = []

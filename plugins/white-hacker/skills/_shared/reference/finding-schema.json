@@ -68,7 +68,10 @@
         "excluded_by": {
           "description": "optional: the exclusion rule that demoted this candidate (audit trail).",
           "type": "string"
-        }
+        },
+        "att_ck": { "description": "MITRE ATT&CK enterprise technique ids (T#### / T####.###) copied from the matched KB entry's xref MITRE subset. Empty when no KB entry is matched.", "type": "array", "items": { "type": "string" } },
+        "atlas": { "description": "MITRE ATLAS technique ids (AML.*) copied from the matched KB entry's xref MITRE subset. Empty when no KB entry is matched.", "type": "array", "items": { "type": "string" } },
+        "disputed": { "description": "Optional contested claim underlying this finding, propagated from the matched KB entry. Confidence is capped while status is 'unresolved'.", "type": "object", "additionalProperties": false, "required": ["claim", "dispute_source", "status"], "properties": { "claim": { "type": "string", "minLength": 1 }, "dispute_source": { "type": "string", "minLength": 1 }, "status": { "enum": ["unresolved", "refuted", "confirmed"] } } }
       }
     }
   }

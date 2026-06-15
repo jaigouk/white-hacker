@@ -53,6 +53,7 @@
       "description": "External taxonomy ids (LLMxx:2025, ASIxx, MCPxx, AML.Txxxx, CVE-...). May be empty only for an unmapped draft.",
       "type": "array",
       "items": { "type": "string", "minLength": 1 }
-    }
+    },
+    "disputed": { "description": "Optional contested claim this entry documents; propagated onto matched findings. Confidence is capped while status is 'unresolved'.", "type": "object", "additionalProperties": false, "required": ["claim", "dispute_source", "status"], "properties": { "claim": { "type": "string", "minLength": 1 }, "dispute_source": { "type": "string", "minLength": 1 }, "status": { "enum": ["unresolved", "refuted", "confirmed"] } } }
   }
 }

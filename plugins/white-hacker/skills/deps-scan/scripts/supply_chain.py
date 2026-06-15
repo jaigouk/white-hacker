@@ -40,6 +40,7 @@ except ModuleNotFoundError:  # Python 3.10 — no stdlib tomllib
     tomllib = None  # type: ignore[assignment]
 
 import degradation as dg
+import kb_attribution  # _shared: xref -> MITRE attribution spine (wh-5ox.10)
 # `is_known_bad(name, version, db)` (malware_db.py) is the version-aware predicate the
 # S8 matcher delegates to (sibling module, same package — imported via the conftest path
 # like the tests' `import malware_db as mdb`; no defensive guard needed, it has no
@@ -47,6 +48,12 @@ import degradation as dg
 from malware_db import is_known_bad, load_malware_db
 
 KB_REF = "AISEC-SUPPLY-CHAIN-001"
+# Mirror of the matched KB entry's xref (ai-attack-kb/reference/supply-chain-1.md:21), VERBATIM.
+# kb_attribution.mitre_from_xref() splits this into the att_ck / atlas finding spine (wh-5ox.10).
+_KB_XREF = ["LLM03:2025",
+            "AML.T0010 [primary-sourced: https://atlas.mitre.org/techniques/AML.T0010]",
+            "T1195.002 [primary-sourced: https://attack.mitre.org/techniques/T1195/002/]",
+            "T1552.005 [primary-sourced: https://attack.mitre.org/techniques/T1552/005/]"]
 _OWASP = ["A06:2021"]  # Vulnerable and Outdated Components
 _CATEGORY = "supply-chain"
 
@@ -1736,7 +1743,9 @@ def _make_finding(idx: int, name: str, dep: dict, hits: list[dict], severity: st
         "tool_assisted": False,  # this is the floor — never tool-backed
         "kb_refs": [KB_REF],
     }
-    # cap floor confidence (degradation.py) — idempotent, lowers weak evidence.
+    # Copy the matched KB entry's MITRE attribution onto the finding (wh-5ox.10), then
+    # cap floor confidence (degradation.py) — both idempotent, lowering weak evidence.
+    finding = kb_attribution.apply_kb_attribution(finding, xref=_KB_XREF, disputed=None)
     return dg.cap_floor_confidence(finding)
 
 

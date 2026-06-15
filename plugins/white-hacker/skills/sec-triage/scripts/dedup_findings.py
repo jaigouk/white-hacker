@@ -20,6 +20,25 @@ from pathlib import Path
 LINE_WINDOW = 10
 
 
+def _merge_attribution(canonical: dict, dup: dict) -> None:
+    """Preserve a duplicate's MITRE attribution when it collapses (wh-5ox.10).
+
+    Collapsing drops the duplicate from the canonical list, so its att_ck/atlas ids would be
+    lost unless folded onto the canonical. Union, order-stable, deduped; a dispute is adopted
+    only when the canonical has none (never clobbered). Mutates `canonical` in place. Pure +
+    idempotent (re-running merges nothing new) — no KB read, no _shared import.
+    """
+    for key in ("att_ck", "atlas"):
+        if dup.get(key):
+            merged = list(canonical.get(key) or [])
+            for v in dup[key]:
+                if v not in merged:
+                    merged.append(v)
+            canonical[key] = merged
+    if "disputed" not in canonical and dup.get("disputed"):
+        canonical["disputed"] = dup["disputed"]
+
+
 def dedup(doc: dict, window: int = LINE_WINDOW) -> dict:
     """Return a copy of `doc` with deterministic duplicates collapsed via `canonical_of`."""
     doc = copy.deepcopy(doc)
@@ -44,6 +63,7 @@ def dedup(doc: dict, window: int = LINE_WINDOW) -> dict:
             canonicals.append(f)
         else:
             f["canonical_of"] = match["id"]
+            _merge_attribution(match, f)   # don't lose the dup's MITRE attribution (wh-5ox.10)
 
     # Recompute counts over canonical findings only (unique findings).
     counts = {"high": 0, "medium": 0, "low": 0}

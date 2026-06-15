@@ -367,6 +367,24 @@ def test_emitted_findings_carry_required_invariants(tmp_path):
         assert fnd["access_required"] != "unauth-remote"
 
 
+def test_emitted_findings_carry_kb_mitre_attribution(tmp_path):
+    # wh-5ox.10: a supply-chain candidate matches AISEC-SUPPLY-CHAIN-001, so its MITRE
+    # attribution is COPIED from that KB entry's xref (the verbatim supply-chain-1.md:21
+    # subset). Pinned both ways: the right ids ARE present AND no dispute is fabricated.
+    proj = _write(tmp_path / "p", {
+        "dependencies": {"@anthropic_ai/sdk": "1.0.0"},   # S5 HIGH
+    })
+    doc = sc.scan(str(proj))
+    f = _emitted(doc)
+    cand = next(x for x in f if "@anthropic_ai/sdk" in x["exploit_scenario"])
+    assert cand["att_ck"] == ["T1195.002", "T1552.005"]   # == the ATT&CK subset of the xref
+    assert cand["atlas"] == ["AML.T0010"]                 # == the ATLAS subset
+    assert cand["att_ck"] != []                           # != the no-match (empty) case
+    assert "disputed" not in cand                         # the entry carries no dispute
+    assert cand["kb_refs"] == ["AISEC-SUPPLY-CHAIN-001"]  # attribution didn't disturb kb_refs
+    assert vf.validate(doc) == []
+
+
 def test_demo_poc_scans_and_validates():
     """The committed demo project under docs/research/poc-supply-chain emits a
     valid candidate via the same scan() path the gate runs."""

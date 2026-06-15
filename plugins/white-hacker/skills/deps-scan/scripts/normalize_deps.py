@@ -14,6 +14,7 @@ sink" exclusion). `tool_assisted` / `tools_unavailable` are derived from the SCA
 from __future__ import annotations
 
 import degradation as dg
+import kb_attribution  # _shared: xref -> MITRE attribution spine (wh-5ox.10)
 
 # Trivy package Type -> our language label (for summary.scanned_langs).
 _TYPE_LANG = {
@@ -45,7 +46,7 @@ def _vuln_to_finding(vuln: dict, target: str, idx: int) -> dict:
     url = vuln.get("PrimaryURL")
     if url:
         kb_refs.append(url)
-    return {
+    finding = {
         "id": f"F-{idx:03d}",
         "canonical_of": None,
         "file": target,
@@ -63,6 +64,8 @@ def _vuln_to_finding(vuln: dict, target: str, idx: int) -> dict:
         "tool_assisted": True,
         "kb_refs": kb_refs,
     }
+    # A CVE/SCA finding matches no ai-attack-kb entry → empty MITRE spine, no dispute (wh-5ox.10).
+    return kb_attribution.apply_kb_attribution(finding, xref=[], disputed=None)
 
 
 def _counts(findings: list[dict]) -> dict:

@@ -183,3 +183,88 @@ def test_parse_github_json_strips_timestamp_to_date():
     raw = json.dumps({"full_name": "o/r", "pushed_at": "2026-06-05T13:22:09Z"})
     v = st.parse_github_json(raw, now=NOW)[0]
     assert v["basis"] == "pushed_at" and v["age_days"] == 7   # 'T...Z' truncated to the date
+
+
+# --- wh-fpy: degrade-never-raise on MALFORMED / hostile GitHub-API JSON --------
+# The module's :58-59/:145 docstrings promise the parser NEVER raises on untrusted
+# remote JSON. Each class of malformed input degrades (-> [] or a verdict), never
+# raising JSONDecodeError / AttributeError / ValueError / RecursionError. Pinned
+# both ways (Policy 9): malformed degrades AND a WELL-FORMED response is UNCHANGED.
+
+def test_parse_github_json_invalid_json_returns_empty():
+    # Malformed/truncated JSON must degrade to [], not raise JSONDecodeError (:154).
+    assert st.parse_github_json("{bad", now=NOW) == []
+    assert st.parse_github_json("", now=NOW) == []
+
+
+def test_parse_github_json_array_of_non_dicts_returns_empty():
+    # A JSON array of non-dicts must skip each element (no .get on an int) -> [].
+    assert st.parse_github_json("[1, 2, 3]", now=NOW) == []
+    assert st.parse_github_json('["a", "b"]', now=NOW) == []
+
+
+def test_parse_github_json_bare_scalar_returns_empty():
+    # A bare scalar (number / string) is not a dict -> skipped -> [].
+    assert st.parse_github_json("5", now=NOW) == []
+    assert st.parse_github_json('"x"', now=NOW) == []
+
+
+def test_parse_github_json_garbage_timestamp_yields_verdict_not_raise():
+    # A present-but-garbage timestamp must NOT raise ValueError; it degrades to
+    # absent -> the verdict still resolves (here: unknown, since no usable date).
+    import json
+    raw = json.dumps({"full_name": "o/r", "published_at": "not-a-date"})
+    v = st.parse_github_json(raw, now=NOW)
+    assert len(v) == 1
+    assert v[0]["status"] == "unknown"      # garbage date -> no usable timestamp
+    assert v[0]["status"] != "fresh"        # garbage is NOT treated as recent
+
+
+def test_parse_github_json_non_dict_latest_release_yields_verdict():
+    # latest_release that is a string (e.g. a 404 body) must NOT raise AttributeError;
+    # it degrades to {} and the repo's own pushed_at drives the verdict.
+    import json
+    raw = json.dumps({"full_name": "o/r", "latest_release": "oops",
+                      "pushed_at": "2026-06-01T00:00:00Z"})
+    v = st.parse_github_json(raw, now=NOW)
+    assert len(v) == 1
+    assert v[0]["status"] == "fresh"        # pushed 11 days ago drives it; release ignored
+    assert v[0]["basis"] == "pushed_at"
+
+
+def test_parse_github_json_deep_nested_returns_empty():
+    # Deeply-nested JSON must degrade (RecursionError caught), never crash the parser.
+    bomb = "[" * 20000 + "]" * 20000
+    assert st.parse_github_json(bomb, now=NOW) == []
+
+
+def test_parse_github_json_array_mixes_valid_and_invalid_elements():
+    # An array with a valid dict next to a non-dict: the valid one yields a verdict,
+    # the junk is skipped (both ways: the good survives AND the bad does not raise).
+    import json
+    raw = json.dumps([{"full_name": "o/r", "pushed_at": "2026-06-01T00:00:00Z"}, 42])
+    v = st.parse_github_json(raw, now=NOW)
+    assert len(v) == 1                      # the int element is dropped, not fatal
+    assert v[0]["tool"] == "o/r" and v[0]["status"] == "fresh"
+
+
+def test_to_date_degrades_on_garbage_and_non_str():
+    import datetime as dt
+    # Garbage / non-str inputs degrade to None instead of raising ValueError/TypeError.
+    assert st._to_date("not-a-date") is None
+    assert st._to_date(123) is None         # non-str (an int field) -> None, not TypeError
+    assert st._to_date(None) is None
+    assert st._to_date("") is None
+    # ... but a WELL-FORMED date is UNCHANGED (the surgical guarantee, Policy 9).
+    assert st._to_date("2026-06-01") == dt.date(2026, 6, 1)
+    assert st._to_date("2026-06-05T13:22:09Z") == dt.date(2026, 6, 5)
+
+
+def test_parse_github_json_well_formed_unchanged_after_hardening():
+    # Regression pin: the hardening must NOT change well-formed behavior.
+    import json
+    archived = json.dumps({"full_name": "owner/dead", "archived": True,
+                           "pushed_at": "2025-01-01T00:00:00Z"})
+    assert st.parse_github_json(archived, now=NOW)[0]["status"] == "archived"
+    fresh = json.dumps({"full_name": "o/r", "pushed_at": "2026-06-01T00:00:00Z"})
+    assert st.parse_github_json(fresh, now=NOW)[0]["status"] == "fresh"

@@ -35,10 +35,17 @@ def _severity(status: str) -> str:
 
 
 def _to_date(ts: str | None) -> _dt.date | None:
-    """ISO-8601 timestamp/date -> date. 'T...Z' is truncated to the date. None/'' -> None."""
-    if not ts:
+    """ISO-8601 timestamp/date -> date. 'T...Z' is truncated to the date.
+
+    Degrade-never-raise (ADR-003): None / '' / non-str / malformed -> None. A garbage
+    timestamp field in untrusted GitHub-API JSON degrades to "absent", never raising.
+    """
+    if not isinstance(ts, str) or not ts:
         return None
-    return _dt.date.fromisoformat(ts[:10])
+    try:
+        return _dt.date.fromisoformat(ts[:10])
+    except ValueError:
+        return None
 
 
 def is_stale(
@@ -55,8 +62,9 @@ def is_stale(
     """Return one staleness verdict (the §2 ordered rule, first match wins).
 
     age basis = the MORE-RECENT of published_at / pushed_at (a live repo with a slow release
-    cadence but recent commits is fresh). Degrade-never-raise (ADR-003): missing/null timestamps
-    fall back or yield status 'unknown'; this never raises on absent fields.
+    cadence but recent commits is fresh). Degrade-never-raise (ADR-003): missing/null/**malformed**
+    timestamps fall back or yield status 'unknown'; a garbage date field degrades to absent rather
+    than raising. (`now` is the TRUSTED caller param and intentionally raises on a bad contract.)
     """
     now_d = _dt.date.fromisoformat(now)
 
@@ -142,8 +150,10 @@ def parse_github_json(raw_github_json: str, *, now: str) -> list[dict]:
     `raw_github_json` is the already-fetched `repos/{owner}/{repo}` object (the fetch is wh-5es's
     egress-confined plumbing), optionally with the `releases/latest` object merged under a
     `latest_release` key. Mirrors poll_feeds.py parse_* (raw str in, list[dict] out). One object
-    -> one verdict; a JSON array -> one verdict per element. Degrade-never-raise: a missing
-    `latest_release` (404) or absent field yields a verdict, never an exception.
+    -> one verdict; a JSON array -> one verdict per element. Degrade-never-raise (ADR-003): the input
+    is UNTRUSTED remote JSON, so malformed/hostile content degrades, never raising — invalid JSON or
+    deeply-nested input -> []; a non-dict array element is skipped; a non-dict `latest_release` (404
+    body) or a garbage timestamp field falls back so the element still yields a verdict.
 
     CONTRACT CAVEAT (QA Gap C) — the verdict uses `tool` as its stable diff key; it has NO `id`
     key. poll_feeds.py poll() (:72-79) dedups items by `it["id"]`, so registering this parser into
@@ -151,11 +161,18 @@ def parse_github_json(raw_github_json: str, *, now: str) -> list[dict]:
     an `id` alias (`verdict["id"] = verdict["tool"]`) or extend poll() to key off `tool`. This stays
     a DEFINITION here — implementing that wiring is wh-5es's scope, not this module's.
     """
-    data = json.loads(raw_github_json)
+    try:
+        data = json.loads(raw_github_json)
+    except (ValueError, RecursionError):   # JSONDecodeError/UnicodeDecodeError are ValueError subclasses
+        return []
     repos = data if isinstance(data, list) else [data]
     out = []
     for repo in repos:
-        rel = repo.get("latest_release") or {}
+        if not isinstance(repo, dict):     # array-of-non-dicts / bare scalar -> skip the element
+            continue
+        rel = repo.get("latest_release")
+        if not isinstance(rel, dict):      # non-dict latest_release (404 string etc.) -> {}
+            rel = {}
         out.append(is_stale(
             tool=repo.get("full_name") or repo.get("tool") or "?",
             published_at=rel.get("published_at"),

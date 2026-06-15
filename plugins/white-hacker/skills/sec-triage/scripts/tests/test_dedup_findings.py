@@ -99,3 +99,47 @@ def test_no_dup_ids_after_dedup():
 def test_window_is_configurable():
     d = doc_with(mkf("F-001", line=10), mkf("F-002", line=30))
     assert dd.dedup(d, window=25)["findings"][1]["canonical_of"] == "F-001"
+
+
+# === wh-5ox.10: collapsing must PRESERVE the duplicate's MITRE attribution =====
+def _attr(f, att_ck=None, atlas=None, disputed=None):
+    f["att_ck"] = att_ck or []
+    f["atlas"] = atlas or []
+    if disputed is not None:
+        f["disputed"] = disputed
+    return f
+
+
+def test_dedup_merges_duplicate_attribution_onto_canonical():
+    # The duplicate (F-002) carries MITRE ids + a dispute the canonical (F-001) lacks.
+    # Collapsing must NOT silently drop them — the canonical inherits the union.
+    canon = _attr(mkf("F-001", line=10), att_ck=["T1195.002"], atlas=[])
+    dup = _attr(mkf("F-002", line=12),
+                att_ck=["T1195.002", "T1552.005"],          # one shared, one new
+                atlas=["AML.T0010"],
+                disputed={"claim": "c", "dispute_source": "s", "status": "unresolved"})
+    out = dd.dedup(doc_with(canon, dup))
+    merged = out["findings"][0]
+    assert out["findings"][1]["canonical_of"] == "F-001"    # the collapse still happened
+    assert merged["att_ck"] == ["T1195.002", "T1552.005"]   # == union, order-stable, deduped
+    assert merged["atlas"] == ["AML.T0010"]                 # == the dup's atlas adopted
+    assert merged["disputed"]["status"] == "unresolved"     # == the dup's dispute adopted
+
+
+def test_dedup_does_not_overwrite_existing_canonical_dispute():
+    # If the canonical ALREADY has a dispute, the duplicate's does NOT clobber it.
+    canon = _attr(mkf("F-001", line=10),
+                  disputed={"claim": "keep-me", "dispute_source": "a", "status": "confirmed"})
+    dup = _attr(mkf("F-002", line=12),
+                disputed={"claim": "drop-me", "dispute_source": "b", "status": "unresolved"})
+    out = dd.dedup(doc_with(canon, dup))
+    assert out["findings"][0]["disputed"]["claim"] == "keep-me"   # == canonical's kept
+    assert out["findings"][0]["disputed"]["claim"] != "drop-me"   # != the dup's
+
+
+def test_dedup_attribution_merge_is_idempotent():
+    canon = _attr(mkf("F-001", line=10), att_ck=["T1195.002"])
+    dup = _attr(mkf("F-002", line=12), att_ck=["T1552.005"], atlas=["AML.T0010"])
+    once = dd.dedup(doc_with(canon, dup))
+    twice = dd.dedup(once)
+    assert once == twice                                    # re-running collapses nothing new
