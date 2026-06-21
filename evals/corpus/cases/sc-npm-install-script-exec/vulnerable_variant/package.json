@@ -9,7 +9,7 @@
     "postinstall": "node scripts/postinstall.js"
   },
   "dependencies": {
-    "axios": "1.7.2",
+    "axios": "1.16.0",
     "lodash": "4.17.21"
   }
 }
